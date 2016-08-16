@@ -1,0 +1,43 @@
+# CES Configuration Parameters
+
+CES Identification:
+    name: cesb
+    domainId: cesb.demo.lte.
+
+DNS:
+    soa: cesb.demo.lte.
+    zonefile: db.cesb.demo.lte.
+    server:
+        loopback:
+            ip: 127.0.0.1
+            port: 54
+    timeouts:
+        naptr:
+            - 0.010
+            - 0.100
+            - 0.200
+        a:
+            - 0.010
+            - 0.100
+            - 0.200
+        aaaa:
+            - 0.010
+            - 0.100
+            - 0.200
+        any:
+            - 0
+            
+CETPServers:
+    serverNames:
+        - server1
+        - server2
+    server1:
+        ip: 127.0.0.1
+        port: 49001
+        transport: tcp
+    server2:
+        ip: 127.0.0.1
+        port: 49002
+        transport: tcp
+
+cetp_policy_file: config_cesb/cetp_policies.json

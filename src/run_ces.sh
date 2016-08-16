@@ -1,1 +1,1 @@
-python3 ces.py config_cesa.yaml
+sudo python3 ces.py config_cesa/config_cesa.yaml
