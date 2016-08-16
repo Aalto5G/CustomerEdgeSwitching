@@ -1,0 +1,1 @@
+python3 ces.py config_cesa.yaml
