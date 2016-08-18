@@ -167,28 +167,31 @@ class DNSServer(asyncio.DatagramProtocol):
 
     def _load_naptr_records(self):
         self.naptr_records = {}
-        self.naptr_records['dest-id'] = "destHost/service-id, dest-cesid, dest-ip, dest-port, transport_protocol"
-        self.naptr_records['hosta1.demo.lte']   = ('hosta1.demo.lte', 'cesa.demo.lte', '127.0.0.1', '49001', 'tcp')
-        self.naptr_records['hosta2.demo.lte']   = ('hosta2.demo.lte', 'cesa.demo.lte', '127.0.0.1', '49001', 'tcp')
-        self.naptr_records['hosta3.demo.lte']   = ('hosta3.demo.lte', 'cesa.demo.lte', '127.0.0.1', '49002', 'tcp')
-        self.naptr_records['hosta4.demo.lte']   = ('hosta4.demo.lte', 'cesa.demo.lte', '127.0.0.1', '49002', 'tcp')
-        self.naptr_records['hostb1.demo.lte']   = ('hostb1.demo.lte', 'cesb.demo.lte', '127.0.0.2', '49001', 'tcp')
-        self.naptr_records['hostb2.demo.lte']   = ('hostb2.demo.lte', 'cesb.demo.lte', '127.0.0.2', '49001', 'tcp')
-        self.naptr_records['hostb3.demo.lte']   = ('hostb3.demo.lte', 'cesb.demo.lte', '127.0.0.2', '49002', 'tcp')
-        self.naptr_records['hostb4.demo.lte']   = ('hostb4.demo.lte', 'cesb.demo.lte', '127.0.0.2', '49002', 'tcp')
-        self.naptr_records['hostc1.demo.lte']   = ('hostc1.demo.lte', 'cesc.demo.lte', '127.0.0.3', '49001', 'tcp')
-        self.naptr_records['hostc2.demo.lte']   = ('hostc2.demo.lte', 'cesc.demo.lte', '127.0.0.3', '49001', 'tcp')
-        self.naptr_records['www.google.com']    = ('www.google.com',  'cesd.demo.lte', '127.0.0.4', '49001', 'tcp')
-        self.naptr_records['www.aalto.fi']      = ('www.aalto.fi',    'cese.demo.lte', '127.0.0.5', '49001', 'tcp')
+        self.naptr_records['dest-id']           = ("destHost/service-id, dest-cesid,    dest-ip, dest-port, proto")
+        self.naptr_records['hosta1.demo.lte.']   = ('hosta1.demo.lte', 'cesa.demo.lte', '127.0.0.1', '49001', 'tcp')
+        self.naptr_records['hosta2.demo.lte.']   = ('hosta2.demo.lte', 'cesa.demo.lte', '127.0.0.1', '49001', 'tcp')
+        self.naptr_records['hosta3.demo.lte.']   = ('hosta3.demo.lte', 'cesa.demo.lte', '127.0.0.1', '49002', 'tcp')
+        self.naptr_records['hosta4.demo.lte.']   = ('hosta4.demo.lte', 'cesa.demo.lte', '127.0.0.1', '49002', 'tcp')
+        self.naptr_records['hostb1.demo.lte.']   = ('hostb1.demo.lte', 'cesb.demo.lte', '127.0.0.1', '49001', 'tcp')
+        self.naptr_records['hostb2.demo.lte.']   = ('hostb2.demo.lte', 'cesb.demo.lte', '127.0.0.1', '49001', 'tcp')
+        self.naptr_records['hostb3.demo.lte.']   = ('hostb3.demo.lte', 'cesb.demo.lte', '127.0.0.1', '49002', 'tcp')
+        self.naptr_records['hostb4.demo.lte.']   = ('hostb4.demo.lte', 'cesb.demo.lte', '127.0.0.1', '49002', 'tcp')
+        self.naptr_records['hostb5.demo.lte.']   = ('hostb5.demo.lte', 'cesb.demo.lte', '127.0.0.1', '49003', 'tls')
+        self.naptr_records['hostb6.demo.lte.']   = ('hostb6.demo.lte', 'cesb.demo.lte', '127.0.0.1', '49003', 'tls')
+        self.naptr_records['hostc1.demo.lte.']   = ('hostc1.demo.lte', 'cesc.demo.lte', '127.0.0.3', '49001', 'tcp')
+        self.naptr_records['hostc2.demo.lte.']   = ('hostc2.demo.lte', 'cesc.demo.lte', '127.0.0.3', '49001', 'tcp')
+        self.naptr_records['www.google.com.']    = ('www.google.com',  'cesd.demo.lte', '127.0.0.4', '49001', 'tcp')
+        self.naptr_records['www.aalto.fi.']      = ('www.aalto.fi',    'cese.demo.lte', '127.0.0.5', '49001', 'tcp')
         
     
     def resolve_naptr(self, domain):
-        default_dns_rec = ('Unknown_name', 'cesa.demo.lte', '127.0.0.1', '49001', 'tcp')
-        print("Searching for domain: ", domain)
-        if domain in self.naptr_records:
-            return self.naptr_records[domain]
+        search_domain = str(domain)
+        print("Resolving DNS NAPTR for domain: ", search_domain)
+        if search_domain in self.naptr_records:
+            return self.naptr_records[search_domain]
         else:
             print("Domain names doesn't exist.. Returning the default result")
+            default_dns_rec = (search_domain, 'cesb.demo.lte', '127.0.0.1', '49001', 'tcp')
             return default_dns_rec
 
     def process_message(self, query, addr):
@@ -207,7 +210,6 @@ class DNSServer(asyncio.DatagramProtocol):
         
         print("Received DNS query for '%s'" % str(name))
         dest_id, r_cesid, r_ip, r_port, r_transport = self.resolve_naptr(name)
-        print("******** Trigger CETPResolution *********")
         
         cb_args = (query, addr)
         if not self._cetpManager.has_local_endpoint(remote_cesid=r_cesid, remote_ip=r_ip, remote_port= r_port, remote_transport=r_transport):

@@ -1,8 +1,6 @@
 {
-	"cespolicy": [
-		{
-		"tcp":	[
-			{
+	"cespolicy": [{
+		"tcp":	[{
 			"outbound": {
 			    "request": [
 			        { "group": "control", "code": "headersignature"},
@@ -30,72 +28,66 @@
 			        { "group": "control", "code": "pow"}
 			    ]
 			}
-			}
-			]
+			}]
 		}
 	],
-	"hostpolicies": 
-	[
-		{
-			"hostpolicy-0": 
-			{
-				"outbound": 
-				{
+	"hostpolicies": [{
+			"hostpolicy-0": {
+				"outbound": {
 			        "request": [
 			            { "group": "id", "code": "fqdn" },
 			            { "group": "rloc", "code": "eth" },
 			            { "group": "payload", "code": "eth" },
-			            { "group": "control", "code": "cesid" }
+			            { "group": "control", "code": "caep" }
 			        ],
 			        "offer": [
 			            { "group": "id", "code": "fqdn" },
 			            { "group": "rloc", "code": "eth" },
 			            { "group": "payload", "code": "eth" },
-			            { "group": "control", "code": "cesid" }
+			            { "group": "control", "code": "caep" }
 			        ],
 			        "available": [
 			            { "group": "id", "code": "fqdn" },
 			            { "group": "rloc", "code": "eth" },
 			            { "group": "payload", "code": "eth" },
 			            { "group": "control", "code": "ack" },
-			            { "group": "control", "code": "cesid" }
+			            { "group": "control", "code": "caep" }
 			        ]
 				},
-				"inbound":  
-				{
+				"inbound":  {
 			        "request": [
 			            { "group": "id", "code": "fqdn" },
 			            { "group": "rloc", "code": "eth" },
 			            { "group": "payload", "code": "eth" },
-			            { "group": "control", "code": "cesid" }
+			            { "group": "control", "code": "caep" }
 					],
 			        "available": [
 			            { "group": "id", "code": "fqdn" },
 			            { "group": "rloc", "code": "eth" },
 			            { "group": "payload", "code": "eth" },
-			            { "group": "control", "code": "cesid" }
+			            { "group": "control", "code": "caep" }
 					]
 				}
 			},
-	        "hostpolicy-1": 
-	        {
-	        	"outbound": 
-	        	{
+	        "hostpolicy-1": {
+	        	"outbound": {
 			        "request": [
 			            { "group": "id", "code": "fqdn" },
 			            { "group": "rloc", "code": "eth" },
 			            { "group": "payload", "code": "eth" },
-			            { "group": "control", "code": "cesid" }
+			            { "group": "control", "code": "caep" }
 			        ],
 			        "offer": [
 			            { "group": "id", "code": "fqdn" },
 			            { "group": "rloc", "code": "eth" },
-			            { "group": "payload", "code": "eth" }			            
+			            { "group": "payload", "code": "eth" },			            
+			            { "group": "control", "code": "caep" }
 			        ],
 			        "available": [
 			            { "group": "id", "code": "fqdn" },
 			            { "group": "rloc", "code": "eth" },
-			            { "group": "payload", "code": "eth" }
+			            { "group": "payload", "code": "eth" },
+			            { "group": "control", "code": "caep" }
 			        ]
 				},
 				"inbound": 
@@ -104,53 +96,50 @@
 			            { "group": "id", "code": "fqdn" },
 			            { "group": "rloc", "code": "eth" },
 			            { "group": "payload", "code": "eth" },
-			            { "group": "control", "code": "cesid" }
+			            { "group": "control", "code": "caep" }
 					],
 			        "available": [
 			            { "group": "id", "code": "fqdn" },
 			            { "group": "rloc", "code": "eth" },
 			            { "group": "payload", "code": "eth" },
-			            { "group": "control", "code": "cesid" }
+			            { "group": "control", "code": "caep" }
 					]
 				}
 			},
-	        "hostpolicy-2": 
-	        {
-	        	"outbound": 
-	        	{
+	        "hostpolicy-2": {
+	        	"outbound": {
 			        "request": [
 			            { "group": "id", "code": "fqdn" },
 			            { "group": "rloc", "code": "eth" },
 			            { "group": "payload", "code": "eth" },
-			            { "group": "control", "code": "cesid" }
+			            { "group": "control", "code": "caep" }
 			        ],
 			        "offer": [
 			            { "group": "id", "code": "fqdn" },
 			            { "group": "rloc", "code": "eth" },
 			            { "group": "payload", "code": "eth" },
-			            { "group": "control", "code": "cesid" }
+			            { "group": "control", "code": "caep" }
 			        ],
 			        "available": [
 			            { "group": "id", "code": "fqdn" },
 			            { "group": "rloc", "code": "eth" },
 			            { "group": "payload", "code": "eth" },
 			            { "group": "control", "code": "ack" },
-			            { "group": "control", "code": "cesid" }
+			            { "group": "control", "code": "caep" }
 			        ]
 				},
-				"inbound": 
-				{
+				"inbound": {
 			        "request": [
 			            { "group": "id", "code": "fqdn" },
 			            { "group": "rloc", "code": "eth" },
 			            { "group": "payload", "code": "eth" },
-			            { "group": "control", "code": "cesid" }
+			            { "group": "control", "code": "caep" }
 					],
 			        "available": [
 			            { "group": "id", "code": "fqdn" },
 			            { "group": "rloc", "code": "eth" },
 			            { "group": "payload", "code": "eth" },
-			            { "group": "control", "code": "cesid" }
+			            { "group": "control", "code": "caep" }
 					]
 				}
 			}

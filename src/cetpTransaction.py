@@ -73,7 +73,8 @@ class PolicyManager(object):
         self._hostpolicy                    = None         #_asPolicyCETP
         self.config_file = policy_file
         self.load_policies(self.config_file)
-    
+        self.assign_policy_to_host()
+        
     def load_policies(self, config_file):
         try:
             f = open(config_file)
@@ -87,6 +88,31 @@ class PolicyManager(object):
         
     def _get_ces_policy(self):
         return self._cespolicy
+
+    def assign_policy_to_host(self):
+        self.fqdn_to_policy = {}
+        self.fqdn_to_policy['hosta1.demo.lte']   = 1
+        self.fqdn_to_policy['hosta2.demo.lte']   = 1
+        self.fqdn_to_policy['hosta3.demo.lte']   = 2
+        self.fqdn_to_policy['hosta4.demo.lte']   = 0
+        self.fqdn_to_policy['hostb1.demo.lte']   = 1
+        self.fqdn_to_policy['hostb2.demo.lte']   = 2
+        self.fqdn_to_policy['hostb3.demo.lte']   = 0
+        self.fqdn_to_policy['hostb4.demo.lte']   = 1
+        self.fqdn_to_policy['hostb5.demo.lte']   = 0
+        self.fqdn_to_policy['hostb6.demo.lte']   = 1
+        self.fqdn_to_policy['hostc1.demo.lte']   = 2
+        self.fqdn_to_policy['hostc2.demo.lte']   = 0
+        self.fqdn_to_policy['www.google.com']    = 1
+        self.fqdn_to_policy['www.aalto.fi']      = 2
+    
+    def mapping_srcId_to_policy(self, host_id):
+        """ Return policy corresponding to a source-id """
+        if host_id in self.fqdn_to_policy:
+            return self.fqdn_to_policy[host_id]
+        else:
+            print("No reachability policy exists for this host")
+            return 1
 
     def _get_host_policies(self):
         return self._hostpolicies
@@ -191,7 +217,33 @@ class PolicyCETP(object):
     def set_available(self, tlv):
         return tlv
     
+    def get_group_code(self, pol_vector):
+        s=""
+        for pol in pol_vector:
+            if 'cmp' in pol:
+                gp, code, cmp = pol['group'], pol['code'], pol['cmp']
+                pol_rep = gp+"."+code+"."+cmp
+            else:
+                gp, code = pol['group'], pol['code']
+                pol_rep = gp+"."+code
+            s+= pol_rep + ", "
+        return s
     
+    def show_policy(self):
+        str_policy =  "\n"
+        for it in ['request', 'offer', 'available']:
+            if it in self.policy:
+                pol_vector = self.policy[it]
+                s = self.get_group_code(pol_vector)
+                str_policy += it+ ": " + s +"\n"
+                
+        return str_policy
+    
+    def __str__(self):
+        return self.show_policy()
+
+    def __repr__(self):
+        return self.show_policy()
     
     
 class CETPTransaction(object):
@@ -200,17 +252,17 @@ class CETPTransaction(object):
 
     def get_cetp_packet(self, sstag=None, dstag=None, req_tlvs=[], offer_tlvs=[], avail_tlvs=[]):
         """ Default CETP fields for signalling message """
-        version = 1
-        has_control = 1
-        has_payload = 0
-        header_len = 0                            # initial value
-        cetp_header = {}
-        cetp_header['ver'] = version
-        cetp_header['Hdr_length'] = header_len
-        cetp_header['has_control'] = has_control
-        cetp_header['has_payload'] = has_payload
-        cetp_header['SST'] = sstag
-        cetp_header['DST'] = dstag
+        version         = 1
+        has_control     = 1
+        has_payload     = 0
+        header_len      = 0                            # initial value
+        cetp_header     = {}
+        cetp_header['ver']          = version
+        cetp_header['Hdr_length']   = header_len
+        cetp_header['has_control']  = has_control
+        cetp_header['has_payload']  = has_payload
+        cetp_header['SST']          = sstag
+        cetp_header['DST']          = dstag
         if len(req_tlvs):
             cetp_header['query']    = req_tlvs
         if len(offer_tlvs):
@@ -220,9 +272,6 @@ class CETPTransaction(object):
         
         cetp_header['Hdr_length'] = len(cetp_header)            # Must insert it correctly.
         return cetp_header
-
-    def mapping_srcId_to_policy(self, src_id):
-        pass
 
     def _verify_tlv(self, tlv):
         if 'cmp' in tlv:
@@ -249,18 +298,27 @@ class CETPTransaction(object):
         return tlv
 
     def pprint(self, packet):
+        print("\nCETP Packet")
         for k, v in packet.items():
-            print(k, " : ", v)
-    
-
+            if k not in ['query', 'info', 'response']:
+                print(k, " : ", v)
+        
+        for k in ['query', 'info', 'response']:
+            if k in packet:
+                print(k)
+                tlvs = packet[k]
+                for tlv in tlvs:
+                    print('\t', tlv)
+        print()
     
 class CETPStateful(CETPTransaction):
-    def __init__(self, sstag=0, dstag=0, dnsmsg=None, src_id="", local_addr=None, r_cesid="", dst_id="", remote_addr=None, name="CETP Stateful", policy_mgr= None, cetpstate_mgr=None):
+    def __init__(self, sstag=0, dstag=0, dnsmsg=None, src_id="", local_addr=None, l_cesid=None, r_cesid="", dst_id="", remote_addr=None, name="CETP Stateful", policy_mgr= None, cetpstate_mgr=None):
         self.sstag, self.dstag  = sstag, dstag
         self.dnsmsg             = dnsmsg
         self.src_id             = src_id
         self.local_addr         = local_addr                # (src_ip, src_port)
         self.remote_addr        = remote_addr
+        self.l_cesid            = l_cesid
         self.r_cesid            = r_cesid
         self.dst_id             = dst_id
         self.name               = name
@@ -273,8 +331,8 @@ class CETPStateful(CETPTransaction):
         self.generate_tag(sstag)
         
     def load_policies(self, src_id):
-        self.mapping_srcId_to_policy(src_id)
-        index, direction = 1, "outbound"
+        index = self.policy_mgr.mapping_srcId_to_policy(src_id)                # dest-fqdn to policy conversion
+        direction = "outbound"
         self.ipolicy, self.ipolicy_tmp  = None, None
         self.opolicy, self.opolicy_tmp  = None, None
 
@@ -326,14 +384,15 @@ class CETPStateful(CETPTransaction):
         return dstep_tlv
 
     def continue_establishing(self, cetp_packet):
-        self.sstag, self.dstag = self.sstag, cetp_packet['SST']                 # self.dstag is sender's SST
-        print("Continue establishing connection (%d -> %d)" %(self.sstag, self.dstag))
-        self.packet = cetp_packet
-        
         req_tlvs, offer_tlvs, ava_tlvs = [], [], []
+        self.sstag, self.dstag = self.sstag, cetp_packet['SST']                 # self.dstag is sender's SST
         error = False
-        #print("Packet in oCES: ")
-        #self.pprint(self.packet)
+        self.packet = cetp_packet
+        print("Continue establishing connection (%d -> %d)" %(self.sstag, self.dstag))
+        
+        print("--------------------------------------")
+        print("\nOutbound policy: ", self.opolicy)
+        self.pprint(cetp_packet)
         print()
         
         if self.rtt>6:
@@ -352,7 +411,7 @@ class CETPStateful(CETPTransaction):
                     ret_tlvs = self._create_response_tlv(tlv)
                     ava_tlvs.append(ret_tlvs)
                 else:
-                    print("TLV", tlv['group'],".", tlv['code'], "is unavailable")
+                    print("oCES has notAvailable TLV", tlv['group'],".", tlv['code'])
                     self._get_unavailable_response(tlv)
                     ava_tlvs.append(tlv)
                     # I guess it shall locally terminate outgoing connection
@@ -450,8 +509,8 @@ class CETPStateless(CETPTransaction):
         self.packet         = packet
 
     def load_policies(self, host_id):
-        self.mapping_srcId_to_policy(host_id)
-        index, direction = 1, "inbound"
+        index = self.policy_mgr.mapping_srcId_to_policy(host_id)
+        direction = "inbound"
         self.ipolicy, self.ipolicy_tmp  = None, None
         self.opolicy, self.opolicy_tmp  = None, None
         self.ipolicy        = self.policy_mgr._get_copy_host_policy(index, direction)
@@ -492,22 +551,24 @@ class CETPStateless(CETPTransaction):
         return None
     
     def start_transaction(self):
-        """ Offer + Request tlvs to iCES """
+        """ Processing inbound packet vs destination policies """
         req_tlvs, offer_tlvs, ava_tlvs, error_tlvs = [], [], [], []
         error = False
         cetp_packet   = self.packet
         i_cetp_sstag  = self.packet['SST']
         o_cetp_sstag  = 0
 
-        #print("self.ipolicy: ", self.ipolicy)
-        #self.pprint(self.packet)
-        print()
         if not self._pre_process():
             print ("Inbound CETP packet failed CETP processing")
             return None
         
         #print("self.cetp_req: ", self.cetp_req)
         #print("self.cetp_ava: ", self.cetp_info)
+        print("--------------------------------------")
+        print("\nInbound policy: ", self.ipolicy)
+        self.pprint(self.packet)
+
+        
         # Processing inbound packet
         for tlv in self.cetp_info:                              # Processing 'info-TLVs'            #Can an attacker with Random TLV order disrupt this??
             if tlv["group"] == "control" and tlv["code"]== "terminate":

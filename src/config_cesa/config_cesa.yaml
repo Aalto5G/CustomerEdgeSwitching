@@ -1,9 +1,11 @@
 # CES Configuration Parameters
 
-CES Identification:
+CESIdentification:
     name: cesa
     domainId: cesa.demo.lte.
-    
+    certificate: config_cesa/cesa.crt
+    private_key: config_cesa/cesa.key
+    ca_certificate: config_cesa/ca.crt
 
 DNS:
     soa: cesa.demo.lte.
@@ -32,6 +34,7 @@ CETPServers:
     serverNames:
         - server1
         - server2
+        - server3
     server1:
         ip: 127.0.0.1
         port: 48001
@@ -40,5 +43,9 @@ CETPServers:
         ip: 127.0.0.1
         port: 48002
         transport: tcp
+    server3:
+        ip: 127.0.0.1
+        port: 48003
+        transport: tls
 
 cetp_policy_file: config_cesa/cetp_policies.json

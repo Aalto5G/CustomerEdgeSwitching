@@ -1,8 +1,11 @@
 # CES Configuration Parameters
 
-CES Identification:
+CESIdentification:
     name: cesb
     domainId: cesb.demo.lte.
+    certificate: config_cesb/cesb.crt
+    private_key: config_cesb/cesb.key
+    ca_certificate: config_cesb/ca.crt
 
 DNS:
     soa: cesb.demo.lte.
@@ -31,6 +34,7 @@ CETPServers:
     serverNames:
         - server1
         - server2
+        - server3
     server1:
         ip: 127.0.0.1
         port: 49001
@@ -39,5 +43,9 @@ CETPServers:
         ip: 127.0.0.1
         port: 49002
         transport: tcp
+    server3:
+        ip: 127.0.0.1
+        port: 49003
+        transport: tls
 
 cetp_policy_file: config_cesb/cetp_policies.json
