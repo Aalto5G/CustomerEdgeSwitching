@@ -1,0 +1,48 @@
+Policy Signalling (in JSON structure).
+
+Query from PolicyAgent to PolicySystem:
+            msg: cetp_policy_request
+            type: host-policy							// Possible values:	"ces-policy", "host-policy"
+            Unique-ID: (80-bit)							// To finalize
+            direction: outbound
+            source: hosta1.cesa.demo.lte 
+            destination: hostb1.cesb.demo.lte
+
+
+Response from PolicySystem to PolicyAgent:
+            msg: cetp_policy_response
+            type: host-policy
+            Unique-ID: (80-bit)							// To finalize
+            direction: outbound
+            source: hosta1.cesa.demo.lte 
+            destination: hostb1.cesb.demo.lte
+            source_reputation: 0.7						// Can CES leverage the reputation to its advantage? If no, then no need for the field.
+            destination_reputation: 0.7
+            policy_status: policy_exists				// Useful in cases, Policy-DB has no policy. Shall Policy-DB have a default host policy for such case?
+            Policy: [policy]                            // All variants of cetp host policies.
+
+
+
+Policy Update from PolicySystem to PolicyAgent:         // To convey change of policy in Policy-DB to CES - for popular/cached/high-priority hosts --- Also if the reputation of a connected CES drops, push corresponding policy to CES.
+            msg: cetp_policy_update
+            type: host-policy
+            direction: outbound							// possible values: "outbound", "inbound"
+            source: hosta1.cesa.demo.lte				// Domain name of the popular/high-priority local host of CES
+            policy_status: policy_exists
+            Policy: [policy]
+
+
+Indicating popular/high-priority hosts to PolicyMgmtSystem:									// Subscribing that policies of high-priority user are pushed to CES.
+            msg: subscribe-to-host
+            type: host-policy
+            direction: outbound
+            source: [hosta1.cesa.demo.lte, hosta2.cesa.demo.lte, hosta3.cesa.demo.lte]		// Domain name of host to whose policies CES wants to subscribe.
+            policy_status: policy_exists
+
+
+Indicating popular remote hosts to PolicyMgmtSystem:										// Suibscribing if reputation of a popular remote client decreases, it is greyed (or black)-listed. 
+            msg: subscribe-to-host
+            type: reputation
+            direction: inbound
+            source: [hosta1.cesb.demo.lte, hosta2.cesb.demo.lte, hosta3.cesb.demo.lte]		// Domain name of host to whose reputation CES wants to subscribe.
+

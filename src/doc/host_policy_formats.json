@@ -1,0 +1,79 @@
+# Format of simple cetp-policy 
+{
+	"type": "host-cetp_policy",
+	"fqdn": "hosta1.nwa.com",
+	"role": "outbound",
+	"policy":{
+	    "required":[
+	        { "ope": "query", "group": "id", "code": "fqdn" },
+	        { "ope": "query", "group": "rloc", "code": "eth" },
+	        { "ope": "query", "group": "payload", "code": "eth" },
+	        { "ope": "query", "group": "control", "code": "caep" }
+	    ],
+	    "offer":[
+	        { "ope": "info", "group": "id", "code": "fqdn"},
+	        { "ope": "info", "group": "rloc", "code": "eth" },
+	        { "ope": "info", "group": "payload", "code": "eth" },
+	        { "ope": "info", "group": "control", "code": "caep" }                
+	    ],
+	    "available":[
+	        { "ope": "response", "group": "id", "code": "fqdn" },
+	        { "ope": "response", "group": "rloc", "code": "eth" },
+	        { "ope": "response", "group": "payload", "code": "eth" },
+	        { "ope": "response", "group": "control", "code": "ack" },
+	        { "ope": "response", "group": "control", "code": "caep" }
+	    ]
+    }
+}
+
+// Assumption: The 'offer' policy vector is a subset of the 'available' policy vector.
+// The operation code 'response' can be removed with 'info'. So that resulting policy is defined by two operations 'query' & 'info'.
+
+
+--------------------------------------------------------
+# Policy format for case, where multiple policies are defined by/for a single host/fqdn.
+# The policy payload shall carry the specific criteria for choosing a particular policy.	The format can easily extend to carry more policy-selection criteria: i.e. 'network-id', 'reputation' etc.
+
+{
+	"type": "host-cetp_policy"
+    "fqdn": "hosta.demo.lte",
+    "role": "outbound",
+    "policy":
+    [
+        {
+        "remote-id": "ID1",
+        "policy":{
+            "request":[req_policy],
+            "offer":[offer_policy],
+            "available":[available_policy]
+    	    }
+        },
+        {
+        "remote-id": "ID2",
+        "policy":{
+            "request":[req_policy],
+            "offer":[offer_policy],
+            "available":[available_policy]
+	        }
+        }
+    ]
+}
+
+--------------------------------------------------------
+# Format for storing multiple host policies (for testing purposes in development)		// Appends the above presented policy format in a list
+
+[
+	{
+		"type": "host-cetp_policy"
+	    "role": "outbound",
+	    "fqdn": "hosta.demo.lte",
+	    "policy": policies
+	},
+	{
+		"type": "host-cetp_policy"
+	    "role": "outbound",
+	    "fqdn": "hosta.demo.lte",
+	    "policy": policies
+	}
+]
+

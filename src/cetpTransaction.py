@@ -112,6 +112,7 @@ class PolicyManager(object):
             return self.fqdn_to_policy[host_id]
         else:
             print("No reachability policy exists for this host")
+            print("Assgning a random policy for testing sake")
             return 1
 
     def _get_host_policies(self):
