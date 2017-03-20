@@ -8,6 +8,9 @@ import sys
 import time
 import traceback
 import cetpManager
+import ocetpLayering
+import icetpLayering
+
 
 import dns
 import dns.message
@@ -18,7 +21,7 @@ from dns.rdataclass import *
 from dns.rdatatype import *
 from email.policy import default
 
-LOGLEVELDNS = logging.DEBUG
+LOGLEVELDNS = logging.INFO
 
 def _sanitize_query(query):
     try:
@@ -167,7 +170,7 @@ class DNSServer(asyncio.DatagramProtocol):
 
     def _load_naptr_records(self):
         self.naptr_records = {}
-        self.naptr_records['dest-id']           = ("destHost/service-id, dest-cesid,    dest-ip, dest-port, proto")
+        self.naptr_records['dest-id']            = ("destHost/service-id, dest-cesid,    dest-ip, dest-port, proto")
         self.naptr_records['hosta1.demo.lte.']   = ('hosta1.demo.lte', 'cesa.demo.lte', '127.0.0.1', '49001', 'tcp')
         self.naptr_records['hosta2.demo.lte.']   = ('hosta2.demo.lte', 'cesa.demo.lte', '127.0.0.1', '49001', 'tcp')
         self.naptr_records['hosta3.demo.lte.']   = ('hosta3.demo.lte', 'cesa.demo.lte', '127.0.0.1', '49002', 'tcp')
@@ -185,6 +188,7 @@ class DNSServer(asyncio.DatagramProtocol):
         
     
     def resolve_naptr(self, domain):
+        """ Resolves a domain name, and returns a list of NAPTR record parsed in format: ('host-id', 'ces-id', 'ip', 'port', 'protocol') """
         search_domain = str(domain)
         print("Resolving DNS NAPTR for domain: ", search_domain)
         if search_domain in self.naptr_records:
@@ -192,7 +196,7 @@ class DNSServer(asyncio.DatagramProtocol):
         else:
             print("Domain names doesn't exist.. Returning the default result")
             default_dns_rec = (search_domain, 'cesb.demo.lte', '127.0.0.1', '49001', 'tcp')
-            return default_dns_rec
+            return [default_dns_rec]
 
     def process_message(self, query, addr):
         """ Process a DNS message received by the DNS Server """
@@ -208,17 +212,24 @@ class DNSServer(asyncio.DatagramProtocol):
         opcode = query.opcode()
         key = (query.id, name, rdtype, rdclass, addr)
         
-        print("Received DNS query for '%s'" % str(name))
-        dest_id, r_cesid, r_ip, r_port, r_transport = self.resolve_naptr(name)
+        print("\nReceived DNS query for '%s'" % str(name))
+        naptr_response_list = self.resolve_naptr(name)
+        for naptr_resp in naptr_response_list:
+            dest_id, r_cesid, r_ip, r_port, r_transport = naptr_resp                # This can be problematic in cases where a domain can be reached through 2 (inbound) CES nodes. 
+                                                                                    # In this case, we can expect a list of NAPTR records in DNS response pointing to different remote ces-ids?
         
         cb_args = (query, addr)
+        self._cetpManager.process_outbound_cetp(r_cesid, naptr_response_list, self.process_dns_query_callback, cb_args)
+        
+        
+        """
         if not self._cetpManager.has_local_endpoint(remote_cesid=r_cesid, remote_ip=r_ip, remote_port= r_port, remote_transport=r_transport):
             local_ep=self._cetpManager.create_local_endpoint(remote_cesid=r_cesid, remote_ip=r_ip, remote_port= r_port, remote_transport=r_transport, dest_hostid=dest_id, cb_func=self.process_dns_query_callback, cb_args=cb_args)
         else:
             local_ep = self._cetpManager.get_local_endpoint(remote_cesid=r_cesid, remote_ip=r_ip, remote_port= r_port, remote_transport=r_transport)
             # Message produced by start_transaction() or others
             local_ep.process_message(r_cesid=r_cesid, cb_args=(query, addr))
-        
+        """
 
         """
         self._logger.debug('Process message {}/{} {}/{} from {}{}'.format(
