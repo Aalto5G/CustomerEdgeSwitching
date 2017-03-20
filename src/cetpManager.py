@@ -11,388 +11,355 @@ import traceback
 import json
 import ssl
 import cetpManager
-import cetpTransaction
+import cetpTransaction_v2
+import ocetpLayering
+import icetpLayering
+import PolicyManager
 
-LOGLEVELCETP = logging.DEBUG
-
-
-class CETPLocalTCPEndpoint(asyncio.Protocol):
-    def __init__(self, loop, ces_cert, ces_privkey, ca_cert, cetpstate_mgr= None, policy_mgr= None, dns_callback=None, cb_args=None, local_cesid= None, remote_cesid=None, dest_hostid=None):
-        self._loop           = loop
-        self.transport      = None
-        self.cb_func        = dns_callback
-        self.initial_args   = cb_args
-        self.cetpstate_mgr  = cetpstate_mgr
-        self.policy_mgr     = policy_mgr
-        self.local_cesid    = local_cesid
-        self.remote_cesid   = remote_cesid
-        self.dest_hostid    = dest_hostid
-        self.ces_certificate, self.ces_privatekey, self.ca_certificate = ces_cert, ces_privkey, ca_cert
-        self.ces_transaction= None
-        
-        self.dns_for_sstag = {}                 # {(SSTag, DSTag):__, } 
-        self.process_first_dnsreq()
-
-    def process_first_dnsreq(self):
-        """ Needed to create first CETP packet based on DNS NAPTR response, on established TCP connection """
-        self.initial_dnsQ = self.initial_args[0]
-
-    def connection_made(self, transport):
-        self.transport = transport
-        self.sockname = transport.get_extra_info('sockname')
-        self.peername = transport.get_extra_info('peername')
-        print("Connection established from", self.sockname, " to ", self.peername)
-        dnsmsg, addr = self.initial_args
-        
-        src_id  = "hosta1.demo.lte"             # Translation of (IP->FQDN) & (FQDN-policy) missing
-        r_cesid = self.remote_cesid
-        dst_id  = self.dest_hostid              # src_id, r_cesid, dst_id, Shall come from dnsReq, and dnsMsg
-        
-        oces_transaction = cetpTransaction.CETPStateful(dnsmsg=dnsmsg, local_addr=self.sockname, remote_addr=self.peername, cetpstate_mgr=self.cetpstate_mgr, policy_mgr=self.policy_mgr, src_id=src_id, l_cesid=self.local_cesid, r_cesid=r_cesid, dst_id=dst_id)
-        cetp_packet = oces_transaction.start_transaction()
-        sstag, dstag = oces_transaction.sstag, oces_transaction.dstag
-        self.dns_for_sstag[(sstag,0)] = self.initial_args
-        self.transport.write(cetp_packet.encode())
-        
-    def data_received(self, data):
-        """ Uses inbound CETP's (SST & DST) in connectionTable for Existing/Ongoing CETP resolutions """
-        inbound_cetp = data.decode()                        # Assuming that other hand replays the message
-        cetp_packet = json.loads(inbound_cetp)
-        #print('Data received: {!r}'.format(inbound_cetp))
-        sstag, dstag = cetp_packet["SST"], cetp_packet["DST"]
-        sstag = int(sstag)
-        
-        if self.cetpstate_mgr.has((dstag, 0)):                                      # i_dstag = o_sstag
-            print("The CETP packet belongs to an ongoing CETP transaction")
-            cetp_transaction = self.cetpstate_mgr.get((dstag, 0))
-            cetp_resp = cetp_transaction.continue_establishing(cetp_packet)
-            
-            if cetp_resp==True:                             # The resolution succeeds, run the following code as callback
-                cb_args = self.dns_for_sstag[(dstag, 0)]
-                dnsQ, addr = cb_args
-                self.cb_func(dnsQ, addr, success=cetp_resp)
-            elif cetp_resp==False:
-                #print("CETP resolution failed callback")
-                cb_args = self.dns_for_sstag[(dstag, 0)]
-                dnsQ, addr = cb_args
-                self.cb_func(dnsQ, addr, success=cetp_resp)
-                return False
-            elif cetp_resp==None:
-                print("Malformed packet.. Ignore and silently drop")
-                return False
-            else:
-                print("Return the generated packet")
-                self.transport.write(cetp_resp.encode())
-
-        elif self.cetpstate_mgr.has((sstag, dstag)):
-            print("The packet belongs to an established CETP Transaction")
-            cetp_transaction = self.cetpstate_mgr.get((sstag, dstag))
-            cetp_transaction.post_establishment(cetp_packet)
-        else:
-            print("Silently drop the packet")
-            
-        
-    def process_message(self, r_cesid="", src_hostid="", dst_hostid="", cb_args=None):
-        """ Triggers CETPStateful Resolution for resolved NAPTR responses """
-        src_id  = "hosta1.demo.lte"             # Policy associated to Host-ip... Host-ip is associated to host-id
-        r_cesid = r_cesid
-        dst_id  = dst_hostid                    # src_id, r_cesid, dst_id, Shall come from dnsReq, and dnsMsg
-        dnsquery = cb_args[0]
-        
-        oces_transaction = cetpTransaction.CETPStateful(dnsmsg=dnsquery, local_addr=self.sockname, remote_addr=self.peername, cetpstate_mgr=self.cetpstate_mgr, policy_mgr=self.policy_mgr, src_id=src_id, r_cesid=r_cesid, dst_id=dst_id)
-        cetp_packet = oces_transaction.start_transaction()
-        sstag, dstag = oces_transaction.sstag, oces_transaction.dstag
-        self.dns_for_sstag[(sstag,0)] = cb_args
-        self.transport.write(cetp_packet.encode())
-        
-    def connection_lost(self, exc):
-        print('The server closed the connection')           # Remove it from the list of local_ep, when connection is closed.
-
-
-class CETPServerTCP(asyncio.Protocol):
-    def __init__(self, loop, ces_cert, ces_privkey, ca_cert, policy_mgr=None, cetpstate_mgr=None):
-        self._loop          = loop
-        self.policy_mgr     = policy_mgr
-        self.cetpstate_mgr  = cetpstate_mgr
-        self.ces_certificate, self.ces_privatekey, self.ca_certificate = ces_cert, ces_privkey, ca_cert
-    
-    def connection_made(self, transport):
-        self.transport  = transport
-        self.sockname   = self.transport.get_extra_info('sockname')
-        self.peername   = self.transport.get_extra_info('peername')
-        print('Connection from {}'.format(self.peername))
-
-    def data_received(self, data):
-        """CETPStateless module processes inbound CETP packets """
-        inbound_cetp = data.decode()
-        cetp_packet = json.loads(inbound_cetp)
-        #print('Data received: {!r}'.format(cetp_packet))
-        sstag, dstag = cetp_packet["SST"], cetp_packet["DST"]
-        sstag = int(sstag)
-
-        if self.cetpstate_mgr.has((sstag, dstag)):
-            print("The packet belongs to an ongoing transaction")
-            cetp_transaction = self.cetpstate_mgr.get((sstag, dstag))
-            cetp_transaction.post_establishment()
-        else:
-            print("New iCES transaction")
-            ices_transaction = cetpTransaction.CETPStateless(cetp_packet, local_addr=self.sockname, remote_addr=self.peername, policy_mgr= self.policy_mgr, cetpstate_mgr= self.cetpstate_mgr)
-            cetp_packet = ices_transaction.start_transaction()
-            if cetp_packet == None:
-                return
-        
-        #print('Send: {!r}'.format(message))
-        self.transport.write(cetp_packet.encode())
-
-class CETPLocalTLSEndpoint(asyncio.Protocol):
-    def __init__(self, loop, ces_cert, ces_privkey, ca_cert, cetpstate_mgr= None, policy_mgr= None, dns_callback=None, cb_args=None, local_cesid= None, remote_cesid=None, dest_hostid=None):
-        self._loop           = loop
-        self.transport      = None
-        self.cb_func        = dns_callback
-        self.initial_args   = cb_args
-        self.cetpstate_mgr  = cetpstate_mgr
-        self.policy_mgr     = policy_mgr
-        self.local_cesid    = local_cesid
-        self.remote_cesid   = remote_cesid
-        self.dest_hostid    = dest_hostid 
-        self.ces_certificate, self.ces_privatekey, self.ca_certificate = ces_cert, ces_privkey, ca_cert
-        self.dns_for_sstag = {}                 # {(SSTag, DSTag):__, } 
-        self.process_first_dnsreq()
-
-    def process_first_dnsreq(self):
-        """ Needed to create first CETP packet based on DNS NAPTR response, on established TCP connection """
-        self.initial_dnsQ = self.initial_args[0]
-
-    def connection_made(self, transport):
-        self.transport = transport
-        self.sockname = transport.get_extra_info('sockname')
-        self.peername = transport.get_extra_info('peername')
-        print("Connection established from", self.sockname, " to ", self.peername)
-        dnsmsg, addr = self.initial_args
-        
-        src_id  = "hosta1.demo.lte"             # Translation of (IP->FQDN) & (FQDN-policy) missing
-        r_cesid = self.remote_cesid
-        dst_id  = self.dest_hostid              # src_id, r_cesid, dst_id, Shall come from dnsReq, and dnsMsg
-        
-        oces_transaction = cetpTransaction.CETPStateful(dnsmsg=dnsmsg, local_addr=self.sockname, remote_addr=self.peername, cetpstate_mgr=self.cetpstate_mgr, policy_mgr=self.policy_mgr, src_id=src_id, l_cesid=self.local_cesid, r_cesid=r_cesid, dst_id=dst_id)
-        cetp_packet = oces_transaction.start_transaction()
-        sstag, dstag = oces_transaction.sstag, oces_transaction.dstag
-        self.dns_for_sstag[(sstag,0)] = self.initial_args
-        self.transport.write(cetp_packet.encode())
-        
-        
-    def data_received(self, data):
-        """ Uses inbound CETP's (SST & DST) in connectionTable for Existing/Ongoing CETP resolutions """
-        inbound_cetp = data.decode()                        # Assuming that other hand replays the message
-        cetp_packet = json.loads(inbound_cetp)
-        #print('Data received: {!r}'.format(inbound_cetp))
-        sstag, dstag = cetp_packet["SST"], cetp_packet["DST"]
-        sstag = int(sstag)
-        
-        if self.cetpstate_mgr.has((dstag, 0)):                                      # i_dstag = o_sstag
-            print("The CETP packet belongs to an ongoing CETP transaction")
-            cetp_transaction = self.cetpstate_mgr.get((dstag, 0))
-            cetp_resp = cetp_transaction.continue_establishing(cetp_packet)
-            
-            if cetp_resp==True:                             # The resolution succeeds, run the following code as callback
-                cb_args = self.dns_for_sstag[(dstag, 0)]
-                dnsQ, addr = cb_args
-                self.cb_func(dnsQ, addr, success=cetp_resp)
-            elif cetp_resp==False:
-                #print("CETP resolution failed callback")
-                cb_args = self.dns_for_sstag[(dstag, 0)]
-                dnsQ, addr = cb_args
-                self.cb_func(dnsQ, addr, success=cetp_resp)
-                return False
-            elif cetp_resp==None:
-                print("Malformed packet.. Ignore and silently drop")
-                return False
-            else:
-                print("Return the generated packet")
-                self.transport.write(cetp_resp.encode())
-
-        elif self.cetpstate_mgr.has((sstag, dstag)):
-            print("The packet belongs to an established CETP Transaction")
-            cetp_transaction = self.cetpstate_mgr.get((sstag, dstag))
-            cetp_transaction.post_establishment(cetp_packet)
-        else:
-            print("Silently drop the packet")
-            
-        
-    def process_message(self, r_cesid="", src_hostid="", dst_hostid="", cb_args=None):
-        """ Triggers CETPStateful Resolution for resolved NAPTR responses """
-        src_id  = "hosta1.demo.lte"             # Policy associated to Host-ip... Host-ip is associated to host-id
-        r_cesid = r_cesid
-        dst_id  = dst_hostid                    # src_id, r_cesid, dst_id, Shall come from dnsReq, and dnsMsg
-        dnsquery = cb_args[0]
-        
-        oces_transaction = cetpTransaction.CETPStateful(dnsmsg=dnsquery, local_addr=self.sockname, remote_addr=self.peername, cetpstate_mgr=self.cetpstate_mgr, policy_mgr=self.policy_mgr, src_id=src_id, r_cesid=r_cesid, dst_id=dst_id)
-        cetp_packet = oces_transaction.start_transaction()
-        sstag, dstag = oces_transaction.sstag, oces_transaction.dstag
-        self.dns_for_sstag[(sstag,0)] = cb_args
-        self.transport.write(cetp_packet.encode())
-        
-    def connection_lost(self, exc):
-        print('The server closed the connection')           # Remove it from the list of local_ep, when connection is closed.
-
-
-
-class CETPServerTLS(asyncio.Protocol):
-    def __init__(self, loop, ces_cert, ces_privkey, ca_cert, policy_mgr=None, cetpstate_mgr=None):
-        self._loop          = loop
-        self.policy_mgr     = policy_mgr
-        self.cetpstate_mgr  = cetpstate_mgr
-        self.ces_certificate, self.ces_privatekey, self.ca_certificate = ces_cert, ces_privkey, ca_cert
-
-    def connection_made(self, transport):
-        self.transport  = transport
-        self.sockname   = self.transport.get_extra_info('sockname')
-        self.peername   = self.transport.get_extra_info('peername')
-        print('Connection from {}'.format(self.peername))
-
-    def data_received(self, data):
-        """CETPStateless module processes inbound CETP packets """
-        inbound_cetp = data.decode()
-        cetp_packet = json.loads(inbound_cetp)
-        #print('Data received: {!r}'.format(cetp_packet))
-        sstag, dstag = cetp_packet["SST"], cetp_packet["DST"]
-        sstag = int(sstag)
-
-        if self.cetpstate_mgr.has((sstag, dstag)):
-            print("The packet belongs to an ongoing transaction")
-            cetp_transaction = self.cetpstate_mgr.get((sstag, dstag))
-            cetp_transaction.post_establishment()
-        else:
-            print("New iCES transaction")
-            ices_transaction = cetpTransaction.CETPStateless(cetp_packet, local_addr=self.sockname, remote_addr=self.peername, policy_mgr= self.policy_mgr, cetpstate_mgr= self.cetpstate_mgr)
-            cetp_packet = ices_transaction.start_transaction()
-            if cetp_packet == None:
-                return
-        
-        #print('Send: {!r}'.format(message))
-        self.transport.write(cetp_packet.encode())
-
+LOGLEVEL_CETPManager    = logging.DEBUG            # Sets the root level of Logger. Any message if this and above level will be printed.    WARNING > INFO > DEBUG
+LOGLEVEL_iCETPManager   = logging.INFO
 
 
 class CETPManager:
-    """ Initiate/Register server endpoint(s), local client instance(s) """ 
-    def __init__(self, host_policies, cesid, ces_certificate, ces_privatekey, ca_certificate, loop=None):
-        #self.logger = logging.getLogger(LOGLEVELCETP)
-        self._localEndpoints = {}                           # List of Local Endpoint instances
-        self._serverEndpoints = {}
-        self.cesid = cesid
-        self.ces_certificate = ces_certificate
-        self.ces_privatekey = ces_privatekey
-        self.ca_certificate = ca_certificate
-        
-        self.cetp_state = cetpTransaction.CETPConnectionObject()
-        self.policy_mgr = cetpTransaction.PolicyManager(policy_file= host_policies)
-        self._loop = loop
-        self._load_cetp_policies()
-        #self._initialize()
-        #self._host_policies, self.cesid, self.ces_certificate, self.ces_privatekey, self.ca_certificate, loop=self._loop
-
-    def _load_cetp_policies(self):
-        pass
+    """
+    Initiates & Registers CETPServer end-points at CES code boot-up (to accept inbound connection from remote CES).
+    Triggers the remote client instances on need. Registers/sorts the remote-client instances against 'cesid'.
     
-    def register_server_endpoint(self, server_ip, server_port, transport_proto, server_ep):
-        """ Register the server_ep by thier transport protocol """
-        if not transport_proto in self._serverEndpoints:
-            self._serverEndpoints[transport_proto] = {}
+    Initiates the local client instances on demand towards a remote 'cesid'. Registers/sorts the local-client instances against 'cesid'.
+    For a given NAPTR response, it retrieves the 'cesid' & then retrieves the local client instance to remote 'cesid' & enqueues the message to client instance for later processing.
+    """
+    
+    def __init__(self, host_policies, cesid, ces_certificate, ces_privatekey, ca_certificate, loop=None, name="CETPManager"):
+        self._localEndpoints    = {}                           # Dictionary of local client instances to remote CESIDs.
+        self._remoteEndpoints   = {}                           # Dictionary of remote client instances to this CESID.
+        self._serverEndpoints   = []                           # List of server instances listening for CETP flows.
+        self._pending_tasks     = {}                           # Contains the list of tasks that shall be terminated upon closing the CETPClient instance {client1:[task1, task2], client2:[task1, task2]}
+        self.cesid = cesid                                     # Local ces-id
+        self.ces_certificate    = ces_certificate
+        self.ces_privatekey     = ces_privatekey
+        self.ca_certificate     = ca_certificate                # X.509 certificate of trusted CA. Used to validate remote node's certificate.
+        
+        self.cetp_state_mgr     = cetpTransaction_v2.CETPConnectionObject()                   # Records the established CETP transactions (both h2h & c2c). Required for preventing the re-allocation already in-use SST & DST (in CETP transaction).
+        self.policy_mgr         = PolicyManager.PolicyManager(policy_file= host_policies)     # Shall ideally fetch the policies from Policy Management System (of Hassaan)    - And will be called, policy_sys_agent
+        self._loop              = loop
+        self.ic2c_mgr           = iCETPManager(loop=loop, policy_mgr=self.policy_mgr, cetp_state_mgr=self.cetp_state_mgr, l_cesid=cesid)
+        self.name               = name
+        self._logger            = logging.getLogger(name)
+        self._logger.setLevel(LOGLEVEL_CETPManager)             # Within this class, logger will only handle message with this or higher level.    (Otherwise, default value of basicConfig() will apply)
+        
 
-        key = self.extract_key(ep_ip=server_ip, ep_port=server_port, ep_transport = transport_proto)
-        self._serverEndpoints[transport_proto][key] = server_ep
+    def process_outbound_cetp(self, r_cesid, naptr_list, dns_cb_func, cb_args):
+        """ Gets/Creates the CETP client instance, and puts the message to process in its queue """
+        # What is format of naptr_list?
+        if self.has_local_endpoint(r_cesid):
+            ep = self.get_local_endpoint(r_cesid)
+        else:
+            self._logger.info("Initiating a CETP client instance towards cesid '{}': ".format(r_cesid))
+            ep = self.create_local_endpoint(self.cesid, r_cesid, naptr_list, dns_cb_func)
+        ep.enqueue_h2h_requests_nowait(naptr_list, cb_args)                                                   # This shall enqueue the naptr response as well as the callback function.
+        # put_nowait() on queue will raise exception if the queue is full.
 
+    def create_local_endpoint(self, l_cesid, r_cesid, naptr_list, dns_cb_func):
+        """ Gets local cetp endpoint for connecting to this remote CES-ID """
+        if self.has_local_endpoint(r_cesid) == False:
+            client_ep = ocetpLayering.CETPClient(l_cesid = l_cesid, r_cesid = r_cesid, cb_func=dns_cb_func, cetp_state_mgr= self.cetp_state_mgr, \
+                                   policy_mgr=self.policy_mgr, policy_client=None, loop=self._loop)
+            
+            self.add_local_endpoint(r_cesid, client_ep)
+            t = asyncio.ensure_future(client_ep.consume_h2h_requests())           # Triggers task for consuming naptr_records (by initiating h2h transactions)
+            self.add_pending_tasks(self, t)
+            self._logger.info("Consume_h2h_requests() task is initiated")
+            t = asyncio.ensure_future(client_ep.consume_message_from_c2c())
+            self.add_pending_tasks(self, t)
+            self._logger.info("Consume_message_from_c2c() task is initiated")
+            client_ep.get_cetp_c2c(naptr_list)                         # naptr_record must have (remote_ip, remote_port, remote_transport, dst_hostid)
+        return client_ep
+    
+
+    def has_local_endpoint(self, r_cesid):
+        """ Whether CES already has a local client instance for the remote CES-ID """
+        return r_cesid in self._localEndpoints
+
+    def add_local_endpoint(self, r_cesid, ep):
+        self._localEndpoints[r_cesid] = ep
+        
+    def get_local_endpoint(self, r_cesid):
+        """ Retrieves the local cetp client instance for communicating to the remote CES-ID """
+        ep = None
+        if self.has_local_endpoint(r_cesid):
+            ep = self._localEndpoints[r_cesid]
+        return ep
+
+    def remove_local_endpoint(self, r_cesid):
+        """ Deletes the local cetp-client endpoint towards the remote CES-ID """
+        if self.has_local_endpoint(r_cesid):
+            del self._localEndpoints[r_cesid]                     # Hard close? OR shall there be more functionality? allowing packets on the wire to be delivered/received?
+
+
+    def _get_local_endpoints(self):
+        """ Provide list of all local client endpoints """
+        end_points = []
+        for key, ep in self._localEndpoints.items():
+            end_points.append(ep)
+        return end_points
+
+    """ Server Endpoint shall have a listening service on advertised (IP, port, proto), and corresponding python object to process a connected client """
+    
+    def register_server_endpoint(self, ep):
+        """ Stores server endpoint """
+        self._serverEndpoints.append(ep)
+        
+    def get_server_endpoints(self):
+        """ Provides list of all CETP server endpoints """
+        return self._serverEndpoints
+        
+    def delete_server_endpoint(self, ep):
+        """ Removes a given server endpoint from the list of all CETP server endpoints, and stops listening on the server endpoint for new connections.
+            The connected remote endpoints can be closed separately
+        """
+        self._serverEndpoints.remove(ep)
+        del ep                                          # Is this a correct way of achieving things?
+        #ep.cancel()
+
+    def delete_all_server_endpoints(self):
+        """ Stops listening on all server endpoints for new connections """
+        pass
+        """
+        for server_ep in self._serverEndpoints:
+            self.delete_server_endpoint(ep)
+        """
 
     def create_server_endpoint(self, server_ip, server_port, transport_proto):
+        """ Creates CETPServer Endpoint for accepting connections from remote oCES """
         try:
+            self._logger.info("Initiating CETPServer on {} protocol @ {}.{}".format(transport_proto, server_ip, server_port))
             if transport_proto == "tcp":
-                coro = self._loop.create_server(lambda: CETPServerTCP(self._loop, self.ces_certificate, self.ces_privatekey, self.ca_certificate, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetp_state), host=server_ip, port=server_port)     # init() parameters can cause issue to new servers??
-                #coro = self._loop.create_server(CETPServerTCP, host=server_ip, port=server_port)     # init() parameters can cause issue to new servers??
-                srv = self._loop.create_task(coro)
-                self.register_server_endpoint(server_ip, server_port, transport_proto, srv)         # Shall store server-task, or the protocol_factory?
-                print('CETP Server is listening on {%s:%d}' % (server_ip, server_port))
-        
+                obj = icetpLayering.iCESServerTransportTCP(self.ces_certificate, self.ces_privatekey, self.ca_certificate, \
+                                                           policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetp_state_mgr, c2c_mgr= self.ic2c_mgr )
+                coro = self._loop.create_server(lambda:obj, host=server_ip, port=server_port)     # pre-created objects or Class() are used with 'lambda'
+                
+                                                                                        
             elif transport_proto == "tls":
                 sc = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
                 sc.verify_mode = ssl.CERT_REQUIRED
                 sc.load_cert_chain(self.ces_certificate, self.ces_privatekey)
                 #sc.check_hostname = True
                 sc.load_verify_locations(self.ca_certificate)
-
-                coro = self._loop.create_server(lambda: CETPServerTLS(self._loop, self.ces_certificate, self.ces_privatekey, self.ca_certificate, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetp_state), host=server_ip, port=server_port, ssl=sc)
-                srv = self._loop.create_task(coro)
-                self.register_server_endpoint(server_ip, server_port, transport_proto, srv)         # Store the protocol_factory perhaps
-                print('CETP Server is listening on {%s:%d}' % (server_ip, server_port))
-                    
+                coro = self._loop.create_server(lambda: icetpLayering.iCESServerTransportTLS(self._loop, self.ces_certificate, self.ces_privatekey, self.ca_certificate, \
+                                                                               policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetp_state, c2c_mgr= self.ic2c_mgr), \
+                                                host=server_ip, port=server_port, ssl=sc)
+                
+            server = self._loop.run_until_complete(coro)            # Returns the task object
+            self.register_server_endpoint(server)                   # Store the protocol_factory perhaps?    # We store the task object, i.e. for cancelling the task later. Can we close CETPServer etc via task.cancel() thing?
+            self._logger.info(' CETP Server is listening on {} protocol: {}:{}'.format(transport_proto, server_ip, server_port))
+                
         except Exception as ex:
-            print("Failed to create CETP server on (%s:%d)" %(server_ip, server_port))
-            print(ex)
-                
-            
-    def get_server_endpoints(self):
-        """ Provide list of all local client endpoints """
-        end_points = []
-        for key, trans in self._serverEndpoints.items():
-            for trans, ep in self._serverEndpoints[trans].items():
-                end_points.append(ep)
-        return end_points
+            self._logger.warning(" Failed to create CETP server on {} protocol @ {}:{}".format(transport_proto, server_ip, server_port))
+            self._logger.warning(ex)
 
-    def extract_key(self, ep_ip=None, ep_port=None, ep_transport = None):
-        return (ep_ip, ep_transport)
 
-    def create_local_endpoint(self, remote_cesid=None, remote_ip=None, remote_port=None, remote_transport=None, dest_hostid=None, cb_func= None, cb_args=None):
-        """ Creates protocol factory for the underlying protocol"""
-        #r_ep_info = (remote_cesid, remote_ip, remote_port, transport_proto)
-        try:
-            if remote_transport == "tcp":
-                print("Creating new CETP LocalEndpoint towards '%s'" %(remote_cesid))
-                local_ep = CETPLocalTCPEndpoint(self._loop, self.ces_certificate, self.ces_privatekey, self.ca_certificate, cetpstate_mgr=self.cetp_state, policy_mgr=self.policy_mgr, local_cesid=self.cesid, dns_callback=cb_func, cb_args=cb_args, remote_cesid=remote_cesid, dest_hostid=dest_hostid)
-                coro = self._loop.create_connection(lambda: local_ep, remote_ip, int(remote_port), local_addr = ('127.0.0.1', random.randint(50000, 54000)))
-                client_task = self._loop.create_task(coro)
-                self.register_local_endpoint(remote_cesid, remote_ip, remote_port, remote_transport, local_ep)          # I store the client-task, not the object
-                print("CETP LocalEndpoint towards '%s' created" %remote_cesid)
-                return local_ep
-            
-            elif remote_transport == "tls":
-                print("Creating new CETP TLS LocalEndpoint towards '%s'" %(remote_cesid))
-                sc = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
-                sc.verify_mode = ssl.CERT_REQUIRED
-                sc.load_cert_chain(self.ces_certificate, self.ces_privatekey)
-                #sc.check_hostname = True
-                sc.load_verify_locations(self.ca_certificate)
-                
-                local_ep = CETPLocalTLSEndpoint(self._loop, self.ces_certificate, self.ces_privatekey, self.ca_certificate, cetpstate_mgr=self.cetp_state, policy_mgr=self.policy_mgr, local_cesid=self.cesid, dns_callback=cb_func, cb_args=cb_args, remote_cesid=remote_cesid, dest_hostid=dest_hostid)
-                coro = self._loop.create_connection(lambda: local_ep, remote_ip, remote_port, local_addr = ('127.0.0.1', random.randint(50000, 54000)), ssl=sc)
-                client_task = self._loop.create_task(coro)
-                self.register_local_endpoint(remote_cesid, remote_ip, remote_port, remote_transport, local_ep)          # I store the client-task, not the object
-                print("CETP TLS Endpoint towards '%s' created" %remote_cesid)
-                return local_ep
-        except:
-            #client_task.exception()
-            print("Failed to create protocol factory for %s at (%s, %s)" %(remote_cesid, remote_ip, remote_port))
+    """ Methods for closing Client and Server Endpoints managed by CES  """
         
+    def close_local_client_endpoint(self):
+        """ Yet to implement """
+        pass
 
-    def register_local_endpoint(self, remote_cesid, remote_ip, remote_port, transport_proto, local_ep):
-        key = self.extract_key(ep_ip=remote_ip, ep_port=remote_port, ep_transport = transport_proto)
-        self._localEndpoints[key] = local_ep
-        print(self._localEndpoints)
+    def close_all_local_client_endpoints(self):
+        """ Yet to implement """
+        pass
+    
+        # for cesid, ep in self._localEndpoints.items():
+        #    ep.enqueue_h2h_requests_nowait(None, ())
+        # Some other links to terminate the tassk: http://stackoverflow.com/questions/33505066/python3-asyncio-task-was-destroyed-but-it-is-pending-with-some-specific-condit
+        # http://stackoverflow.com/questions/27796294/when-using-asyncio-how-do-you-allow-all-running-tasks-to-finish-before-shutting
+        # http://stackoverflow.com/questions/30765606/whats-the-correct-way-to-clean-up-after-an-interrupted-event-loop
+        
+    def close_connected_remote_endpoint(self, ep):
+        """ Not very apparent, how this can be done in CETPManager class, as it doesn't instantiate it"""
+        pass
+    
+    def close_all_connected_remote_endpoints(self):
+        """ Not very apparent, how this can be done in CETPManager class, as it doesn't instantiate it"""
+        pass
 
-    def has_local_endpoint(self, remote_cesid=None, remote_ip=None, remote_port=None, remote_transport=None):
-        """remote_ep_info must be a tuple of (remote_cesid, remote_ip, remote_port, transport_proto)"""
-        key = self.extract_key(ep_ip=remote_ip, ep_port=remote_port, ep_transport=remote_transport)
-        return key in self._localEndpoints
 
-    def get_local_endpoint(self, remote_cesid=None, remote_ip=None, remote_port=None, remote_transport=None):
-        """remote_ep_info must be a tuple of (remote_cesid, remote_ip, remote_port, transport_proto)"""
-        key = self.extract_key(ep_ip=remote_ip, ep_port=remote_port, ep_transport=remote_transport)
-        if self.has_local_endpoint(remote_cesid=remote_cesid, remote_ip=remote_ip, remote_port=remote_port, remote_transport=remote_transport):
-            return self._localEndpoints[key]
+    def close_all(self):
+        """Closes all the server endpoints, all the local client endpoints, and all the remote client endpoints 
+            This can be useful, for example in gracefully closing the CES (which may be in interaction with many remote endpoints).
+        """
+        # self.delete_all_server_endpoints()
+        self.close_all_local_client_endpoints()
+        #self.close_all_connected_remote_endpoints()
+
+
+    """ To terminate the pending asyncio tasks """
+    def has_client(self, client):
+        return client in self._pending_tasks
+
+    def add_pending_tasks(self, client, task):
+        if not self.has_client(client):
+            self._pending_tasks[client] = [task]
+        else:
+            self._pending_tasks[client].append(task)
+    
+    def get_pending_tasks(self, client):
+        for k, v in self._pending_tasks.items():
+            if k == client:
+                return v
         return None
 
-    def get_local_endpoints(self):
-        """ Provide list of all local client endpoints """
-        end_points = []
-        for key, ep in self._localEndpoints.items():
-            end_points.append(ep)
-        return end_points
+    def get_all_pending_tasks(self):
+        tsks = []
+        for k, task_list in self._pending_tasks.items():
+            for tsk in task_list:
+                tsks.append(tsk)
+        return tsks
+
+    def close_all_pending_tasks(self):
+        """ Terminating the tasks pending per client """
+        for client, tsk_list in self._pending_tasks.items():
+            for tsk in tsk_list:
+                self._logger.warning("Closing a task")
+                tsk.cancel() 
+        
+    """
+    For consolidated management of things, (i.e. initiatied tasks)
+    its probably best that c2cLayer for remote end is instantiated by the CETPManager, upon request from CETPClient.
+    """
+
+
+        
+class iCETPManager:
+    """ 
+    This is a manager class, which aggregates different Transport endpoints from a remote CESID, such that at end there is only one c2c-layer between two CES nodes.
+    
+    """
+    def __init__(self, loop=None, policy_mgr=None, cetp_state_mgr=None, l_cesid=None, name="iCETPManager"):
+        self._loop              = loop
+        self.policy_mgr         = policy_mgr
+        self.cetpstate_mgr      = cetp_state_mgr
+        self.l_cesid            = l_cesid
+        
+        self.c2c_store          = {}               # Registers a c2clayer corresponding to a remote 'cesid' --- Format: {cesid1: c2c_layer, cesid2: c2c_layer}
+        self.t2t_store          = {}               # Registers a t2tlayer corresponding to a remote 'cesid' --- Format: {cesid1: t2t_layer, cesid2: t2t_layer}
+        self._logger            = logging.getLogger(name)
+        self._logger.setLevel(LOGLEVEL_iCETPManager)
+
+    def has_c2c_layer(self, cesid):
+        return cesid in self.c2c_store
+
+    def get_c2c_layer(self, cesid):
+        return self.c2c_store[cesid]
+
+    def delete_c2c_layer(self, cesid):
+        if self.has(cesid):
+            del self.c2c_store[cesid]
+
+    def get_all_c2c_layers(self):
+        c2c_layers = []
+        for cesid, c2clayer in self.c2c_store:
+            c2c_layers.append(c2clayer)
+            
+        return c2c_layers
+    
+    def has_t2t_layer(self, cesid):
+        return cesid in self.t2t_store
+
+    def add_t2t_layer(self, cesid, t2tlayer):
+        if not self.has_t2t_layer(cesid):
+            self.t2t_store[cesid] = t2tlayer
+
+    def get_t2t_layer(self, cesid):
+        return self.t2t_store[cesid]
+
+    def delete_t2t_layer(self, cesid):
+        if self.has(cesid):
+            del self.t2t_store[cesid]
+
+
+    def remote_endpoint_malicious_history(self, ip_addr):
+        """ If remote node has previous history of misbehavior and if it exceededed a threshold"""
+        return False
+
+    def create_c2c_layer(self, cesid, c2c_cetp_transaction, t2t_mgr):
+        """ Creates a new c2cLayer for cesid.. And to it passes the negotiated ces-to-ces transaction """
+        c2cobj = icetpLayering.iCETPC2CLayer(cesid, c2c_cetp_transaction, t2t_mgr)
+        self.c2c_store[cesid] = c2cobj
+        asyncio.ensure_future(c2cobj.consume_transport_message())
+        return c2cobj
+        
+    def process_new_sender(self, msg, transport):
+        self.process_c2c_transaction(msg, transport)
+
+    def process_c2c_transaction(self, msg, transport):
+        """ The method is called on the first (or subsequent) packet from a remote CES, until C2C-policies are negotiated """
+        self._logger.info("New transport endpoint --> Initiate (or continue) C2C negotiation with the remote endpoint")
+        cetp_resp = self.prcoess_c2c_negotiation(msg)
+        (status, cetp_resp) = cetp_resp
+        
+        if status == False:
+            self._logger.info(" Inbound CES-to-CES negotiation failed with remote endpoint -> Send(cetp_error_response) AND close the transport.")
+            if len(cetp_resp) ==0:
+                transport.send(cetp_resp)
+            transport.close()
+            
+        elif status == None:
+            self._logger.info(" Inbound CES-to-CES negotiation not completed yet.. Sending C2C response packet.")
+            transport.send_cetp(cetp_resp)
+        
+        elif status==True:
+            self._logger.info(" Inbound CES-to-CES negotiation succeeded.. Retrieve cesid and other necessary parameters to make following code work")
+            r_cesid = "cesa"                                          # For testing
+            if self.has_c2c_layer(r_cesid) == False: 
+                t2t_mgr = icetpLayering.iCETPT2TManager(r_cesid)
+                self.add_t2t_layer(r_cesid, t2t_mgr)
+                transport.assign_t2t_manager(t2t_mgr)
+                
+                c2c_cetp_transaction = None                       # For now, For testing
+                c2c_layer = self.create_c2c_layer(r_cesid, c2c_cetp_transaction, t2t_mgr)                  # Pass the completed c2c transaction as well
+                t2t_mgr.assign_c2c(c2c_layer)
+                transport.assign_c2c(c2c_layer)                   # Assign c2c-layer for ’cesid’ to transport
+                #c2c_layer.create_cetp_server(r_cesid)            # Top layer to handling H2H         # Commented for now
+                c2c_layer.create_cetp_server(r_cesid, self._loop, self.policy_mgr, self.cetpstate_mgr, self.l_cesid)
+                transport.set_cesid(r_cesid)
+                
+            elif self.has_c2c_layer(r_cesid) == True:
+                c2c_obj = self.get_c2c_layer(r_cesid)             # Existing c2c layer for remote ’cesid’
+                transport.assign_c2c(c2c_obj)                   # Assigns  c2c-layer to CETPtransport
+                t2t_obj = self.get_t2t_layer(r_cesid)             # Existing t2t layer for ’cesid’
+                transport.assign_t2t(t2t_obj)                   # Assigns  t2t-layer to CETPtransport
+                #self.append_active_c2c_transaction_id(cetp_obj.sst, cetp_obj.dst)       # Commented for now    # CETP response active (CSST, CDST) session tags to use for c2c communication.
+                
+            transport.send_cetp(cetp_resp)
+
+
+    def prcoess_c2c_negotiation(self, msg):
+        """ Pre-processes the received packet... Checks whether it is a new or existing CETP-C2C negotiation from a legitimate node... """ 
+        try:
+            cetp_msg = json.loads(msg)
+            inbound_sstag, inbound_dstag = cetp_msg['SST'], cetp_msg['DST']
+            sstag, dstag    = inbound_dstag, inbound_sstag
+        except Exception as msg:
+            self._logger.error("Exception in parsing the received message.")
+            return
+
+        if inbound_sstag == 0:
+            self._logger.error("Inbound SST cannot be zero")     # As this would mean that sender has not choosen any SST, and upon negotiation completion cetp-session state would be (0, DST)
+            return None
+            
+        if self.cetpstate_mgr.has((sstag, dstag)):
+            oc2c = self.cetpstate_mgr.get((sstag, dstag))
+            self._logger.info("Outbound C2CTransaction found for (SST={}, DST={})".format(inbound_sstag, inbound_dstag))
+            cetp_resp = oc2c.post_c2c_negotiation(cetp_msg)
+            return cetp_resp
+        
+        elif inbound_dstag == 0:
+            self._logger.info("No prior Outbound C2CTransaction found... Initiating C2CTransactionInbound with (SST={}, DST={})".format(inbound_sstag, inbound_dstag))
+            i_c2c = cetpTransaction_v2.iC2CTransaction(sstag=sstag, dstag=sstag, l_cesid=self.l_cesid, \
+                                                             policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr)
+            cetp_resp = i_c2c.process_c2c_transaction(cetp_msg)
+            return cetp_resp
+
+
+        # Incorporate the paper work, you did to prevent abuse of (SST,0) states from remote entity for messing up the connection state table, or CETP state table.
+
