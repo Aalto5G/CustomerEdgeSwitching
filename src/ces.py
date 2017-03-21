@@ -159,7 +159,7 @@ class CustomerEdgeSwitch(object):
     def _signal_handler(self, signame):
         self._logger.critical('Got signal %s: exit' % signame)
         try:
-            print("\nClosing the listening CETPServer endpoints.")
+            self._logger.info(" Closing the listening CETPServer endpoints.")
             for server_obj in self.cetp_mgr.get_server_endpoints():
                 server_obj.close()
 
@@ -168,15 +168,16 @@ class CustomerEdgeSwitch(object):
             For the tasks to be cancelled, you need to start the loop back up again.
             self.cetp_mgr.close_all_pending_tasks()     # Terminating the ongoing tasks
             """
-            print("Close the remote endpoints connected to local CES.")
+            self._logger.info(" Close the CETP clients connected to remote endpoints.")
             self.cetp_mgr.close_all_local_client_endpoints()
+            #self._loop.run_until_complete(asyncio.sleep(1.0))
             
-            print("Close the DNS listening servers.")
+            self._logger.info(" Close the DNS listening servers.")
             #addr = self._dns['addr'][k]
             #self._logger.warning('Terminating DNS Server {} @{}:{}'.format(k, addr[0],addr[1]))
             #v.connection_lost(None)
             
-            print("Close the CETP clients connected to remote endpoints.")
+            self._logger.info(" Close the remote endpoints connected to local CES.")
             self.cetp_mgr.close_all_connected_remote_endpoints()
             
             """

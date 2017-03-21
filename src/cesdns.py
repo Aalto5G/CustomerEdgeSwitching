@@ -221,15 +221,6 @@ class DNSServer(asyncio.DatagramProtocol):
         cb_args = (query, addr)
         self._cetpManager.process_outbound_cetp(r_cesid, naptr_response_list, self.process_dns_query_callback, cb_args)
         
-        
-        """
-        if not self._cetpManager.has_local_endpoint(remote_cesid=r_cesid, remote_ip=r_ip, remote_port= r_port, remote_transport=r_transport):
-            local_ep=self._cetpManager.create_local_endpoint(remote_cesid=r_cesid, remote_ip=r_ip, remote_port= r_port, remote_transport=r_transport, dest_hostid=dest_id, cb_func=self.process_dns_query_callback, cb_args=cb_args)
-        else:
-            local_ep = self._cetpManager.get_local_endpoint(remote_cesid=r_cesid, remote_ip=r_ip, remote_port= r_port, remote_transport=r_transport)
-            # Message produced by start_transaction() or others
-            local_ep.process_message(r_cesid=r_cesid, cb_args=(query, addr))
-        """
 
         """
         self._logger.debug('Process message {}/{} {}/{} from {}{}'.format(

@@ -11,7 +11,7 @@ import traceback
 import json
 import ssl
 import cetpManager
-import cetpTransaction_v2
+import cetpTransaction
 import ocetpLayering
 import icetpLayering
 import copy
@@ -68,8 +68,8 @@ class PolicyManager(object):
         if host_id in self.fqdn_to_policy:
             return self.fqdn_to_policy[host_id]
         else:
-            print("No reachability policy exists for this host")
-            print("Assgning a random policy for testing sake")
+            self._logger.info("No reachability policy exists for this host")
+            self._logger.info("Assgning a random policy for testing sake")
             return 1
 
     def _get_host_policies(self):
