@@ -11,7 +11,7 @@ import traceback
 import json
 import ssl
 import cetpManager
-import cetpTransaction_v2
+import cetpTransaction
 import icetpLayering
 import ocetpLayering
 
@@ -24,7 +24,7 @@ LOGLEVEL_oCESTransportTCP       = logging.INFO
 
 
 class CETPClient:
-    def __init__(self, l_cesid= None, r_cesid=None, cb_func=None, cetp_state_mgr= None, policy_client=None, policy_mgr=None, loop=None, name="CETPClient"):
+    def __init__(self, l_cesid= None, r_cesid=None, cb_func=None, cetp_state_mgr= None, policy_client=None, policy_mgr=None, loop=None, ces_cert=None, priv_key=None, ca_cert=None, ocetp_mgr=None, name="CETPClient"):
         self.l_cesid            = l_cesid
         self.r_cesid            = r_cesid
         self.cb_func            = cb_func
@@ -35,15 +35,38 @@ class CETPClient:
         
         self.client_q           = asyncio.Queue()           # Enqueues the naptr responses triggered by private hosts (served by CES)
         self.c2c_q              = asyncio.Queue()           # Enqueues the response from remote peer (iCES), to H2H transactions
-        self.c2c_negotiated     = False
+        self.c2c_completed      = False
+        self.c2c_succeeded      = False
+        self.c2c_completed_timely = True
+
+        self.ces_certificate    = ces_cert
+        self.ces_privatekey     = priv_key
+        self.ca_certificate     = ca_cert
+        self.cetp_conn_mgr      = ocetp_mgr
+        self.task_list          = []
+        
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPClient)
+        self.C2C_Negotiation_Threshold = 3.0
+        self.initiate_coroutines()
+
+    def initiate_coroutines(self):
+        t1=asyncio.ensure_future(self.consume_h2h_requests())
+        self.store_pending_tasks(t1)
+        self._logger.info("consume_h2h_requests() task is initiated")           # Triggers task for consuming naptr_records (and initiates h2h transactions)
+        t2=asyncio.ensure_future(self.consume_message_from_c2c())
+        self.store_pending_tasks(t2)
+        self._logger.info("consume_message_from_c2c() task is initiated")
         
+    def store_pending_tasks(self, t):
+        self.task_list.append(t)
 
     def get_cetp_c2c(self, naptr_list):
         """ Initiates CETPc2clayer between two CES nodes """
         self.c2c = oCES2CESLayer(naptr_list=naptr_list, cetp_client=self, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetp_state_mgr= self.cetp_state_mgr, \
-                                 policy_mgr=self.policy_mgr, policy_client=self.policy_client, loop=self._loop)
+                                 policy_mgr=self.policy_mgr, policy_client=self.policy_client, loop=self._loop, ces_cert=self.ces_certificate, \
+                                 priv_key=self.ces_privatekey, ca_cert=self.ca_certificate)
+        
         asyncio.ensure_future(self.c2c.consume_transport_message())
         # Register by using c2cManager.getC2C(’cesid’)
         # This can be a function getting c2clayer from CETPManager?
@@ -68,37 +91,71 @@ class CETPClient:
     def consume_h2h_requests(self):
         start_time = time.time()
         while True:
-            if self.c2c_negotiated == False:                    # Prevents processing of h2h, until the c2c-negotiation has completed.
+            if self.c2c_completed == False:                     # Prevents processing of h2h, until the c2c-negotiation has completed.
                 yield from asyncio.sleep(0.05)                  # 2-to-5 millisecond interval for re-checking if trust established
-                if (time.time() - start_time) > 2.0:            # To detect if remote end is unreachable
-                    self._logger.error("CETPClient: c2c connection didn't complete in time (To)")
-                    self._logger.debug("CETPClient instance, c2cLayer and CETPTransport for this 'cesid' shall be terminated")
-                    break
-                    # Delete the client instance and any 'naptr' response stored in the queue
-                continue
+                if (time.time() - start_time) > self.C2C_Negotiation_Threshold:            # To prevent infinite blocking, incase if remote-ces is unreachable
+                    self._logger.error(" C2C negotiation did not complete in To ={}".format(self.C2C_Negotiation_Threshold))
+                    if self.client_q.qsize()>1:
+                        self._logger.info(" Terminate CETPClient, c2cLayer and CETPTransport created for cesid '{}'".format(self.r_cesid))
+                        break
+                    else:
+                        self._logger.info("Respond the host-DNS-queries with DNS NXDOMAIN")     # If less than 'N' number of requests are queued, respond with DNS NXDOMAIN. Otherwise, simply drop every thing.
+                        queued_data = yield from self.client_q.get()
+                        (naptr_rr, cb_args) = queued_data
+                        self.dns_nxdomain_callback(cb_args)
+                        self.client_q.task_done()
+                else:
+                    continue
             else:
                 try:
                     queued_data = yield from self.client_q.get()
                     (naptr_rr, cb_args) = queued_data                               # Could it be on a list on naptr records? If yes, how to handle it?
-                    if naptr_rr == None:
-                        self._logger.info("None received to terminate  the CETP client queue towards CETPManager")
-                        break
-
+                    
                     for naptr in naptr_rr:
-                        dest_id, r_cesid, r_ip, r_port, r_transport = naptr          # Assuming single naptr response here.
+                        dest_id, r_cesid, r_ip, r_port, r_transport = naptr          # Assuming single naptr response... for now, for testing
                     
                 except Exception as msg:
                     self._logger.info("Terminating CETPClient queue towards cesid {}".format(self.r_cesid))
                     break
-                #asyncio.ensure_future(self.h2h_transaction(msg) )
-                asyncio.ensure_future(self.h2h_transaction_start(cb_args, dest_id))    # On temporary basis.
-                self.client_q.task_done()
+                
+                if self.c2c_succeeded == False:
+                    self._logger.info("C2C Negotiation failed... Responding the host-DNS-queries with DNS NXDOMAIN")
+                    asyncio.ensure_future(self.dns_nxdomain_callback(cb_args))
+                    self.client_q.task_done()
+                    if self.client_q.qsize()==0:
+                        self._logger.debug(" Terminate CETPClient, c2cLayer and CETPTransport for this 'cesid'")
+                        break
+                    # How to clean remaining resources: CETPClient, C2C, Transport etc? - break and then terminate resources?
+                else:
+                    asyncio.ensure_future(self.h2h_transaction_start(cb_args, dest_id))
+                    self.client_q.task_done()
+                    
+        del(self)
+                        
+                        
+    def __del__(self):
+        """ Performs cleanup activity when connection or c2c-negotiation with remote end fails """
+        self._logger.info("Deleting the pending tasks")
+        #for it in self.task_list:
+        #    it.cancel()
+            
+        self._logger.info("Deleting CETPClient and C2C instance")
+        self.cetp_conn_mgr.remove_local_endpoint(self.r_cesid)
+        del(self.c2c)
+        del(self)
+        # How to kill the pending tasks? 
+
+    @asyncio.coroutine
+    def dns_nxdomain_callback(self, cb_args):
+        yield from asyncio.sleep(0.001)
+        (query, addr) = cb_args
+        self.cb_func(query, addr, success=False)
 
             
     @asyncio.coroutine
     def h2h_transaction_start(self, cb_args, dst_id):
         dns_q, addr = cb_args
-        h2h = cetpTransaction_v2.H2HTransactionOutbound(dns_q=dns_q, local_addr=addr, src_id="", dst_id=dst_id, l_cesid=self.l_cesid, r_cesid=self.r_cesid, \
+        h2h = cetpTransaction.H2HTransactionOutbound(dns_q=dns_q, local_addr=addr, src_id="", dst_id=dst_id, l_cesid=self.l_cesid, r_cesid=self.r_cesid, \
                                                         policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetp_state_mgr, dns_callback=self.cb_func)
         
         cetp_packet = yield from h2h.start_cetp_processing()
@@ -131,9 +188,12 @@ class CETPClient:
             if msg!=None:
                 self.send(msg)
         
-
-    def if_c2c_negotiated(self):
-        return self.c2c_negotiated
+    def c2c_negotiation_status(self, status=True):
+        self.c2c_completed  = True
+        self.c2c_succeeded  = status
+        
+    def get_c2c_negotiation_status(self):
+        return self.c2c_succeeded
     
     def send(self, msg):
         """ Forwards the message to CETP c2c layer"""
@@ -151,22 +211,12 @@ class CETPClient:
         """ Consumes the message from c2cLayer to CETPClient (for H2H) """
         while True:
             try:
-                msg = yield from self.c2c_q.get()                   # Gets the CETP message sent by iCES            
-                if msg == "c2c negotiated":
-                    self.c2c_negotiated = True
-                    self._logger.info("C2C is negotiated -> Trigger h2h policy negotiations ")
-                else:
+                msg = yield from self.c2c_q.get()                   # Gets the CETP message from remote iCES
+                if self.c2c_succeeded == True:
                     asyncio.ensure_future(self.h2h_transaction_continue(msg))
-
+                    self.c2c_q.task_done()
             except Exception as msg:
-                self._logger.debug("Exception in consuming message from c2c-layer")
-
-    @asyncio.coroutine
-    def dummy_io_delay_and_dnscallback(self, msg, cb_args):
-        yield from asyncio.sleep(1.0)
-        self._logger.debug("Message: ", msg)
-        (query, addr) = cb_args
-        self.cb_func(query, addr)
+                self._logger.info("Exception in consuming message from c2c-layer")
 
 
 
@@ -176,18 +226,22 @@ class oCES2CESLayer:
     Expected outcome from class is the timely negotiation of the CES-to-CES policies.
     If c2c doesn't successfully complete in time 'To', this shall be detected and negotiation shall fail in time 'To'.        (Not implemented yet)
     """
-    def __init__(self, naptr_list=[], cetp_client=None, l_cesid=None, r_cesid=None, cetp_state_mgr=None, policy_mgr=None, policy_client=None, loop=None, name="oCES2CESLayer"):
-        self.naptr_list     = naptr_list
-        self.cetp_client    = cetp_client            # H2H layer manager for remote-cesid 
-        self.l_cesid        = l_cesid
-        self.r_cesid        = r_cesid
-        self.cetp_state_mgr = cetp_state_mgr
-        self.policy_client  = policy_client
-        self.policy_mgr     = policy_mgr
-        self._loop          = loop
-        
-        self.q              = asyncio.Queue()        # Enqueues the CETP message from CETP Transport
+    def __init__(self, naptr_list=[], cetp_client=None, l_cesid=None, r_cesid=None, cetp_state_mgr=None, policy_mgr=None, policy_client=None, loop=None, ces_cert=None, priv_key=None, ca_cert=None, name="oCES2CESLayer"):
+        self.naptr_list         = naptr_list
+        self.cetp_client        = cetp_client            # H2H layer manager for remote-cesid 
+        self.l_cesid            = l_cesid
+        self.r_cesid            = r_cesid
+        self.cetp_state_mgr     = cetp_state_mgr
+        self.policy_client      = policy_client
+        self.policy_mgr         = policy_mgr
+        self._loop              = loop
+
+        self.ces_certificate    = ces_cert
+        self.ces_privatekey     = priv_key
+        self.ca_certificate     = ca_cert
+        self.q                  = asyncio.Queue()        # Enqueues the CETP message from CETP Transport
         self.c2c_negotiated = False
+        
         self.get_cetp_transport(naptr_list)
         self._logger        = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_oCES2CESLayer)
@@ -195,7 +249,8 @@ class oCES2CESLayer:
 
 
     def get_cetp_transport(self, naptr_list):
-        self.transport_layer = oCESTransportMgr(naptr_list = naptr_list, c2clayer= self, r_cesid= self.r_cesid, loop=self._loop) 
+        self.transport_layer = oCESTransportMgr(naptr_list = naptr_list, c2clayer= self, r_cesid= self.r_cesid, loop=self._loop, ces_cert=self.ces_certificate, \
+                                                priv_key=self.ces_privatekey, ca_cert=self.ca_certificate) 
 
     def send_cetp(self, msg):
         self.transport_layer.send_cetp(msg)
@@ -213,12 +268,12 @@ class oCES2CESLayer:
             msg = yield from self.q.get()
             #print("\nMessage from CETPTransportManager (consume_transport_message(: msg): ", msg)
             if self.c2c_negotiated == False:
-                self._logger.info("c2c is not negotiation with remote-cesid ''".format(self.r_cesid))
+                self._logger.info(" C2C is not negotiated with remote-cesid '{}' yet.".format(self.r_cesid))
                 asyncio.ensure_future(self.process_c2c(msg))        # to exchange ces-policies and security policies.
                 self.q.task_done()
 
             else:
-                self._logger.info(" Forward message to H2H-layer")
+                self._logger.debug(" Forward message to H2H-layer")
                 self.forward_to_h2h_layer(msg)            # - Message belongs to H2H layer.
                 self.q.task_done()
 
@@ -265,11 +320,11 @@ class oCES2CESLayer:
                 
                 if status == True:
                     self.c2c_negotiated = True
-                    self.forward_to_h2h_layer("c2c negotiated")
+                    self.cetp_client.c2c_negotiation_status(status=True)
+                    
                 elif status == False:
-                    if len(cetp_resp) > 0:
-                        self.send(cetp_resp)
-                    self.forward_to_h2h_layer("c2c negotiation failed")
+                    if len(cetp_resp) > 0:  self.send(cetp_resp)
+                    self.cetp_client.c2c_negotiation_status(status=False)
                     self._logger.info("Close the Transport that triggered this CETP-C2C negotiation.")      # If it was the only transport, also clean all the resources towards remote CES.
                     #self.transport_layer.close()
                     
@@ -290,25 +345,34 @@ class oCES2CESLayer:
 
     def initiate_c2c_transaction(self):
         """ Initiates/Continues CES-to-CES negotiation """
-        c2c = cetpTransaction_v2.oC2CTransaction(l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetp_state_mgr=self.cetp_state_mgr, policy_mgr=self.policy_mgr)
+        c2c = cetpTransaction.oC2CTransaction(l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetp_state_mgr=self.cetp_state_mgr, policy_mgr=self.policy_mgr)
         resp = c2c.initiate_c2c_negotiation()
         if resp!=None:
             self.send_cetp(resp)
         else:
             self._logger.error(" CES-to-CES negotiation could not be initiated. Why? ")
+            #report_host():  OR enforce_ratelimits():        # Invoking these methods to report a misbehaving host to remote CES.
             
-        #report_host():  OR enforce_ratelimits():        # Invoking these methods to report a misbehaving host to remote CES.
-
-
+    def __del__(self):
+        self._logger.info("Deleting oCES2CESlayer")
+        del(self.transport_layer)
+        del(self)
+     
+     
+            
 
 class oCESTransportMgr:
-    def __init__(self, naptr_list=[], c2clayer= None, r_cesid= None, loop=None, name="oCESTransportMgr"):
-        self.c2c                  = c2clayer
-        self.r_cesid              = r_cesid
-        self.initiated_transports = []
-        self.connected_transports = []
-        self._loop                = loop
-        self._logger              = logging.getLogger(name)
+    def __init__(self, naptr_list=[], c2clayer= None, r_cesid= None, loop=None, ces_cert=None, priv_key=None, ca_cert=None, name="oCESTransportMgr"):
+        self.c2c                    = c2clayer
+        self.r_cesid                = r_cesid
+        self.initiated_transports   = []
+        self.connected_transports   = []
+        self.ces_certificate        = ces_cert
+        self.ces_privatekey         = priv_key
+        self.ca_certificate         = ca_cert
+
+        self._loop                  = loop
+        self._logger                = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_oCESTransportMgr)
         self._logger.info("Initiating oCESTransportMgr towards cesid '{}'".format(r_cesid) )
         self.initiate_cetp_transport(naptr_list)
@@ -338,19 +402,38 @@ class oCESTransportMgr:
     @asyncio.coroutine
     def initiate_transport(self, proto, ip_addr, port):
         """ Description """
-        if proto == 'tcp':
+        if proto == 'tcp' or proto=="tls":
             self._logger.debug(" Initiating CETPTransport towards cesid '{}' @({}, {})".format(self.r_cesid, ip_addr, port))
-            transport_instance = oCESTransportTCP(self, proto, self.r_cesid)
-            self.initiated_transports.append(transport_instance)
-        
-        try:
-            coro = self._loop.create_connection(lambda: transport_instance, ip_addr, port)
-            connect_task = asyncio.ensure_future(coro)
-            yield from connect_task
-            self.initiated_transports.append(transport_instance)
-        except Exception as ex:
-            self._logger.info("Exception in connection towards {}".format(self.r_cesid),  ex)                  # ex.errno == 111 -- means connection RST received
-            self._logger.info("Clean the allocated resources for CETPclient: initiated queues, tasks and others ")
+            transport_instance = oCESTransportTCP(self, proto, self.r_cesid, loop=self._loop)
+            
+            if proto == "tls":
+                sc = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+                sc.verify_mode = ssl.CERT_REQUIRED
+                sc.load_cert_chain(self.ces_certificate, self.ces_privatekey)
+                sc.load_verify_locations(self.ca_certificate)
+                #sc.check_hostname = True
+            
+                try:
+                    coro = self._loop.create_connection(lambda: transport_instance, ip_addr, port, ssl=sc)
+                    yield from asyncio.ensure_future(coro)
+                    self.initiated_transports.append(transport_instance)
+                except Exception as ex:
+                    self._logger.info("Exception in {} connection towards {}".format(proto, self.r_cesid))                  # ex.errno == 111 -- means connection RST received
+                    print(ex)
+                    self._logger.info("Clean the allocated resources for CETPclient: initiated queues, tasks and others ")
+
+            elif proto == "tcp":
+                try:
+                    coro = self._loop.create_connection(lambda: transport_instance, ip_addr, port)
+                    connect_task = asyncio.ensure_future(coro)
+                    yield from connect_task
+                    self.initiated_transports.append(transport_instance)
+                except Exception as ex:
+                    self._logger.info("Exception in {} connection towards {}".format(proto, self.r_cesid))
+                    print(ex)
+                    self._logger.info("Clean the allocated resources for CETPclient: initiated queues, tasks and others ")
+
+
 
 
     def register_connected_transports(self, transport):
@@ -385,9 +468,12 @@ class oCESTransportMgr:
 
 
 class oCESTransportTCP(asyncio.Protocol):
-    def __init__(self, transport_mgr, proto, r_cesid, name="oCESTransportTCP"):
+    def __init__(self, transport_mgr, proto, r_cesid, loop=None, name="oCESTransport"):
         self.t_mgr          = transport_mgr
         self.r_cesid        = r_cesid 
+        self._loop          = loop
+        self.kalive_timeout = 20
+        self.name           = name+proto
         self._logger        = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_oCESTransportTCP)
 
@@ -397,6 +483,13 @@ class oCESTransportTCP(asyncio.Protocol):
         self._logger.info('Connected to {}'.format(peername))
         self.t_mgr.data_received_from_transport("Channel connected", self)      # Reporting the connectivity to upper layer.
         print()
+        self._loop.call_later(self.kalive_timeout, self.send_keepalive)
+
+    def send_keepalive(self):
+        self._logger.info(" Sending keepalive to remote CES")
+        self.send_cetp("Hello")
+        self._loop.call_later(self.kalive_timeout, self.send_keepalive)
+        
         
     def send_cetp(self, msg):
         framed_msg = self.message_framing(msg)
@@ -425,97 +518,4 @@ class oCESTransportTCP(asyncio.Protocol):
     def close(self):
         """ Closes the connection with the remote CES """
         self.transport.close()
-
-
-class oCESTransportTLS(asyncio.Protocol):
-    def __init__(self, loop, ces_cert, ces_privkey, ca_cert, cetpstate_mgr= None, policy_mgr= None, dns_callback=None, cb_args=None, local_cesid= None, remote_cesid=None, dest_hostid=None):
-        self._loop           = loop
-        self.transport      = None
-        self.cb_func        = dns_callback
-        self.initial_args   = cb_args
-        self.cetpstate_mgr  = cetpstate_mgr
-        self.policy_mgr     = policy_mgr
-        self.local_cesid    = local_cesid
-        self.remote_cesid   = remote_cesid
-        self.dest_hostid    = dest_hostid 
-        self.ces_certificate, self.ces_privatekey, self.ca_certificate = ces_cert, ces_privkey, ca_cert
-        self.dns_for_sstag = {}                 # {(SSTag, DSTag):__, } 
-        self.process_first_dnsreq()
-
-    def process_first_dnsreq(self):
-        """ Needed to create first CETP packet based on DNS NAPTR response, on established TCP connection """
-        self.initial_dnsQ = self.initial_args[0]
-
-    def connection_made(self, transport):
-        self.transport = transport
-        self.sockname = transport.get_extra_info('sockname')
-        self.peername = transport.get_extra_info('peername')
-        print("Connection established from", self.sockname, " to ", self.peername)
-        dnsmsg, addr = self.initial_args
-        
-        src_id  = "hosta1.demo.lte"             # Translation of (IP->FQDN) & (FQDN-policy) missing
-        r_cesid = self.remote_cesid
-        dst_id  = self.dest_hostid              # src_id, r_cesid, dst_id, Shall come from dnsReq, and dnsMsg
-        
-        oces_transaction = cetpTransaction_v2.CETPStateful(dnsmsg=dnsmsg, local_addr=self.sockname, remote_addr=self.peername, cetpstate_mgr=self.cetpstate_mgr, policy_mgr=self.policy_mgr, src_id=src_id, l_cesid=self.local_cesid, r_cesid=r_cesid, dst_id=dst_id)
-        cetp_packet = oces_transaction.start_transaction()
-        sstag, dstag = oces_transaction.sstag, oces_transaction.dstag
-        self.dns_for_sstag[(sstag,0)] = self.initial_args
-        self.transport.write(cetp_packet.encode())
-        
-        
-    def data_received(self, data):
-        """ Uses inbound CETP's (SST & DST) in connectionTable for Existing/Ongoing CETP resolutions """
-        inbound_cetp = data.decode()                        # Assuming that other hand replays the message
-        cetp_packet = json.loads(inbound_cetp)
-        #print('Data received: {!r}'.format(inbound_cetp))
-        sstag, dstag = cetp_packet["SST"], cetp_packet["DST"]
-        sstag = int(sstag)
-        
-        if self.cetpstate_mgr.has((dstag, 0)):                                      # i_dstag = o_sstag
-            print("The CETP packet belongs to an ongoing CETP transaction")
-            cetp_transaction = self.cetpstate_mgr.get((dstag, 0))
-            cetp_resp = cetp_transaction.continue_establishing(cetp_packet)
-            
-            if cetp_resp==True:                             # The resolution succeeds, run the following code as callback
-                cb_args = self.dns_for_sstag[(dstag, 0)]
-                dnsQ, addr = cb_args
-                self.cb_func(dnsQ, addr, success=cetp_resp)
-            elif cetp_resp==False:
-                #print("CETP resolution failed callback")
-                cb_args = self.dns_for_sstag[(dstag, 0)]
-                dnsQ, addr = cb_args
-                self.cb_func(dnsQ, addr, success=cetp_resp)
-                return False
-            elif cetp_resp==None:
-                print("Malformed packet.. Ignore and silently drop")
-                return False
-            else:
-                print("Return the generated packet")
-                self.transport.write(cetp_resp.encode())
-
-        elif self.cetpstate_mgr.has((sstag, dstag)):
-            print("The packet belongs to an established CETP Transaction")
-            cetp_transaction = self.cetpstate_mgr.get((sstag, dstag))
-            cetp_transaction.post_establishment(cetp_packet)
-        else:
-            print("Silently drop the packet")
-            
-        
-    def process_message(self, r_cesid="", src_hostid="", dst_hostid="", cb_args=None):
-        """ Triggers CETPStateful Resolution for resolved NAPTR responses """
-        src_id  = "hosta1.demo.lte"             # Policy associated to Host-ip... Host-ip is associated to host-id
-        r_cesid = r_cesid
-        dst_id  = dst_hostid                    # src_id, r_cesid, dst_id, Shall come from dnsReq, and dnsMsg
-        dnsquery = cb_args[0]
-        
-        oces_transaction = cetpTransaction.CETPStateful(dnsmsg=dnsquery, local_addr=self.sockname, remote_addr=self.peername, cetpstate_mgr=self.cetpstate_mgr, policy_mgr=self.policy_mgr, src_id=src_id, r_cesid=r_cesid, dst_id=dst_id)
-        cetp_packet = oces_transaction.start_transaction()
-        sstag, dstag = oces_transaction.sstag, oces_transaction.dstag
-        self.dns_for_sstag[(sstag,0)] = cb_args
-        self.transport.write(cetp_packet.encode())
-        
-    def connection_lost(self, exc):
-        self._logger.info('The server closed the connection')           # Remove it from the list of local_ep, when connection is closed.
-
 

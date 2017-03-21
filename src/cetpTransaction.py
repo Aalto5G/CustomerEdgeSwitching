@@ -44,10 +44,13 @@ class CETPConnectionObject(object):
         del self.cetp_transactions[session_tag]
 
 
+LOGLEVEL_H2HTransaction     = logging.INFO
 
 class H2HTransaction(object):
-    def __init__(self):
-        pass
+    def __init__(self, name="H2HTransaction"):
+        self.name       = name
+        self._logger    = logging.getLogger(name)
+        self._logger.setLevel(LOGLEVEL_H2HTransaction)
 
     def get_cetp_packet(self, sstag=None, dstag=None, req_tlvs=[], offer_tlvs=[], avail_tlvs=[]):
         """ Default CETP fields for signalling message """
@@ -95,18 +98,18 @@ class H2HTransaction(object):
         return tlv
 
     def pprint(self, packet):
-        print("\nCETP Packet")
+        self._logger.info("CETP Packet")
         for k, v in packet.items():
             if k not in ['query', 'info', 'response']:
                 print(k, " : ", v)
         
         for k in ['query', 'info', 'response']:
             if k in packet:
-                print(k)
+                self._logger.info(k)
                 tlvs = packet[k]
                 for tlv in tlvs:
                     print('\t', tlv)
-        print()
+        self._logger.info("\n")
 
 
 
@@ -214,10 +217,10 @@ class H2HTransactionOutbound(H2HTransaction):
         self.cetpstate_mgr.remove((self.sstag, 0))
         self.cetpstate_mgr.add((self.sstag, self.dstag), self)
     
-    def _execute_dns_callback(self, cb_args):
-        self._logger.info(" Executing DNS callback")
+    def _execute_dns_callback(self, cb_args, resolution=True):
+        self._logger.debug(" Executing DNS callback")
         dns_q, addr = cb_args
-        self.dns_cb(dns_q, addr)
+        self.dns_cb(dns_q, addr, success=resolution)
 
     def create_transaction_in_dp(self, cetp_msg):
         pass
@@ -309,6 +312,8 @@ class H2HTransactionOutbound(H2HTransaction):
             print("CETP negotiation failed")
             if self.dstag==0:
                 # Return false, and execute DNS failure callback
+                cb_args=(self.dnsmsg, self.local_addr)
+                self._execute_dns_callback(cb_args, resolution=False)
                 return False
             else:
                 # Return terminate packet to remote end, as it completed transaction
@@ -319,7 +324,7 @@ class H2HTransactionOutbound(H2HTransaction):
                 self.cetp_negotiation_history.append(cetp_packet)
                 return cetp_packet
         else:                
-            self._logger.info("Negotiation succeeded.. Run the DNS callback")
+            self._logger.info("H2H negotiation succeeded --> Executing the DNS callback")
             self._cetp_established(cetp_packet)
             cb_args=(self.dnsmsg, self.local_addr)
             self._execute_dns_callback(cb_args)
@@ -459,6 +464,7 @@ class H2HTransactionInbound(H2HTransaction):
             #All the destination requirements are met -> Accept/Create CETP connection (i.e. by assigning 'SST') and Export to stateful (for post_establishment etc)
             o_cetp_sstag = random.randint(0, 2**32)
             self.sstag, self.dstag = o_cetp_sstag, i_cetp_sstag
+            self._logger.info("H2H-policy negotiation succeeded -> Create stateful transaction (SST={}, DST={})".format(self.sstag, self.dstag))
             stateful_transansaction = self._export_to_stateful()
             self.cetpstate_mgr.add((o_cetp_sstag, i_cetp_sstag), stateful_transansaction)
         
@@ -734,6 +740,7 @@ class oC2CTransaction(H2HTransaction):
                 return (negotiation_status, cetp_msg)
         else:
             self._logger.info(" CES-to-CES policy negotiation succeeded.. Continue H2H transactions")
+            self._logger.info("{}".format(30*'#') )
             self.validate_signalling_rlocs(r_cesid)
             self._cetp_established()
             negotiation_status = True
@@ -793,7 +800,7 @@ class iC2CTransaction(H2HTransaction):
 
     def process_c2c_transaction(self, cetp_packet):
         """ Negotiating CES-to-CES policies with remote edge """
-        self._logger.info("{}".format(30*'#') )
+        self._logger.debug("{}".format(30*'#') )
         self._security_negotiation_successful = False
         negotiation_status  = None
         cetp_response       = ""
@@ -810,7 +817,6 @@ class iC2CTransaction(H2HTransaction):
         req_tlvs, offer_tlvs, ava_tlvs, error_tlvs = [], [], [], []
         self.sstag, self.dstag = cetp_packet['DST'], cetp_packet['SST']
         error = False
-        self._logger.info(" iCES is processing the CES-to-CES negotiation")
         # CETPTransport shall have a mechanism, where it checks that it has been 5 seconds since connection establishment, and c2c didn't complete. So, let's close the connecton with oCES.
 
         # Parsing the inbound packet
@@ -867,6 +873,8 @@ class iC2CTransaction(H2HTransaction):
             stateful_transansaction = None
             o_cetp_sstag = random.randint(0, 2**32)
             self.sstag = o_cetp_sstag
+            self._logger.info("C2C-policy negotiation succeeded -> Create stateful transaction (SST={}, DST={})".format(self.sstag, self.dstag))
+            self._logger.info("{}".format(30*'#') )
             stateful_transansaction = self._export_to_stateful()            # Not implemented yet
             self.cetpstate_mgr.add((self.sstag, self.dstag), stateful_transansaction)
             negotiation_status = True
