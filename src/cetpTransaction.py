@@ -8,14 +8,24 @@ import sys
 import random
 import time
 import traceback
-import cetpManager
 import json
-import copy
+import ssl
+import cetpManager
+import icetpLayering
+import ocetpLayering
 
-LOGLEVELCETP = logging.DEBUG
 
-KEY_ONGOING     = 1
-KEY_ESTABLISHED = 2
+LOGLEVEL_H2HTransactionOutbound = logging.INFO
+LOGLEVEL_H2HTransactionInbound  = logging.INFO
+LOGLEVEL_oC2CTransaction        = logging.INFO
+LOGLEVEL_iC2CTransaction        = logging.INFO
+
+LOGLEVELCETP                    = logging.DEBUG
+KEY_ONGOING                     = 1
+KEY_ESTABLISHED                 = 2
+
+NEGOTIATION_RTT_THRESHOLD       = 3
+
 
 class CETPConnectionObject(object):
     def __init__(self):
@@ -34,220 +44,8 @@ class CETPConnectionObject(object):
         del self.cetp_transactions[session_tag]
 
 
-class CETP(object):
-    pass                        # CETP class will have multiple instances of CETP TLV
 
-class CETPTLV(object):
-    def __init__(self):
-        self.ope    = None
-        self.cmp    = None
-        self.ext    = None
-        self.group  = None
-        self.code   = None
-        self.len    = None
-        self.value  = None
-    
-    def get_ope(self):
-        return self.ope
-    
-    def get_group(self):
-        return self.group
-
-    def get_code(self):
-        return self.code
-        
-    def get_value(self):
-        return self.value
-
-    def set_value(self, value):
-        self.value = value
-        
-    def remove_value(self):
-        self.value=None
-        
-
-class PolicyManager(object):
-    # Loads policies, and keeps policy elements as CETPTLV objects
-    def __init__(self, policy_file=None):
-        self._cespolicy                     = None         # asPolicyCETP
-        self._hostpolicy                    = None         #_asPolicyCETP
-        self.config_file = policy_file
-        self.load_policies(self.config_file)
-        self.assign_policy_to_host()
-        
-    def load_policies(self, config_file):
-        try:
-            f = open(config_file)
-            self._config = json.load(f)
-            self._cespolicy_lst = self._config["cespolicy"]
-            self._hostpolicies_lst = self._config["hostpolicies"]
-            self.load_CES_policy()
-            self.load_host_policy()
-        except Exception:
-            return False
-        
-    def _get_ces_policy(self):
-        return self._cespolicy
-
-    def assign_policy_to_host(self):
-        self.fqdn_to_policy = {}
-        self.fqdn_to_policy['hosta1.demo.lte']   = 1
-        self.fqdn_to_policy['hosta2.demo.lte']   = 1
-        self.fqdn_to_policy['hosta3.demo.lte']   = 2
-        self.fqdn_to_policy['hosta4.demo.lte']   = 0
-        self.fqdn_to_policy['hostb1.demo.lte']   = 1
-        self.fqdn_to_policy['hostb2.demo.lte']   = 2
-        self.fqdn_to_policy['hostb3.demo.lte']   = 0
-        self.fqdn_to_policy['hostb4.demo.lte']   = 1
-        self.fqdn_to_policy['hostb5.demo.lte']   = 0
-        self.fqdn_to_policy['hostb6.demo.lte']   = 1
-        self.fqdn_to_policy['hostc1.demo.lte']   = 2
-        self.fqdn_to_policy['hostc2.demo.lte']   = 0
-        self.fqdn_to_policy['www.google.com']    = 1
-        self.fqdn_to_policy['www.aalto.fi']      = 2
-    
-    def mapping_srcId_to_policy(self, host_id):
-        """ Return policy corresponding to a source-id """
-        if host_id in self.fqdn_to_policy:
-            return self.fqdn_to_policy[host_id]
-        else:
-            print("No reachability policy exists for this host")
-            print("Assgning a random policy for testing sake")
-            return 1
-
-    def _get_host_policies(self):
-        return self._hostpolicies
-    
-    def get_ces_policy(self, proto="tcp", direction="outbound"):
-        return self._cespolicy[proto][direction]
-
-    def get_host_policy(self, index, direction):
-        """ The search key for host-policy number 0 is 'policy-0' """
-        key="hostpolicy-%d" %index
-        return self._hostpolicies[key][direction]
-
-    def _get_copy_host_policy(self, index, direction):
-        key="hostpolicy-%d" %index
-        policy = self._hostpolicies[key][direction]
-        return copy.deepcopy(policy)
-
-    def load_CES_policy(self):
-        self._cespolicy = {}
-        for policy_dict in self._cespolicy_lst:
-            for transp, transport_policy in policy_dict.items():
-                self._cespolicy[transp] = {}
-            
-                for dir_dict in transport_policy:
-                    for direction, direction_policy in dir_dict.items():
-                        self._cespolicy[transp][direction] = direction_policy
-
-    def load_host_policy(self):
-        self._hostpolicies = {}
-        for pol_dict in self._hostpolicies_lst:
-            for host_id, host_policy in pol_dict.items():
-                self._hostpolicies[host_id] = {}
-                for policy_direction, policy in host_policy.items():
-                    self._hostpolicies[host_id][policy_direction] = PolicyCETP(policy)
-                
-
-class PolicyCETP(object):
-    def __init__(self, policy):
-        self.policy = policy
-        self._initialize()
-        
-    def _initialize(self):
-        if "request" in self.policy:
-            self.required = self.policy["request"]
-        if "offer" in self.policy:
-            self.offer = self.policy["offer"]
-        if "available" in self.policy:
-            self.available = self.policy["available"]
-        # setting value for CETP can be handled in CETP transaction module
-
-    def get_tlv_details(self, tlv):
-        cmp, ext, group, code = None, None, None, None
-        if "group" in tlv:
-            group=tlv["group"]
-        if "code" in tlv:
-            code = tlv["code"]
-        if "cmp" in tlv:
-            cmp= tlv["cmp"]
-        return (cmp, ext, group, code)
-    
-    def has_required(self, tlv):
-        cmp, ext, group, code = self.get_tlv_details(tlv)
-        for pol in self.required:
-            if (group in pol["group"]) and (code in pol["code"]):
-                return True
-        return False
-    
-    def del_required(self, tlv):
-        cmp, ext, group, code = self.get_tlv_details(tlv)
-        for pol in self.required:
-            if (group in pol["group"]) and (code in pol["code"]):
-                self.required.remove(pol)
-    
-    def has_available(self, tlv):
-        cmp, ext, group, code = self.get_tlv_details(tlv)
-        for pol in self.available:
-            if (group in pol["group"]) and (code in pol["code"]):
-                return True
-        return False
-
-    def del_available(self, tlv):
-        cmp, ext, group, code = self.get_tlv_details(tlv)
-        for pol in self.available:
-            if (group in pol["group"]) and (code in pol["code"]):
-                self.available.remove(pol)
-
-    def get_required(self):
-        return self.required
-    
-    def get_offer(self):
-        return self.offer
-    
-    def get_available(self):
-        return self.available                   # Store as CETPTLV field with additional possibility of value field
-
-    def set_required(self, tlv):
-        return tlv
-
-    def set_offer(self, tlv):
-        return tlv
-    
-    def set_available(self, tlv):
-        return tlv
-    
-    def get_group_code(self, pol_vector):
-        s=""
-        for pol in pol_vector:
-            if 'cmp' in pol:
-                gp, code, cmp = pol['group'], pol['code'], pol['cmp']
-                pol_rep = gp+"."+code+"."+cmp
-            else:
-                gp, code = pol['group'], pol['code']
-                pol_rep = gp+"."+code
-            s+= pol_rep + ", "
-        return s
-    
-    def show_policy(self):
-        str_policy =  "\n"
-        for it in ['request', 'offer', 'available']:
-            if it in self.policy:
-                pol_vector = self.policy[it]
-                s = self.get_group_code(pol_vector)
-                str_policy += it+ ": " + s +"\n"
-                
-        return str_policy
-    
-    def __str__(self):
-        return self.show_policy()
-
-    def __repr__(self):
-        return self.show_policy()
-    
-    
-class CETPTransaction(object):
+class H2HTransaction(object):
     def __init__(self):
         pass
 
@@ -259,7 +57,6 @@ class CETPTransaction(object):
         header_len      = 0                            # initial value
         cetp_header     = {}
         cetp_header['ver']          = version
-        cetp_header['Hdr_length']   = header_len
         cetp_header['has_control']  = has_control
         cetp_header['has_payload']  = has_payload
         cetp_header['SST']          = sstag
@@ -271,7 +68,6 @@ class CETPTransaction(object):
         if len(avail_tlvs):
             cetp_header['response'] = avail_tlvs
         
-        cetp_header['Hdr_length'] = len(cetp_header)            # Must insert it correctly.
         return cetp_header
 
     def _verify_tlv(self, tlv):
@@ -311,26 +107,34 @@ class CETPTransaction(object):
                 for tlv in tlvs:
                     print('\t', tlv)
         print()
-    
-class CETPStateful(CETPTransaction):
-    def __init__(self, sstag=0, dstag=0, dnsmsg=None, src_id="", local_addr=None, l_cesid=None, r_cesid="", dst_id="", remote_addr=None, name="CETP Stateful", policy_mgr= None, cetpstate_mgr=None):
+
+
+
+class H2HTransactionOutbound(H2HTransaction):
+    def __init__(self, sstag=0, dstag=0, dns_q=None, src_id="", dst_id="", local_addr=None, l_cesid="", r_cesid="", remote_addr=None, policy_mgr= None, cetpstate_mgr=None, dns_callback=None, name="H2HTransactionOutbound"):
         self.sstag, self.dstag  = sstag, dstag
-        self.dnsmsg             = dnsmsg
-        self.src_id             = src_id
+        self.dnsmsg             = dns_q
+        self.src_id             = src_id                    # FQDN
+        self.dst_id             = dst_id
         self.local_addr         = local_addr                # (src_ip, src_port)
         self.remote_addr        = remote_addr
         self.l_cesid            = l_cesid
         self.r_cesid            = r_cesid
-        self.dst_id             = dst_id
-        self.name               = name
         self.policy_mgr         = policy_mgr
+        self.cetpstate_mgr      = cetpstate_mgr
+        self.dns_cb             = dns_callback
+
+        self.name               = name
+        self._logger            = logging.getLogger(name)
+        self._logger.setLevel(LOGLEVEL_H2HTransactionOutbound)
 
         self.rtt                = 0
-        self.cetpstate_mgr      = cetpstate_mgr
         self.cetp_negotiation_history   = []
         self.load_policies(self.src_id)
-        self.generate_tag(sstag)
-        
+        self.generate_session_tags(sstag)
+        # self.dns_callback   = dns_callback        # Function to execute DNS response
+        # self.cb_args        = cb_args             # Arguments required to execute DNS callback.
+    
     def load_policies(self, src_id):
         index = self.policy_mgr.mapping_srcId_to_policy(src_id)                # dest-fqdn to policy conversion
         direction = "outbound"
@@ -341,27 +145,40 @@ class CETPStateful(CETPTransaction):
         self.opolicy_tmp    = self.policy_mgr._get_copy_host_policy(index, direction)
         self.ipolicy        = self.policy_mgr._get_copy_host_policy(index, "inbound")
         self.ipolicy_tmp    = self.policy_mgr._get_copy_host_policy(index, "inbound")
-    
-    def generate_tag(self, sstag):
+
+    def generate_session_tags(self, sstag):
         if sstag == 0:
             self.sstag = random.randint(0, 2**32)
             self.dstag = self.dstag
         else:
             self.sstag = sstag
             self.dstag = random.randint(0, 2**32)           # later on, add checks for conflicts with other (sstag, dstag)
-            
-    def _initiate_ces_security(self):
-        pass
+
+    def _pre_process(self, msg):
+        self.cetp_req, self.cetp_info, self.cetp_resp = [], [], []
+
+        if "query" in self.packet:
+            self.cetp_req = self.packet['query']
+        if "info" in self.packet:
+            self.cetp_info = self.packet['info']
+        if "response" in self.packet:
+            self.cetp_resp = self.packet['response']
+        return True
+        self.sanity_checking(msg)   # for min packet details & format    - on response packet
+
+
+    def sanity_checking(self, msg):
+        return True
     
-    def _continue_ces_security(self):
-        pass
-    
-    def start_transaction(self):
-        """ Offer + Request tlvs to iCES """
+    @asyncio.coroutine
+    def start_cetp_processing(self):
+        """ Returns CETP message containing [Offer & Request] tlvs towards iCES """
         self.req_tlvs, self.offer_tlvs, self.ava_tlvs = [], [], []
         dstep_tlv = self.append_dstep_info()
         self.offer_tlvs.append(dstep_tlv)        
-        #print("self.opolicy: ", self.opolicy)
+        # print("self.opolicy: ", self.opolicy)
+        # We shall check if src_id supports the id_type as of the destination-id, otherwise maybe not even initiate a transaction? or initiate with a default ID-type?
+        # And regardless of id_type being used, FQDN of host shall be made part of the messages exchanged?
         
         for tlv in self.opolicy.get_required():
             tlv["value"] = ""
@@ -376,31 +193,60 @@ class CETPStateful(CETPTransaction):
         self.last_packet_sent = cetp_packet
         self.cetp_negotiation_history.append(cetp_packet)
         self.rtt += 1
-        self.cetpstate_mgr.add((self.sstag,0), self)                # State in Connection table
+        self.cetpstate_mgr.add((self.sstag,0), self)                # Register state in Connection table to continue negotiating h2h-transaction later
         return cetp_packet
+
+        """
+        policies = yield from self.get_policies_from_PolicySystem(r_id, r_cesid)
+        o_cetp_packet = None
+        #o_cetp_packet = cetp_processing(policies)
+        return o_cetp_packet
+        """
 
     def append_dstep_info(self):
         dstep_tlv = {}
         dstep_tlv["group"], dstep_tlv["code"], dstep_tlv["value"] = "control", "dstep", self.dst_id 
         return dstep_tlv
 
-    def continue_establishing(self, cetp_packet):
+    def _cetp_established(self, cetp_packet):
+        # It can perhaps execute DNS callback as well
+        self.dstag = cetp_packet['DST']
+        self.cetpstate_mgr.remove((self.sstag, 0))
+        self.cetpstate_mgr.add((self.sstag, self.dstag), self)
+    
+    def _execute_dns_callback(self, cb_args):
+        self._logger.info(" Executing DNS callback")
+        dns_q, addr = cb_args
+        self.dns_cb(dns_q, addr)
+
+    def create_transaction_in_dp(self, cetp_msg):
+        pass
+        #cetp_msg
+        #self.create_dataplane_entry(sst, dst, info)
+
+    @asyncio.coroutine
+    def get_policies_from_PolicySystem(self, r_hostid, r_cesid):        # Has to be a coroutine in asyncio - PolicyAgent
+        pass
+        #yield from self.policy_client.send(r_hostid, r_cesid)
+
+    def post_cetp_negotiation(self, cetp_packet):
+        pass
+
+    def continue_cetp_processing(self, cetp_packet):
         req_tlvs, offer_tlvs, ava_tlvs = [], [], []
         self.sstag, self.dstag = self.sstag, cetp_packet['SST']                 # self.dstag is sender's SST
         error = False
         self.packet = cetp_packet
-        print("Continue establishing connection (%d -> %d)" %(self.sstag, self.dstag))
-        
-        print("--------------------------------------")
-        print("\nOutbound policy: ", self.opolicy)
+        self._logger.info("Continue establishing connection (%d -> %d)" %(self.sstag, self.dstag))
+        # self._logger.info(" ---- Outbound policy: ", self.opolicy)
         self.pprint(cetp_packet)
-        print()
+        self._logger.info(" ")
         
-        if self.rtt>6:
+        if self.rtt > NEGOTIATION_RTT_THRESHOLD:
             return False                            # Prevents infinite loop of CETP negotiation, Where remote end repeatedly sends only Requests-TLVs (or incomplete message??)
 
         # print("Host policy ", self.opolicy)
-        if not self._pre_process():
+        if not self._pre_process(cetp_packet):
             print("oCES failed pre_process() ")
             return None
         
@@ -439,20 +285,20 @@ class CETPStateful(CETPTransaction):
         
         for tlv in self.cetp_resp:
             if (tlv['group'] == 'control') and (tlv['code']=='terminate'):
-                print("Terminate received for", tlv["group"], ".", tlv['code'], "with value: ", tlv['value'] )
+                self._logger.info("Terminate received for", tlv["group"], ".", tlv['code'], "with value: ", tlv['value'] )
                 error = True
                 break
             elif self.opolicy.has_required(tlv):
                 if self._verify_tlv(tlv):
                     self.opolicy_tmp.del_required(tlv)
                 else:
-                    print("TLV", tlv['group'], ".", tlv['code'], "failed verification")         # handles TLV NotAvailable & TLV wrong value case
+                    self._logger.info("TLV", tlv['group'], ".", tlv['code'], "failed verification")         # handles TLV NotAvailable & TLV wrong value case
                     ava_tlvs =  []
                     ava_tlvs.append(self._get_terminate_tlv(err_tlv=tlv))
                     error=True
                     break
         
-        if self.rtt>5:
+        if self.rtt > NEGOTIATION_RTT_THRESHOLD:
             error = True            # Preventing infinite loop of CETP negotiation
 
         if len(self.opolicy_tmp.required)>0:
@@ -466,48 +312,44 @@ class CETPStateful(CETPTransaction):
                 return False
             else:
                 # Return terminate packet to remote end, as it completed transaction
-                print("Responding remote end with terminate-TLV")
+                self._logger.info("Responding remote end with terminate-TLV")
                 cetp_signaling = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, offer_tlvs=ava_tlvs)        # Send as 'Info' TLV
                 cetp_packet = json.dumps(cetp_signaling)
                 self.last_packet_sent = cetp_packet
                 self.cetp_negotiation_history.append(cetp_packet)
                 return cetp_packet
         else:                
-            print("Negotiation succeeded.. Run the DNS callback")
+            self._logger.info("Negotiation succeeded.. Run the DNS callback")
             self._cetp_established(cetp_packet)
-            return True
+            cb_args=(self.dnsmsg, self.local_addr)
+            self._execute_dns_callback(cb_args)
+            return None
+
+        """
+        l_policy = get_cached_policy()
+        if policies_match_both_ways:
+            self.create_transaction_in_dp()
+            self.dns_callback(dns_response)
+        return msg                                                      # resp_msg, error_message, or None.
+        """
+        
 
 
-    def _pre_process(self):
-        self.cetp_req, self.cetp_info, self.cetp_resp = [], [], []
 
-        if "query" in self.packet:
-            self.cetp_req = self.packet['query']
-        if "info" in self.packet:
-            self.cetp_info = self.packet['info']
-        if "response" in self.packet:
-            self.cetp_resp = self.packet['response']
-            
-        return True
+class H2HTransactionInbound(H2HTransaction):
+    def __init__(self, packet, sstag=0, dstag=0, l_cesid="", r_cesid="", local_addr=(), remote_addr=(), policy_mgr= None, cetpstate_mgr= None, name="H2HTransactionInbound"):
+        self.local_addr         = local_addr
+        self.remote_addr        = remote_addr
+        self.policy_mgr         = policy_mgr                # This could be policy client in future use.
+        self.cetpstate_mgr      = cetpstate_mgr
+        self.packet             = packet
+        self.l_cesid            = l_cesid
+        self.r_cesid            = r_cesid
+        
+        self.name               = name
+        self._logger            = logging.getLogger(name)
+        self._logger.setLevel(LOGLEVEL_H2HTransactionInbound)
 
-    def _cetp_established(self, cetp_packet):
-        # It can perhaps execute DNS callback as well
-        self.dstag = cetp_packet['DST']
-        self.cetpstate_mgr.remove((self.sstag, 0))
-        self.cetpstate_mgr.add((self.sstag, self.dstag), self)
-
-    def post_establishment(self, cetp_packet):
-        pass
-
-
-class CETPStateless(CETPTransaction):
-    def __init__(self, packet, name="Stateless", local_addr=(), remote_addr=(), policy_mgr= None, cetpstate_mgr= None):
-        self.name           = name
-        self.local_addr     = local_addr
-        self.remote_addr    = remote_addr
-        self.policy_mgr     = policy_mgr
-        self.cetpstate_mgr  = cetpstate_mgr
-        self.packet         = packet
 
     def load_policies(self, host_id):
         index = self.policy_mgr.mapping_srcId_to_policy(host_id)
@@ -518,7 +360,7 @@ class CETPStateless(CETPTransaction):
         self.ipolicy_tmp    = self.policy_mgr._get_copy_host_policy(index, direction)
         self.opolicy        = self.policy_mgr._get_copy_host_policy(index, "outbound")
         self.opolicy_tmp    = self.policy_mgr._get_copy_host_policy(index, "outbound")
-
+    
     def _pre_process(self):
         self.cetp_req, self.cetp_info, self.cetp_resp = [], [], []
         if 'info' in self.packet:
@@ -532,7 +374,7 @@ class CETPStateless(CETPTransaction):
         
         self.dst_hostId = destep_tlv['value']
         if not self.dst_hostId_is_valid(self.dst_hostId):
-            print("Destination host is not available")
+            self._logger.info("Destination host is not available")
             return False
         
         print("self.dst_hostId", self.dst_hostId)
@@ -543,15 +385,20 @@ class CETPStateless(CETPTransaction):
             self.cetp_resp = self.packet['response']
             
         return True
+        # self.sanity_checking()      #for min packet details & format
         
-            
+
+    def sanity_checking(self, msg):
+        return True
+
     def get_tlv(self, recv_tlv_lst, group=None, code=None):
         for tlv in recv_tlv_lst:
             if (tlv['group']==group) and (tlv['code'] == code):
                 return tlv
         return None
-    
-    def start_transaction(self):
+
+
+    def start_cetp_processing(self, msg):
         """ Processing inbound packet vs destination policies """
         req_tlvs, offer_tlvs, ava_tlvs, error_tlvs = [], [], [], []
         error = False
@@ -560,27 +407,23 @@ class CETPStateless(CETPTransaction):
         o_cetp_sstag  = 0
 
         if not self._pre_process():
-            print ("Inbound CETP packet failed CETP processing")
+            self._logger.info("Inbound CETP packet failed CETP processing")
             return None
         
-        #print("self.cetp_req: ", self.cetp_req)
-        #print("self.cetp_ava: ", self.cetp_info)
-        print("--------------------------------------")
-        print("\nInbound policy: ", self.ipolicy)
         self.pprint(self.packet)
 
         
         # Processing inbound packet
         for tlv in self.cetp_info:                              # Processing 'info-TLVs'            #Can an attacker with Random TLV order disrupt this??
             if tlv["group"] == "control" and tlv["code"]== "terminate":
-                print("Terminate received for", tlv["group"], ".", tlv['code'], "with value: ", tlv['value'] )
+                self._logger.info("Terminate received for", tlv["group"], ".", tlv['code'], "with value: ", tlv['value'] )
                 error = True
                 break
             elif self.ipolicy.has_required(tlv):
                 if self._verify_tlv(tlv):
                     self.ipolicy_tmp.del_required(tlv)
                 else:
-                    print("TLV", tlv['group'], ".", tlv['code'], "failed verification")
+                    self._logger.info("TLV", tlv['group'], ".", tlv['code'], "failed verification")
                     terminate_tlv = self._get_terminate_tlv(err_tlv=tlv)
                     error_tlvs.append(terminate_tlv)
                     error = True
@@ -596,14 +439,14 @@ class CETPStateless(CETPTransaction):
                 ret_tlvs = self._create_response_tlv(tlv)
                 ava_tlvs.append(ret_tlvs)
             else:
-                print("TLV", tlv['group'], ".", tlv['code'], "is unavailable")
+                self._logger.info("TLV", tlv['group'], ".", tlv['code'], "is unavailable")
                 self._get_unavailable_response(tlv)
                 ava_tlvs.append(tlv)
                 #error = True
 
         if len(self.ipolicy_tmp.required)>0:
-            print("# of iCES requirements not satisfied: ", len(self.ipolicy_tmp.get_required()))
-            print("Initiate full query")
+            self._logger.info("# of iCES requirements not satisfied: ", len(self.ipolicy_tmp.get_required()))
+            self._logger.info("Initiate full query")
             # Generating Full Query message
             req_tlvs, offer_tlvs, ava_tlvs = [], [], []
             for tlv in self.ipolicy.get_required():
@@ -625,6 +468,14 @@ class CETPStateless(CETPTransaction):
         self.last_packet_sent = cetp_packet
         return cetp_packet
 
+        """
+        policies = yield from self.get_policies_from_PolicySystem(r_id, r_cesid)
+        if policies_match_both_ways:
+            self.export_to_stateful(self)
+            self.create_transaction_in_dp()
+        return msg, error_message etc.
+        """
+
     def _create_response_tlv(self, tlv):
         tlv['value'] = "Some value"
         return tlv
@@ -634,7 +485,7 @@ class CETPStateless(CETPTransaction):
         return True
 
     def _export_to_stateful(self):
-        new_transaction = CETPStateful(sstag=self.sstag, dstag=self.dstag, local_addr=self.local_addr, remote_addr=self.remote_addr, policy_mgr= self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, r_cesid="", src_id="", dst_id="")
+        new_transaction = H2HTransactionOutbound(sstag=self.sstag, dstag=self.dstag, local_addr=self.local_addr, remote_addr=self.remote_addr, policy_mgr= self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, r_cesid="", src_id="", dst_id="")
         #Create it this way so that we can reuse the existing variables from the Stateless Transaction
         new_transaction.ipolicy = self.ipolicy
         new_transaction.opolicy = self.opolicy
@@ -642,3 +493,400 @@ class CETPStateless(CETPTransaction):
         new_transaction.opolicy_tmp = []
         return new_transaction
     
+
+    def create_transaction_in_dp(self):
+        self.create_dataplane_entry(sst, dst, info)
+
+    @asyncio.coroutine
+    def get_policies_from_PolicySystem(self, r_hostid, r_cesid):
+        yield from self.policy_client.send(r_hostid, r_cesid)
+
+
+
+
+
+
+
+class CETP(object):
+    pass                        # CETP class will have multiple instances of CETP TLV
+
+class CETPTLV(object):
+    def __init__(self):
+        self.ope    = None
+        self.cmp    = None
+        self.ext    = None
+        self.group  = None
+        self.code   = None
+        self.len    = None
+        self.value  = None
+    
+    def get_ope(self):
+        return self.ope
+    
+    def get_group(self):
+        return self.group
+
+    def get_code(self):
+        return self.code
+        
+    def get_value(self):
+        return self.value
+
+    def set_value(self, value):
+        self.value = value
+        
+    def remove_value(self):
+        self.value=None
+
+
+LOGLEVEL_oC2CTransaction        = logging.INFO
+
+class oC2CTransaction(H2HTransaction):
+    """
+    Expected outcome from class is to negotiate CES-to-CES transaction & to report status if CES-to-CES is negotiated
+    """
+    def __init__(self, l_cesid="", r_cesid="", c_sstag=0, c_dstag=0, cetp_state_mgr=None, policy_client=None, policy_mgr=None, proto="tcp", name="oC2CTransaction"):
+        self.l_cesid            = l_cesid
+        self.r_cesid            = r_cesid
+        self.sstag              = c_sstag
+        self.dstag              = c_dstag
+        self.cetpstate_mgr      = cetp_state_mgr
+        self.policy_client      = policy_client
+        self.policy_mgr         = policy_mgr                            # Used in absence of the PolicyAgent to PolicyManagementSystem interaction.
+        self.direction          = "outbound"
+        self.proto              = proto                                 # Protocol layer for CETPTransport
+        
+        self.name               = name
+        self._logger            = logging.getLogger(name)
+        self._logger.setLevel(LOGLEVEL_oC2CTransaction)
+        self.rtt                = 0
+        self.cetp_negotiation_history   = []
+        
+
+    def generate_session_tags(self, sstag):
+        if sstag == 0:
+            self.sstag = random.randint(0, 2**32)
+            self.dstag = self.dstag
+        else:
+            self.sstag = sstag
+            self.dstag = random.randint(0, 2**32)           # later on, add checks for conflicts with other (sstag, dstag)
+    
+    def load_policies(self, l_ceisd, proto, direction):
+        """ Retrieves the policies stored in the Policy file"""
+        self.oces_policy, self.oces_policy_tmp  = None, None
+        self.oces_policy        = self.policy_mgr.get_ces_policy(proto="tcp", direction=direction)
+        self.oces_policy_tmp    = self.policy_mgr.get_ces_policy(proto="tcp", direction=direction)
+
+    def _initialize(self):
+        """ Loads policies, generates session tags"""
+        self.generate_session_tags(self.sstag)
+        self.load_policies(self.l_cesid, self.proto, self.direction)
+
+    def _pre_process(self, msg):
+        return self.sanity_checking(msg) 
+ 
+    def sanity_checking(self, msg):
+        # for min packet details & format    - on response packet
+       return True
+
+    def initiate_c2c_negotiation(self):
+        """ Initiating CES policy offers and requirments towards destination """
+        self._logger.info(" Starting CES-to-CES CETP session negotiation (SST={}, DST={}) towards {}".format(self.dstag, self.sstag, self.r_cesid))
+        #self._logger.info("Outbound policy: ", self.oces_policy.show2())
+        req_tlvs, offer_tlvs = [], []
+        self._initialize()
+        # Perhaps, here we should ingress filter to ensure that only a registered IP is initiating the CES-to-CES transaction towards remote 'cesid'? And not a spoofed IP
+
+        #self._logger.debug("Policy: ", self.oces_policy.get_offer())
+
+        #print "The TLVs offered"
+        for otlv in self.oces_policy.get_offer():
+            otlv["value"] = "offer"
+            offer_tlvs.append(otlv)
+
+        #print "The TLVs required"
+        for rtlv in self.oces_policy.get_required():
+            rtlv["value"] = ""
+            req_tlvs.append(rtlv)
+        
+        #if len(tlv_to_send) == 0:
+        #    self._logger.warning("No CES-to-CES policy is defined")                     # Pops up the warning, if no CES-to-CES policy is defined,
+
+        # self.attach_cetp_signature(tlv_to_send)                                       # Signing the CETP header, if required by policy    - Depends on the type of transport layer.
+        cetp_packet = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, req_tlvs=req_tlvs, offer_tlvs=offer_tlvs)
+        self.last_packet_send = cetp_packet
+        #self._log_tlvs(cetp_packet, "Sent TLV", "oCES")
+        self.cetpstate_mgr.add((self.sstag,0), self)
+        self.start_time = time.time()
+        self.rtt += 1
+        cetp_msg = json.dumps(cetp_packet)
+        #self._logger.debug("cetp_msg: ", cetp_msg)
+        return cetp_msg
+
+    def validate_signalling_rlocs(self, r_cesid):
+        """ Shall store the remote-cesid in a list of trusted CES-IDs """
+        pass
+
+    def continue_c2c_negotiation(self, cetp_packet):
+        """ Continues CES-to-CES negotiation towards remote CES """
+        self._logger.info(" Continuing CES-to-CES CETP negotiation (SST={}, DST={}) towards {}".format(self.dstag, self.sstag, self.r_cesid))
+        #self._logger.info(" Outbound policy: ", self.oces_policy.show2())
+        negotiation_status = None
+
+        self.packet = cetp_packet
+        req_tlvs, offer_tlvs, ava_tlvs = [], [], []
+        i_req, i_info, i_resp = [], [], []
+        self.sstag, self.dstag = cetp_packet['DST'], cetp_packet['SST']
+        error = False
+        cetp_resp = ""
+        r_cesid = ""                                     # For testing -by passing the error condition
+
+        if self.rtt>3:
+            self._logger.error(" Failure: CES-to-CES negotiation exceeded {} RTTs".format(self.rtt))
+            negotiation_status = False
+            return (negotiation_status, "")                                    # Prevents infinite loop of CETP negotiation
+        
+        self.rtt += 1
+        if not self._pre_process(cetp_packet):
+            self._logger.error(" CETP packet failed pre_processing() in oCES")
+            # How to deal this if a packet is missing fundamental details? Negotiation failure or Drop?
+            negotiation_status = False
+            return (negotiation_status, "")
+        
+        if len(self.oces_policy.required)==0:                # This can't be true, CES have to exchange mandatory field like 'cesid' etc.
+            self._logger.info(" Local CES has not defined any CES-to-CES policy requirements")
+            self.validate_signalling_rlocs(r_cesid)
+            #return None                                     # Doesn't make sense. oCES might still need to response to queries of iCES. 
+        
+        # Parsing the inbound packet
+        if "query" in self.packet:      i_req = self.packet['query']
+        if "info" in self.packet:       i_info = self.packet['info']
+        if "response" in self.packet:   i_resp = self.packet['response']
+
+        
+        # Processing inbound packet
+        if len(i_req):
+            # Inbound packet has request TLVs               # Reply with 'response' vector for asked queries (+) Send sender host queries
+            for tlv in i_req:
+                if self.oces_policy_tmp.has_available(tlv):
+                    ret_tlvs = self._create_response_tlv(tlv)
+                    ava_tlvs.append(ret_tlvs)
+                else:
+                    self._logger.info(" oCES has notAvailable TLV", tlv['group'],".", tlv['code'])
+                    self._get_unavailable_response(tlv)             # I have not covered this scenrio in implementation
+                    ava_tlvs.append(tlv)
+                    # I guess it shall locally terminate outgoing connection
+                    # OR it can append notavailable with TLV
+            
+            for tlv in self.oces_policy_tmp.get_required():         # Issuing sender's policy requirements
+                tlv["value"] = ""
+                req_tlvs.append(tlv)
+
+            cetp_packet = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, req_tlvs=req_tlvs, offer_tlvs=ava_tlvs, avail_tlvs=[])           # Send 'response' as 'info'
+            self.last_packet_sent = cetp_packet
+            self.cetp_negotiation_history.append(cetp_packet)
+            self.rtt += 1
+            negotiation_status = None
+            cetp_msg = json.dumps(cetp_packet)
+            self._logger.debug("self.rtt: ", self.rtt)
+            return (negotiation_status, cetp_msg)
+        
+        # Legacy sentences - Must evaluate before processing the following 3 sentences.
+        # Expectedly CETP message only has CETP responses, which require 1) verification
+        # 2) May carry TLV notAvailable message; 3) TLV with wrong value; 4) Missing TLVs (due to rogue CETP messages from other nodes??) exploiting CETP states??
+        # Upon success or Failure (Execute processing and then relevant DNS callbacks)
+
+
+        for tlv in i_resp:
+            if (tlv['group'] == 'ces') and (tlv['code']=='terminate'):
+                self._logger.info(" Terminate received for", tlv["group"], ".", tlv['code'], "with value: ", tlv['value'] )
+                error = True
+                break
+
+            elif self.oces_policy_tmp.has_required(tlv):
+                if self._verify_tlv(tlv):
+                    self.oces_policy_tmp.del_required(tlv)
+                else:
+                    self._logger.info(" TLV", tlv['group'], ".", tlv['code'], "failed verification")         # handles TLV NotAvailable & TLV wrong value case
+                    ava_tlvs =  []
+                    ava_tlvs.append(self._get_terminate_tlv(err_tlv=tlv))
+                    error=True
+                    break
+
+
+        if len(self.oces_policy_tmp.required)>0:
+            self._logger.info(" Inbound packet didn't meet all the oCES requirements")                      #  Options: 1) Terminate the connection; 2) A more LAX version may allow another negotiation round 
+            error = True
+
+        if error:
+            self._logger.error(" CES-to-CES policy negotiation failed in {} RTT".format(self.rtt))
+            self._logger.warning(" Execute DNS error callback on the pending h2h-transactions.")
+            negotiation_status = False
+            if self.dstag==0:
+                return (negotiation_status, "")        # This result shall be reflected in all the queued H2H transactions to send the DNS error response.
+            else:
+                # Return terminate packet to remote end, as it completed transaction
+                self._logger.info(" Responding remote end with terminate-TLV")
+                cetp_packet = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, offer_tlvs=ava_tlvs)        # Send as 'Info' TLV
+                self.last_packet_sent = cetp_packet
+                self.cetp_negotiation_history.append(cetp_packet)
+                cetp_msg = json.dumps(cetp_packet)
+                return (negotiation_status, cetp_msg)
+        else:
+            self._logger.info(" CES-to-CES policy negotiation succeeded.. Continue H2H transactions")
+            self.validate_signalling_rlocs(r_cesid)
+            self._cetp_established()
+            negotiation_status = True
+            return (negotiation_status, "")
+            # Some legacy statement, perhaps not too relevant.. Incase ces-policy requirement is not defined, but ces-policies are avaialble.. we can decide based on len(tlv_to_send) whether to respond with message or not.
+            # self.attach_cetp_signature(tlv_to_send)
+            
+
+    def post_c2c_negotiation(self, msg):
+        pass
+        #rate_limit_cetp_flows(), block_host(), ratelimit_host(), SLA_violated()
+        #New_certificate_required(), ssl_renegotiation(), DNS_source_traceback()
+
+    def _cetp_established(self):
+        # It can perhaps execute DNS callback as well
+        self.cetpstate_mgr.remove((self.sstag, 0))
+        self.cetpstate_mgr.add((self.sstag, self.dstag), self)
+
+    @asyncio.coroutine
+    def get_policies_from_PolicySystem(self, r_hostid, r_cesid):    # Has to be a coroutine in asyncio - PolicyAgent
+        yield from asyncio.sleep(0.2)
+        #yield from self.policy_client.send(r_hostid, r_cesid)
+        
+    def get_cached_policy(self):
+        pass
+
+
+LOGLEVEL_iC2CTransaction        = logging.INFO
+
+class iC2CTransaction(H2HTransaction):
+    def __init__(self, sstag=0, dstag=0, l_cesid="", r_cesid="", local_addr=(), remote_addr=(), policy_mgr= None, policy_client=None, cetpstate_mgr= None, proto="tcp", name="iC2CTransaction"):
+        self.local_addr         = local_addr
+        self.remote_addr        = remote_addr
+        self.policy_mgr         = policy_mgr                # This could be policy client in future use.
+        self.cetpstate_mgr      = cetpstate_mgr
+        self.l_cesid            = l_cesid
+        self.r_cesid            = r_cesid
+        self.proto              = proto
+        self.direction          = "inbound"
+        
+        self.name               = name
+        self._logger            = logging.getLogger(name)
+        self._logger.setLevel(LOGLEVEL_iC2CTransaction)
+        self.load_policies(self.l_cesid, proto, self.direction)
+        
+        
+    def load_policies(self, l_ceisd, proto, direction):
+        """ Retrieves the policies stored in the Policy file"""
+        self.ices_policy, self.ices_policy_tmp  = None, None
+        self.ices_policy        = self.policy_mgr.get_ces_policy(proto=self.proto, direction=direction)
+        self.ices_policy_tmp    = self.policy_mgr.get_ces_policy(proto=self.proto, direction=direction)
+
+
+    def is_sender_blacklisted(self, src_addr, r_cesid):
+        """ Checks if the source-address was previously blacklisted due to attack conditions """
+        pass
+
+    def process_c2c_transaction(self, cetp_packet):
+        """ Negotiating CES-to-CES policies with remote edge """
+        self._logger.info("{}".format(30*'#') )
+        self._security_negotiation_successful = False
+        negotiation_status  = None
+        cetp_response       = ""
+        
+        # (src_addr, src_port) = self.remote_addr           # Uncomment it when the remote_address is passed/available as parameter in iCES object
+        src_addr = ""
+        r_cesid = ""
+        if self.is_sender_blacklisted(src_addr, r_cesid):            # Remove, if the one after accept() call works fine.
+            self._logger.info(" Drop: Sender {} is blacklisted.".format(r_cesid))
+            negotiation_status = False
+            return (negotiation_status, cetp_response)
+        
+        self.packet = cetp_packet
+        req_tlvs, offer_tlvs, ava_tlvs, error_tlvs = [], [], [], []
+        self.sstag, self.dstag = cetp_packet['DST'], cetp_packet['SST']
+        error = False
+        self._logger.info(" iCES is processing the CES-to-CES negotiation")
+        # CETPTransport shall have a mechanism, where it checks that it has been 5 seconds since connection establishment, and c2c didn't complete. So, let's close the connecton with oCES.
+
+        # Parsing the inbound packet
+        if "query" in self.packet:      i_req = self.packet['query']
+        if "info" in self.packet:       i_info = self.packet['info']
+        if "response" in self.packet:   i_resp = self.packet['response']
+
+        for tlv in i_info:                              
+            # Some legacy comment --- Processing 'info-TLVs'            #Can an attacker with Random TLV order disrupt this??
+            if tlv["group"] == "ces" and tlv["code"]== "terminate":
+                self._logger.info(" Terminate received for", tlv["group"], ".", tlv['code'], "with value: ", tlv['value'] )
+                error = True
+                break
+            elif self.ices_policy.has_required(tlv):
+                if self._verify_tlv(tlv):
+                    self.ices_policy_tmp.del_required(tlv)
+                else:
+                    self._logger.info("TLV", tlv['group'], ".", tlv['code'], "failed verification")
+                    terminate_tlv = self._get_terminate_tlv(err_tlv=tlv)
+                    error_tlvs.append(terminate_tlv)
+                    error = True
+                    break
+
+        if error:
+            cetp_signaling = self.get_cetp_packet(sstag=o_cetp_sstag, dstag=i_cetp_sstag, avail_tlvs=error_tlvs)
+            cetp_packet = json.dumps(cetp_signaling)
+            negotiation_status = False
+            return (negotiation_status, cetp_packet)                 # Future item: This return value doesn't allow CETPLayering to distinguish (Failure due to policy mismatch from wrong value and hence blacklisting subsequent interactions)
+        
+        for tlv in i_req:                               # Processing 'Req-TLVs'
+            if self.ices_policy.has_available(tlv):
+                ret_tlvs = self._create_response_tlv(tlv)
+                ava_tlvs.append(ret_tlvs)
+            else:
+                self._logger.info("TLV", tlv['group'], ".", tlv['code'], "is unavailable")
+                self._get_unavailable_response(tlv)
+                ava_tlvs.append(tlv)
+                #error = True
+
+        if len(self.ices_policy_tmp.required)>0:
+            self._logger.info("# of iCES requirements not satisfied: ", len(self.ipolicy_tmp.get_required()))
+            self._logger.info("Initiate full query")
+            # Generating Full Query message
+            req_tlvs, offer_tlvs, ava_tlvs = [], [], []
+            for tlv in self.ipolicy.get_required():
+                tlv["value"] = ""
+                req_tlvs.append(tlv)
+                o_cetp_sstag=0
+                negotiation_status = None
+                
+        
+        if (len(self.ices_policy_tmp.required)==0) and not error:
+            #All the destination requirements are met -> Accept/Create CETP connection (i.e. by assigning 'SST') and Export to stateful (for post_establishment etc)
+            stateful_transansaction = None
+            o_cetp_sstag = random.randint(0, 2**32)
+            self.sstag = o_cetp_sstag
+            stateful_transansaction = self._export_to_stateful()            # Not implemented yet
+            self.cetpstate_mgr.add((self.sstag, self.dstag), stateful_transansaction)
+            negotiation_status = True
+        
+        cetp_signaling = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, req_tlvs=req_tlvs, offer_tlvs=offer_tlvs, avail_tlvs=ava_tlvs)
+        #self.pprint(cetp_signaling)
+        cetp_packet = json.dumps(cetp_signaling)
+        self.last_packet_sent = cetp_packet
+        return (negotiation_status, cetp_packet)                              # The return value shall be: (status, cetp_message)
+        
+
+    def _export_to_stateful(self):
+        new_transaction = oC2CTransaction(l_cesid=self.l_cesid, c_sstag=self.sstag, c_dstag=self.dstag, policy_mgr= self.policy_mgr, cetp_state_mgr=self.cetpstate_mgr, r_cesid="")
+        # Create it this way so that we can reuse the existing variables from the Stateless Transaction
+        new_transaction.ices_policy = self.ices_policy
+        new_transaction.ipolicy_tmp = []            # Already met
+        return new_transaction
+
+    def report_host(self):
+        pass
+        # (or def enforce_ratelimits():)
+        # These methods are invoked to report a misbehaving host to remote CES.
+
