@@ -79,15 +79,15 @@ class CustomerEdgeSwitch(object):
         
     def _init_cetp(self):
         """ Initiate CETP manager... Manages CETPLocalManager() and CETPServers() """
-        self.ces_details     = self.ces_conf['CESIdentification']
-        self.ces_name        = self.ces_details['name']
-        self.cesid           = self.ces_details['domainId']
-        self.ces_certificate = self.ces_details['certificate']
-        self.ces_privatekey  = self.ces_details['private_key']
-        self.ca_certificate  = self.ces_details['ca_certificate']                     # Could be a list of popular/trusted (certificate issuing) CA's certificates
+        self.ces_params      = self.ces_conf['CESParameters']
+        self.ces_name        = self.ces_params['name']
+        self.cesid           = self.ces_params['cesid']
+        self.ces_certificate = self.ces_params['certificate']
+        self.ces_privatekey  = self.ces_params['private_key']
+        self.ca_certificate  = self.ces_params['ca_certificate']                     # Could be a list of popular/trusted (certificate issuing) CA's certificates
 
         self._host_policies = self.ces_conf["cetp_policy_file"]
-        self.cetp_mgr = cetpManager.CETPManager(self._host_policies, self.cesid, self.ces_certificate, self.ces_privatekey, self.ca_certificate, loop=self._loop)
+        self.cetp_mgr = cetpManager.CETPManager(self._host_policies, self.cesid, self.ces_params, loop=self._loop)
         cetp_server_list = self.ces_conf["CETPServers"]["serverNames"]
         for srv in cetp_server_list:
             srv_info = self.ces_conf["CETPServers"][srv]

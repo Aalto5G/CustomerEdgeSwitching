@@ -73,7 +73,7 @@ class CETPServer:
                 transport.send_cetp(cetp_resp)
         
         elif inbound_dst == 0:
-            self._logger.info("No prior Outbound H2H-transaction found... Initiating Inbound H2HTransaction (SST={} -> DST={})".format(inbound_sst, inbound_dst))
+            self._logger.info("No prior Outbound H2H-transaction found -> Initiating Inbound H2HTransaction (SST={} -> DST={})".format(inbound_sst, inbound_dst))
             i_h2h = cetpTransaction.H2HTransactionInbound(cetp_msg, sstag=sstag, dstag=sstag, l_cesid=self.l_cesid, r_cesid=self.r_cesid, \
                                                              policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr)
             cetp_resp = i_h2h.start_cetp_processing(cetp_msg)

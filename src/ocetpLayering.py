@@ -24,7 +24,7 @@ LOGLEVEL_oCESTransportTCP       = logging.INFO
 
 
 class CETPClient:
-    def __init__(self, l_cesid= None, r_cesid=None, cb_func=None, cetp_state_mgr= None, policy_client=None, policy_mgr=None, loop=None, ces_cert=None, priv_key=None, ca_cert=None, ocetp_mgr=None, name="CETPClient"):
+    def __init__(self, l_cesid= None, r_cesid=None, cb_func=None, cetp_state_mgr= None, policy_client=None, policy_mgr=None, loop=None, ocetp_mgr=None, ces_params=None, name="CETPClient"):
         self.l_cesid            = l_cesid
         self.r_cesid            = r_cesid
         self.cb_func            = cb_func
@@ -32,17 +32,13 @@ class CETPClient:
         self.policy_client      = policy_client
         self.policy_mgr         = policy_mgr
         self._loop              = loop
+        self.ces_params         = ces_params
         
         self.client_q           = asyncio.Queue()           # Enqueues the naptr responses triggered by private hosts (served by CES)
         self.c2c_q              = asyncio.Queue()           # Enqueues the response from remote peer (iCES), to H2H transactions
         self.c2c_completed      = False
         self.c2c_succeeded      = False
         self.c2c_completed_timely = True
-
-        self.ces_certificate    = ces_cert
-        self.ces_privatekey     = priv_key
-        self.ca_certificate     = ca_cert
-        self.cetp_conn_mgr      = ocetp_mgr
         self.task_list          = []
         
         self._logger            = logging.getLogger(name)
@@ -64,8 +60,7 @@ class CETPClient:
     def get_cetp_c2c(self, naptr_list):
         """ Initiates CETPc2clayer between two CES nodes """
         self.c2c = oCES2CESLayer(naptr_list=naptr_list, cetp_client=self, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetp_state_mgr= self.cetp_state_mgr, \
-                                 policy_mgr=self.policy_mgr, policy_client=self.policy_client, loop=self._loop, ces_cert=self.ces_certificate, \
-                                 priv_key=self.ces_privatekey, ca_cert=self.ca_certificate)
+                                 policy_mgr=self.policy_mgr, policy_client=self.policy_client, loop=self._loop, ces_params=self.ces_params)
         
         asyncio.ensure_future(self.c2c.consume_transport_message())
         # Register by using c2cManager.getC2C(’cesid’)
@@ -130,9 +125,14 @@ class CETPClient:
                     asyncio.ensure_future(self.h2h_transaction_start(cb_args, dest_id))
                     self.client_q.task_done()
                     
-        del(self)
+        self.clear_resources_pending_tasks()
                         
-                        
+    def clear_resources_pending_tasks(self):
+        self._logger.info("Deleting the pending tasks")
+        del(self.c2c)
+        self.cetp_conn_mgr.remove_local_endpoint(self.r_cesid)
+        
+        
     def __del__(self):
         """ Performs cleanup activity when connection or c2c-negotiation with remote end fails """
         self._logger.info("Deleting the pending tasks")
@@ -226,7 +226,7 @@ class oCES2CESLayer:
     Expected outcome from class is the timely negotiation of the CES-to-CES policies.
     If c2c doesn't successfully complete in time 'To', this shall be detected and negotiation shall fail in time 'To'.        (Not implemented yet)
     """
-    def __init__(self, naptr_list=[], cetp_client=None, l_cesid=None, r_cesid=None, cetp_state_mgr=None, policy_mgr=None, policy_client=None, loop=None, ces_cert=None, priv_key=None, ca_cert=None, name="oCES2CESLayer"):
+    def __init__(self, naptr_list=[], cetp_client=None, l_cesid=None, r_cesid=None, cetp_state_mgr=None, policy_mgr=None, policy_client=None, loop=None, ces_params=None, name="oCES2CESLayer"):
         self.naptr_list         = naptr_list
         self.cetp_client        = cetp_client            # H2H layer manager for remote-cesid 
         self.l_cesid            = l_cesid
@@ -235,22 +235,18 @@ class oCES2CESLayer:
         self.policy_client      = policy_client
         self.policy_mgr         = policy_mgr
         self._loop              = loop
-
-        self.ces_certificate    = ces_cert
-        self.ces_privatekey     = priv_key
-        self.ca_certificate     = ca_cert
-        self.q                  = asyncio.Queue()        # Enqueues the CETP message from CETP Transport
-        self.c2c_negotiated = False
+        self.ces_params         = ces_params
         
-        self.get_cetp_transport(naptr_list)
-        self._logger        = logging.getLogger(name)
+        self.q                  = asyncio.Queue()        # Enqueues the CETP message from CETP Transport
+        self.c2c_negotiated     = False
+        self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_oCES2CESLayer)
         self._logger.info("Initiating oCES2CESLayer towards cesid '{}'".format(r_cesid) )
+        self.get_cetp_transport(naptr_list)
 
 
     def get_cetp_transport(self, naptr_list):
-        self.transport_layer = oCESTransportMgr(naptr_list = naptr_list, c2clayer= self, r_cesid= self.r_cesid, loop=self._loop, ces_cert=self.ces_certificate, \
-                                                priv_key=self.ces_privatekey, ca_cert=self.ca_certificate) 
+        self.transport_layer = oCESTransportMgr(naptr_list = naptr_list, c2clayer= self, r_cesid= self.r_cesid, loop=self._loop, ces_params=self.ces_params) 
 
     def send_cetp(self, msg):
         self.transport_layer.send_cetp(msg)
@@ -345,7 +341,10 @@ class oCES2CESLayer:
 
     def initiate_c2c_transaction(self):
         """ Initiates/Continues CES-to-CES negotiation """
-        c2c = cetpTransaction.oC2CTransaction(l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetp_state_mgr=self.cetp_state_mgr, policy_mgr=self.policy_mgr)
+        for naptr_resp in self.naptr_list:
+            dest_id, r_cesid, r_ip, r_port, proto = naptr_resp
+            
+        c2c = cetpTransaction.oC2CTransaction(l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetp_state_mgr=self.cetp_state_mgr, policy_mgr=self.policy_mgr, proto=proto, ces_params=self.ces_params)
         resp = c2c.initiate_c2c_negotiation()
         if resp!=None:
             self.send_cetp(resp)
@@ -362,15 +361,15 @@ class oCES2CESLayer:
             
 
 class oCESTransportMgr:
-    def __init__(self, naptr_list=[], c2clayer= None, r_cesid= None, loop=None, ces_cert=None, priv_key=None, ca_cert=None, name="oCESTransportMgr"):
+    def __init__(self, naptr_list=[], c2clayer= None, r_cesid= None, loop=None, ces_params=None, name="oCESTransportMgr"):
         self.c2c                    = c2clayer
         self.r_cesid                = r_cesid
         self.initiated_transports   = []
         self.connected_transports   = []
-        self.ces_certificate        = ces_cert
-        self.ces_privatekey         = priv_key
-        self.ca_certificate         = ca_cert
-
+        self.ces_params             = ces_params
+        self.ces_certificate_path   = self.ces_params['certificate']
+        self.ces_privatekey_path    = self.ces_params['private_key']
+        self.ca_certificate_path    = self.ces_params['ca_certificate']                     
         self._loop                  = loop
         self._logger                = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_oCESTransportMgr)
@@ -409,8 +408,8 @@ class oCESTransportMgr:
             if proto == "tls":
                 sc = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
                 sc.verify_mode = ssl.CERT_REQUIRED
-                sc.load_cert_chain(self.ces_certificate, self.ces_privatekey)
-                sc.load_verify_locations(self.ca_certificate)
+                sc.load_cert_chain(self.ces_certificate_path, self.ces_privatekey_path)
+                sc.load_verify_locations(self.ca_certificate_path)
                 #sc.check_hostname = True
             
                 try:
