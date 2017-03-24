@@ -1,11 +1,23 @@
 # CES Configuration Parameters
 
-CESIdentification:
+CESParameters:
     name: cesb
-    domainId: cesb.demo.lte.
+    cesid: cesb.demo.lte.
     certificate: config_cesb/cesb.crt
     private_key: config_cesb/cesb.key
     ca_certificate: config_cesb/ca.crt
+    dp_ttl: 3600
+    keepalive_timeout: 2
+    keepalive_cycle: 20
+    caces: 127.0.0.1
+    fw_version: 0.1
+    ces_session_limit: 30
+    host_ratelimit: 2
+    pow_algo: hashcash
+    max_ces_session_limit: 100
+    max_dp_ttl: 7200
+    max_host_ratelimit: 10
+    min_keepalive_timeout: 10
 
 DNS:
     soa: cesb.demo.lte.

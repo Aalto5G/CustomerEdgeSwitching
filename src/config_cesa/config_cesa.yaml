@@ -1,12 +1,24 @@
 # CES Configuration Parameters
 
-CESIdentification:
+CESParameters:
     name: cesa
-    domainId: cesa.demo.lte.
+    cesid: cesa.demo.lte.
     certificate: config_cesa/cesa.crt
     private_key: config_cesa/cesa.key
     ca_certificate: config_cesa/ca.crt
-
+    dp_ttl: 3600
+    keepalive_timeout: 2
+    keepalive_cycle: 20
+    caces: 127.0.0.1
+    fw_version: 0.1
+    ces_session_limit: 30
+    host_ratelimit: 2
+    pow_algo: hashcash
+    max_ces_session_limit: 100
+    max_dp_ttl: 7200
+    max_host_ratelimit: 10
+    min_keepalive_timeout: 10
+    
 DNS:
     soa: cesa.demo.lte.
     zonefile: db.cesa.demo.lte.
