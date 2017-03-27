@@ -13,7 +13,7 @@
 			        { "group": "ces", "code": "fw_version"},
 			        { "group": "ces", "code": "ttl"},
 			        { "group": "ces", "code": "ack"},
-			        { "group": "ces", "code": "keepalive_timeout"},
+			        { "group": "ces", "code": "keepalive_cycle"},
 			        { "group": "ces", "code": "parallel_sessions"},
 			        { "group": "ces", "code": "parallel_host_sessions"}
 			    ],
@@ -48,10 +48,10 @@
 			"outbound": {
 			    "request": [
 			        { "group": "ces", "code": "cesid"},
-			        { "group": "ces", "code": "pow"},
 			        { "group": "ces", "code": "caces"},
 			        { "group": "ces", "code": "fw_version"},
 			        { "group": "ces", "code": "ttl"},
+			        { "group": "ces", "code": "keepalive"},
 			        { "group": "ces", "code": "keepalive_cycle"},
 			        { "group": "ces", "code": "session_limit"},
 			        { "group": "ces", "code": "host_ratelimit"}
@@ -61,6 +61,7 @@
 			        { "group": "ces", "code": "caces"},
 			        { "group": "ces", "code": "fw_version"},
 			        { "group": "ces", "code": "ttl"},
+			        { "group": "ces", "code": "keepalive"},
 			        { "group": "ces", "code": "keepalive_cycle"},
 			        { "group": "ces", "code": "session_limit"},
 			        { "group": "ces", "code": "host_ratelimit"}
@@ -71,6 +72,7 @@
 			        { "group": "ces", "code": "caces"},
 			        { "group": "ces", "code": "fw_version"},
 			        { "group": "ces", "code": "ttl"},
+			        { "group": "ces", "code": "keepalive"},
 			        { "group": "ces", "code": "keepalive_cycle"},
 			        { "group": "ces", "code": "session_limit"},
 			        { "group": "ces", "code": "host_ratelimit"}
@@ -83,6 +85,7 @@
 			        { "group": "ces", "code": "caces"},
 			        { "group": "ces", "code": "fw_version"},
 			        { "group": "ces", "code": "ttl"},
+			        { "group": "ces", "code": "keepalive"},
 			        { "group": "ces", "code": "keepalive_cycle"},
 			        { "group": "ces", "code": "session_limit"},
 			        { "group": "ces", "code": "host_ratelimit"}
@@ -93,6 +96,7 @@
 			        { "group": "ces", "code": "caces"},
 			        { "group": "ces", "code": "fw_version"},
 			        { "group": "ces", "code": "ttl"},
+			        { "group": "ces", "code": "keepalive"},
 			        { "group": "ces", "code": "keepalive_cycle"},
 			        { "group": "ces", "code": "session_limit"},
 			        { "group": "ces", "code": "host_ratelimit"}

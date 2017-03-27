@@ -43,6 +43,7 @@
 			        { "group": "ces", "code": "caces"},
 			        { "group": "ces", "code": "fw_version"},
 			        { "group": "ces", "code": "ttl"},
+			        { "group": "ces", "code": "keepalive"},
 			        { "group": "ces", "code": "keepalive_cycle"},
 			        { "group": "ces", "code": "session_limit"},
 			        { "group": "ces", "code": "host_ratelimit"}
@@ -52,6 +53,7 @@
 			        { "group": "ces", "code": "caces"},
 			        { "group": "ces", "code": "fw_version"},
 			        { "group": "ces", "code": "ttl"},
+			        { "group": "ces", "code": "keepalive"},
 			        { "group": "ces", "code": "keepalive_cycle"},
 			        { "group": "ces", "code": "session_limit"},
 			        { "group": "ces", "code": "host_ratelimit"}
@@ -62,6 +64,7 @@
 			        { "group": "ces", "code": "caces"},
 			        { "group": "ces", "code": "fw_version"},
 			        { "group": "ces", "code": "ttl"},
+			        { "group": "ces", "code": "keepalive"},
 			        { "group": "ces", "code": "keepalive_cycle"},
 			        { "group": "ces", "code": "session_limit"},
 			        { "group": "ces", "code": "host_ratelimit"}
@@ -72,17 +75,19 @@
 			        { "group": "ces", "code": "cesid"},
 			        { "group": "ces", "code": "caces"},
 			        { "group": "ces", "code": "fw_version"},
+			        { "group": "ces", "code": "pow"},
 			        { "group": "ces", "code": "ttl"},
+			        { "group": "ces", "code": "keepalive"},
 			        { "group": "ces", "code": "keepalive_cycle"},
 			        { "group": "ces", "code": "session_limit"},
 			        { "group": "ces", "code": "host_ratelimit"}
 			    ],
 			    "available": [
 			        { "group": "ces", "code": "cesid"},
-			        { "group": "ces", "code": "pow"},
 			        { "group": "ces", "code": "caces"},
 			        { "group": "ces", "code": "fw_version"},
 			        { "group": "ces", "code": "ttl"},
+			        { "group": "ces", "code": "keepalive"},
 			        { "group": "ces", "code": "keepalive_cycle"},
 			        { "group": "ces", "code": "session_limit"},
 			        { "group": "ces", "code": "host_ratelimit"}
