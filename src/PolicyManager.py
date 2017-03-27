@@ -76,8 +76,9 @@ class PolicyManager(object):
         return self._hostpolicies
     
     def get_ces_policy(self, proto="tcp", direction="outbound"):
-        return self._cespolicy[proto][direction]
-
+        policy = self._cespolicy[proto][direction]
+        return copy.deepcopy(policy)
+    
     def get_host_policy(self, index, direction):
         """ The search key for host-policy number 0 is 'policy-0' """
         key="hostpolicy-%d" %index
@@ -86,7 +87,7 @@ class PolicyManager(object):
     def _get_copy_host_policy(self, index, direction):
         key="hostpolicy-%d" %index
         policy = self._hostpolicies[key][direction]
-        return copy.copy(policy)                            # copy.deepcopy() is another option. But is more memory consuming (+ slow)
+        return copy.deepcopy(policy)                            # Shall always return a copy for use. Else, inbound packet would manipulate policy for subsequent interactions 
 
     def load_CES_policy(self):
         self._cespolicy = {}
@@ -117,6 +118,25 @@ class PolicyCETP(object):
         self._logger.setLevel(LOGLEVEL_PolicyCETP)             # Within this class, logger will only handle message with this or higher level.    (Otherwise, default value of basicConfig() will apply)
         self._initialize()
         
+    def __copy__(self):
+        self._logger.debug("Shallow copying the python policy object.")
+        return PolicyCETP(self.policy)
+        
+    def __deepcopy__(self, memo):
+        """
+        To copy the policy object by value.. Deepcopy() is useful for compound objects (that contain other objects, like lists or class instances in them)
+        Reference implementation: https://pymotw.com/2/copy/
+        """
+        self._logger.debug("Deep copying the python policy object.")
+        not_there = []
+        existing = memo.get(self, not_there)
+        if existing is not not_there:
+            return existing
+        
+        dup = PolicyCETP(copy.deepcopy(self.policy, memo))
+        memo[self] = dup
+        return dup
+    
     def _initialize(self):
         if "request" in self.policy:
             self.required = self.policy["request"]
@@ -129,11 +149,11 @@ class PolicyCETP(object):
     def get_tlv_details(self, tlv):
         cmp, ext, group, code = None, None, None, None
         if "group" in tlv:
-            group=tlv["group"]
+            group = tlv["group"]
         if "code" in tlv:
-            code = tlv["code"]
+            code  = tlv["code"]
         if "cmp" in tlv:
-            cmp= tlv["cmp"]
+            cmp   = tlv["cmp"]
         return (cmp, ext, group, code)
     
     def has_required(self, tlv):
