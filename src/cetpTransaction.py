@@ -370,7 +370,7 @@ class H2HTransactionInbound(H2HTransaction):
         
         self.dst_hostId = destep_tlv['value']
         if not self.dst_hostId_is_valid(self.dst_hostId):
-            self._logger.info("Destination host is not available")
+            self._logger.info(" Destination host is not available")
             return False
         
         #print("self.dst_hostId", self.dst_hostId)
@@ -712,6 +712,27 @@ VERIFY_TLV_GROUP = {TLV_GROUP["id"]:VERIFY_TLV_ID_CODE,
 
 LOGLEVEL_C2CTransaction = logging.INFO
 
+"""
+General_policy
+        cesid: cesa.demo.lte.
+        certificate: config_cesa/cesa.crt
+        #private_key: config_cesa/cesa.key
+        #ca_certificate: config_cesa/ca.crt
+        dp_ttl: 3600
+        keepalive_timeout: 2
+        keepalive_cycle: 20
+        caces: 127.0.0.1
+        fw_version: 0.1
+        ces_session_limit: 30
+        host_ratelimit: 2
+        pow_algo: hashcash
+        max_ces_session_limit: 100
+        max_dp_ttl: 7200
+        max_host_ratelimit: 10
+        min_keepalive_timeout: 10
+
+"""
+
 class C2CTransaction(object):
     def __init__(self, name="C2CTransaction"):
         self.name       = name
@@ -815,7 +836,8 @@ LOGLEVEL_oC2CTransaction        = logging.INFO
 
 class oC2CTransaction(C2CTransaction):
     """
-    Expected outcome from class is to negotiate CES-to-CES transaction & to report status if CES-to-CES is negotiated.
+    Negotiates outbound CES policies with the remote CES.
+    Also contains methods to support communication in post-c2c negotiation phase between CES nodes.
     """
     def __init__(self, loop, l_cesid="", r_cesid="", c_sstag=0, c_dstag=0, cetp_state_mgr=None, policy_client=None, policy_mgr=None, proto="tls", ces_params=None, direction="outbound", name="oC2CTransaction"):
         self._loop              = loop
@@ -827,15 +849,13 @@ class oC2CTransaction(C2CTransaction):
         self.policy_client      = policy_client
         self.policy_mgr         = policy_mgr                            # Used in absence of the PolicyAgent to PolicyManagementSystem interaction.
         self.direction          = direction
-        self.proto              = proto                                 # Protocol layer for CETPTransport
+        self.proto              = proto                                 # CETPTransport protocol 
         self.ces_params         = ces_params
-        
+        self.rtt                = 0
         self.name               = name
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_oC2CTransaction)
-        self.rtt                = 0
         self.cetp_negotiation_history   = []
-        # possible to initiate the super class?
         
 
     def generate_session_tags(self, sstag):
@@ -844,8 +864,8 @@ class oC2CTransaction(C2CTransaction):
             self.dstag = self.dstag
         else:
             self.sstag = sstag
-            self.dstag = random.randint(0, 2**32)           # later on, add checks for conflicts with other (sstag, dstag)
-    
+            self.dstag = random.randint(0, 2**32)           # Future item: Add checks if a session tag is already assigned (to prevent conflicts across state)
+
     def load_policies(self, l_ceisd, proto, direction):
         """ Retrieves the policies stored in the Policy file"""
         self.ces_policy, self.ces_policy_tmp  = None, None
@@ -868,64 +888,43 @@ class oC2CTransaction(C2CTransaction):
         return True
 
 
-    def general_policy_group_codes(self):
-        """
-        cesid: cesa.demo.lte.
-        certificate: config_cesa/cesa.crt
-        #private_key: config_cesa/cesa.key
-        #ca_certificate: config_cesa/ca.crt
-        dp_ttl: 3600
-        keepalive_timeout: 2
-        keepalive_cycle: 20
-        caces: 127.0.0.1
-        fw_version: 0.1
-        ces_session_limit: 30
-        host_ratelimit: 2
-        pow_algo: hashcash
-        max_ces_session_limit: 100
-        max_dp_ttl: 7200
-        max_host_ratelimit: 10
-        min_keepalive_timeout: 10
-        """
-
     def initiate_c2c_negotiation(self):
-        """ Initiating CES policy offers and requirments towards destination """
+        """ Initiates CES policy offers and requirments towards 'r_cesid' """
         self._logger.info(" Starting CES-to-CES CETP session negotiation (SST={}, DST={}) towards {}".format(self.dstag, self.sstag, self.r_cesid))
         req_tlvs, offer_tlvs = [], []
         self._initialize()
         #self._logger.debug("Outbound policy: ", self.ces_policy.show2())
-        # At this stage, ingress filtering is ensured?   - ensuring that only a valid host initiates the CES-to-CES transaction towards remote 'cesid'? 
         
-        #print "The TLVs offered"
+        # The offered TLVs
         for otlv in self.ces_policy.get_offer():
             self._create_offer_tlv(otlv)
             offer_tlvs.append(otlv)
 
-        #print "The TLVs required"
+        # The required TLVs
         for rtlv in self.ces_policy.get_required():
             self._create_request_tlv(rtlv)
             req_tlvs.append(rtlv)
         
         #if len(tlv_to_send) == 0:
-        #    self._logger.warning("No CES-to-CES policy is defined")                     # Pops up the warning, if no CES-to-CES policy is defined,
+        #    self._logger.warning("No CES-to-CES policy is defined")                    # Pops up the warning, if no CES-to-CES policy is defined,
 
         # self.attach_cetp_signature(tlv_to_send)                                       # Signing the CETP header, if required by policy    - Depends on the type of transport layer.
-        cetp_packet = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, req_tlvs=req_tlvs, offer_tlvs=offer_tlvs)
-        self.last_packet_send = cetp_packet
+        cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, req_tlvs=req_tlvs, offer_tlvs=offer_tlvs)
+        self.last_packet_send = cetp_message
         self.cetpstate_mgr.add((self.sstag,0), self)
         self.start_time = time.time()
-        self.pprint(cetp_packet)
-        #self._log_tlvs(cetp_packet, "Sent TLV", "oCES")
-        #self._logger.debug("cetp_msg: "+ cetp_msg)
-        cetp_msg = json.dumps(cetp_packet)
-        return cetp_msg
+        self.pprint(cetp_message)
+        cetp_packet = json.dumps(cetp_message)
+        return cetp_packet
 
     def validate_signalling_rlocs(self, r_cesid):
-        """ Shall store the remote-cesid in a list of trusted CES-IDs """
+        """ Shall store the remote-cesid in a list of trusted CES-IDs 
+        Such list shall be maintained by a CETPSecurity monitoring module 
+        """
         pass
 
     def continue_c2c_negotiation(self, cetp_packet, transport):
-        """ Continues CES-to-CES negotiation towards remote CES """
+        """ Continues CES policy negotiation towards remote CES """
         self._logger.info(" Continuing CES-to-CES CETP negotiation (SST={}, DST={}) towards {}".format(self.dstag, self.sstag, self.r_cesid))
         #self._logger.info(" Outbound policy: ", self.ces_policy.show2())
         negotiation_status = None
@@ -934,14 +933,13 @@ class oC2CTransaction(C2CTransaction):
         self.packet = cetp_packet
         req_tlvs, offer_tlvs, ava_tlvs = [], [], []
         i_req, i_info, i_resp = [], [], []
-        self.sstag, self.dstag = cetp_packet['DST'], cetp_packet['SST']
         self.rtt += 1
         error = False
         cetp_resp = ""
 
         if self.rtt>3:
             self._logger.error(" Failure: CES-to-CES negotiation exceeded {} RTTs".format(self.rtt))
-            negotiation_status = False              # Prevents infinite loop of CETP negotiation
+            negotiation_status = False
             return (negotiation_status, "")
         
         if not self._pre_process(cetp_packet):
@@ -955,8 +953,8 @@ class oC2CTransaction(C2CTransaction):
         if "info" in self.packet:       i_info = self.packet['info']
         if "response" in self.packet:   i_resp = self.packet['response']
 
-        # oCES check whether the inbound CETP message is a request or response.    If request, send policy-response + sender-host Queries.
-        # If Response message, verify that it is okay, and accept. Else send terminate-TLV, if iCES has completed (SST, DST)
+        # oCES check whether the inbound CETP message is a request or response.    If request, send response & issue sender-policy queries.
+        # If response message, verify.     If validated, accept.     Otherwise, send terminate-TLV, if iCES has already completed (SST, DST).
         
         # Processing inbound packet
         if len(i_req):
@@ -966,10 +964,10 @@ class oC2CTransaction(C2CTransaction):
                     ret_tlvs = self._create_response_tlv(tlv)
                     ava_tlvs.append(ret_tlvs)
                 else:
-                    self._logger.info(" TLV" + tlv['group']+"."+ tlv['code'] + " is not Available.")
+                    self._logger.info(" TLV {}.{}  is not Available.".format(tlv['group'], tlv['code']))
                     if 'cmp' in tlv:
                         if tlv['cmp'] == "optional":
-                            self._logger.info(" TLV" + tlv['group']+"."+ tlv['code'] + " is not mandatory requirement.")
+                            self._logger.info(" TLV {}.{} is not mandatory requirement.".format(tlv['group'], tlv['code']))
                             self._get_unavailable_response(tlv)
                             ava_tlvs.append(tlv)
                     else:
@@ -995,7 +993,7 @@ class oC2CTransaction(C2CTransaction):
 
         for tlv in i_resp:
             if (tlv['group'] == 'ces') and (tlv['code']=='terminate'):
-                self._logger.info(" Terminate received for", tlv["group"], ".", tlv['code'], "with value: ", tlv['value'] )
+                self._logger.info(" Terminate received for {}.{} with value: {}".format(tlv["group"], tlv['code'], tlv['value']) )
                 error = True
                 break
             
@@ -1004,7 +1002,7 @@ class oC2CTransaction(C2CTransaction):
                     self.ces_policy_tmp.del_required(tlv)
                 else:
                     # There is need to handle 'notAvailable' TLV and absorbing if its not too stingently required
-                    self._logger.info(" TLV", tlv['group'], ".", tlv['code'], "failed verification")         # handles TLV NotAvailable & TLV wrong value case
+                    self._logger.info(" TLV {}.{} failed verification".format(tlv['group'], tlv['code']))         # handles TLV NotAvailable & TLV wrong value case
                     ava_tlvs =  []
                     ava_tlvs.append(self._get_terminate_tlv(err_tlv=tlv))
                     error=True
@@ -1128,7 +1126,7 @@ class oC2CTransaction(C2CTransaction):
             
             for tlv in offer_tlvs:
                 if (tlv['group'] == 'ces') and (tlv['code']=='terminate'):
-                    self._logger.info(" Terminate received for", tlv["group"], ".", tlv['code'], "with value: ", tlv['value'] )
+                    self._logger.info(" Terminate received for {}.{} with value: {}".format(tlv["group"], tlv['code'], tlv['value']) )
                     # Could it mean to terminate the support for a particular TLV.
                     status = False                  
                     return (status, cetp_resp)
@@ -1142,7 +1140,7 @@ class oC2CTransaction(C2CTransaction):
                         # Should we even communication (with a CES) a TLV that is not supported? 
                         # If it is too important for us, and support is not available - This shall already fail in policy negotiation
                         # If it is a nice-to-have TLV from CES perspective, but the remote CES does not support it. CES shall never forward this TLV towards the remote CES.
-                        self._logger.info(" TLV", tlv['group'], ".", tlv['code'], "failed verification")         # handles TLV wrong value case
+                        self._logger.info(" TLV {} failed verification".format(tlv['group'], tlv['code']) )         # handles TLV wrong value case
                         #self.last_packet.queries.satisfied(tlv, False)    # Unsatisfied policy requirement
                         ava_tlvs =  []
                         #ava_tlvs.append(self._unexpected_payload_in_tlv(err_tlv=tlv))
@@ -1203,70 +1201,87 @@ class iC2CTransaction(C2CTransaction):
         
         
     def load_policies(self, l_ceisd, proto, direction):
-        """ Retrieves the policies stored in the Policy file"""
+        """ Retrieves the policies stored in the policy file"""
         self.ices_policy, self.ices_policy_tmp  = None, None
         self.ices_policy        = self.policy_mgr.get_ces_policy(proto=self.proto, direction=direction)
         self.ices_policy_tmp    = self.policy_mgr.get_ces_policy(proto=self.proto, direction=direction)
-        #self.ices_policy_tmp    = copy.deepcopy(self.ices_policy)
-        #self.ices_policy_tmp    = self.ices_policy[:]
         
     def is_sender_blacklisted(self, r_cesid):
-        """ Checks if the source-address was previously blacklisted due to attack conditions """
+        """ Checks if the source-address or 'cesid' are blacklisted due to attack history """
         pass
 
+    def _pre_process(self, cetp_packet):
+        """ Enforce version field, minimum set of required fields, and minimum set of TLVs .. Extracts 'cesid'
+        """
+        try:
+            ver, sstag, dstag = cetp_packet['VER'], cetp_packet['SST'], cetp_packet['DST']
+            if "info" in cetp_packet:       i_info = cetp_packet['info']
+            if len(i_info) == 0:
+                self._logger.info(" Minimum packet details are missing")
+                return False
+        except:
+            self._logger.error(" Inbound packet doesn't conform to CETP format")
+            return False
+        
+        if ver!=1:
+            self._logger.error(" CETP Version is not supported.")
+            return False
+        
+        for tlv in cetp_packet['info']:
+            if tlv["group"] == "ces" and tlv["code"]== "cesid":
+                self.r_cesid = tlv['value']
+                if len(tlv['value'])>256:
+                    return False                    # Length of FQDN <= 255
+        return True
+
     def process_c2c_transaction(self, cetp_packet):
-        """ Negotiating CES-to-CES policies with remote edge """
-        """ Extract the remote CESID: 'self.r_cesid' """
+        """ Processes the inbound cetp-packet for Negotiating the CES-to-CES policies """
         self._logger.info("{}".format(30*'#') )
         negotiation_status  = None
         cetp_response       = ""
         
-        src_addr = self.remote_addr[0]
-        r_cesid = ""                                                 # This can be only extracted upon decoding the CETP message. 
-        if self.is_sender_blacklisted(r_cesid):                      # Remove, if the one after accept() call works fine.
-            self._logger.info(" Drop: Sender {} is blacklisted.".format(r_cesid))
+        if not self._pre_process(cetp_packet):
+            self._logger.info("Inbound packet failed the pre-processing()")
             negotiation_status = False
             return (negotiation_status, cetp_response)
         
+        src_addr = self.remote_addr[0]
         self.packet = cetp_packet
         req_tlvs, offer_tlvs, ava_tlvs, error_tlvs = [], [], [], []
         self.sstag, self.dstag = cetp_packet['DST'], cetp_packet['SST']
         error = False
-        # iCETPTransport shall have a mechanism, where it checks that it has been 5 seconds since connection establishment, and c2c didn't complete. So, let's close the connecton with oCES.
 
         # Parsing the inbound packet
         if "query" in self.packet:      i_req = self.packet['query']
         if "info" in self.packet:       i_info = self.packet['info']
         if "response" in self.packet:   i_resp = self.packet['response']
 
-        # Ideally: iCES first checks if its requirements are met... If not met, send full query. If met, then verify the offered/responded policies.. 
-        # If verified, only then respond to the remote end's requirements.
-        # Support for POW is missing .... + iCES shall allow both 1-RTT & 2-RTT CETP negotiations
+        # iCES first checks if its requirements are met... If not met, sends all queries. If met, then verifies the offered/responded policies. 
+        # If all TLVs are verified, it responds to the remote end's requirements.
         
         for tlv in i_info:                              
             if tlv["group"] == "ces" and tlv["code"]== "terminate":
-                self._logger.info(" Terminate received for", tlv["group"], ".", tlv['code'], "with value: ", tlv['value'] )     # IMO, iCES will never receive terminate in stateless mode. Only stateful transaction can/should process the terminate.
+                self._logger.info(" Terminate received for {}.{} with value: {}".format(tlv["group"], tlv['code'], tlv['value']) )     # iCES being stateless, shall never receive terminate TLV.
                 return (None, cetp_response)
              
             elif self.ices_policy_tmp.has_required(tlv):
                 if self._verify_tlv(tlv):
                     self.ices_policy_tmp.del_required(tlv)
                 else:
-                    self._logger.info("TLV " + tlv['group']+ "."+ tlv['code'] + " failed verification")
+                    self._logger.info("TLV {}.{} failed verification".format(tlv['group'], tlv['code']))
                     terminate_tlv = self._get_terminate_tlv(err_tlv=tlv)
                     error_tlvs.append(terminate_tlv)
                     error = True
                     break
             else:
-                self._logger.info("Unrecognized TLV is received:  " + tlv)
-                # Return False, or Ignore    (in this case, for future extension sake??)
+                self._logger.debug("Non-requested TLV {} is received: ".format(tlv))
 
-            
         if error:
             cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, avail_tlvs=error_tlvs)
             cetp_packet = json.dumps(cetp_message)
             negotiation_status = False
-            return (negotiation_status, cetp_packet)                 # Future item:     Return value shall allow CETPLayering to distinguish (Failure due to policy mismatch from wrong value and hence blacklisting subsequent interactions) OR shall this be handled internally?
+            return (negotiation_status, cetp_packet)
+            # Future item:     Return value shall allow CETPLayering to distinguish (Failure due to policy mismatch from wrong value and hence blacklisting subsequent interactions) OR shall this be handled internally?
         
         if len(self.ices_policy_tmp.required)>0:
             self._logger.info(" {} of unsatisfied iCES requirements: ".format(len(self.ices_policy_tmp.get_required())) )
@@ -1283,14 +1298,14 @@ class iC2CTransaction(C2CTransaction):
             cetp_packet = json.dumps(cetp_message)
             return (negotiation_status, cetp_packet)
 
-        # At this stage, The sender's offer has met the iCES policy requirements & Offer has been verified as correct..  Now, we evaluate the sender's requirements.
+        # At this stage, the sender's offer has met the iCES policy requirements & Offer has been verified as correct..  Now, we evaluate the sender's requirements.
         
         for tlv in i_req:                                            # Processing 'Req-TLVs'
             if self.ices_policy.has_available(tlv):
                 self._create_response_tlv(tlv)
                 ava_tlvs.append(tlv)
             else:
-                self._logger.info("TLV "+ tlv['group']+ "."+ tlv['code']+ " is unavailable")
+                self._logger.info("TLV {}.{} is unavailable".format(tlv['group'], tlv['code']))
                 self._get_unavailable_response(tlv)
                 error_tlvs.append(tlv)
                 error = True
@@ -1300,32 +1315,27 @@ class iC2CTransaction(C2CTransaction):
             cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, avail_tlvs=error_tlvs)
             cetp_packet = json.dumps(cetp_message)
             negotiation_status = False
-            return (negotiation_status, cetp_packet)                 # Future item:     Return value shall allow CETPLayering to distinguish (Failure due to policy mismatch from wrong value and hence blacklisting subsequent interactions) OR shall this be handled internally?
+            return (negotiation_status, cetp_packet)                 
         
         
-        #All the destination requirements are met -> Accept/Create CETP connection (i.e. by assigning 'SST') and Export to stateful (for post_establishment etc)
+        #All the destination requirements are met -> Accept/Create CETP connection (i.e. by assigning 'SST') and Export to stateful (for post-negotiation CETP flow etc.)
         self.sstag = random.randint(0, 2**32)
         self._logger.info("C2C-policy negotiation succeeded -> Create stateful transaction (SST={}, DST={})".format(self.sstag, self.dstag))
         self._logger.info("{}".format(30*'#') )
-        stateful_transansaction = self._export_to_stateful()            # Not implemented yet
-        self.cetpstate_mgr.add((self.sstag, self.dstag), stateful_transansaction)
+        stateful_transansaction = self._export_to_stateful()
         negotiation_status = True
-        self.r_cesid = "cesa.demo.lte"                                  # Dummy value: For now, for testing    -- Needs to be extracted from inbound packet.
         
         cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, req_tlvs=req_tlvs, offer_tlvs=offer_tlvs, avail_tlvs=ava_tlvs)
         self.pprint(cetp_message)
         self._logger.info("{}".format(30*'#') )
         cetp_packet = json.dumps(cetp_message)
         self.last_packet_sent = cetp_packet
-        return (negotiation_status, cetp_packet)                              # The return value shall be: (status, cetp_message)
-        
-
-        # try: except clasues for error handling are missing entirely...
+        return (negotiation_status, cetp_packet)
 
     def _export_to_stateful(self):
-        new_transaction = oC2CTransaction(self._loop, l_cesid=self.l_cesid, c_sstag=self.sstag, c_dstag=self.dstag, policy_mgr= self.policy_mgr, cetp_state_mgr=self.cetpstate_mgr, ces_params=self.ces_params, r_cesid="", direction="inbound")
-        # Create it this way so that we can reuse the existing variables from the Stateless Transaction
+        new_transaction = oC2CTransaction(self._loop, l_cesid=self.l_cesid, r_cesid=self.r_cesid, c_sstag=self.sstag, c_dstag=self.dstag, policy_mgr= self.policy_mgr, cetp_state_mgr=self.cetpstate_mgr, ces_params=self.ces_params, direction="inbound")
         new_transaction.load_policies(self.l_cesid, self.proto, direction="inbound")
+        self.cetpstate_mgr.add((self.sstag, self.dstag), new_transansaction)
         return new_transaction
 
     def report_host(self):
