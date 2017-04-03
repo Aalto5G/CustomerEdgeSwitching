@@ -251,7 +251,7 @@ class iCESServerTransportTCP(asyncio.Protocol):
             self.c2c_mgr.process_inbound_message(cetp_msg, self)                # Forward the message to inbound-c2cmanager for C2C negotiation.
         else:
             self._logger.debug("Forward the message to CETP-C2C layer")
-            self.c2c_layer.enqueue_transport_message_nowait((msg, self))        # Sending the transport alongside the message, for sending reply.
+            self.c2c_layer.enqueue_transport_message_nowait((cetp_msg, self))        # Sending the transport alongside the message, for sending reply.
 
     def unframe(self, data):
         # After some processing on data

@@ -51,7 +51,7 @@ class CETPManager:
 
     def process_outbound_cetp(self, r_cesid, naptr_list, dns_cb_func, cb_args):
         """ Gets/Creates the CETP client instance, and puts the NAPTR response in a queue for handling the H2H transactions """
-        # Expected format of NAPTR_response: (remote_ip, remote_port, remote_transport, dst_hostid)
+        # Expected format of NAPTR_response: (remote_ip, remote_port, remote_transport, dst_hostid)        - Assumption: All NAPTRs point towards one 'r_cesid'.    (Detsination domain is connected to one 'cesid' only)
         
         if self.has_local_endpoint(r_cesid):
             ep = self.get_local_endpoint(r_cesid)

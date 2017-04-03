@@ -387,13 +387,12 @@ class oCES2CESLayer:
         proto = ""
         for naptr_resp in self.naptr_list:
             dest_id, r_cesid, r_ip, r_port, proto = naptr_resp
-            
-        c2c_transaction  = cetpTransaction.oC2CTransaction(self._loop, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetp_state_mgr=self.cetp_state_mgr, policy_mgr=self.policy_mgr, proto=proto, ces_params=self.ces_params)
-        resp = c2c_transaction.initiate_c2c_negotiation()
-        if resp!=None:
-            transport_obj.send_cetp(resp)
-        else:
-            self._logger.error(" CES-to-CES negotiation could not be initiated. Why? ")
+            c2c_transaction  = cetpTransaction.oC2CTransaction(self._loop, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetp_state_mgr=self.cetp_state_mgr, policy_mgr=self.policy_mgr, proto=proto, ces_params=self.ces_params)
+            resp = c2c_transaction.initiate_c2c_negotiation()
+            if resp!=None:
+                transport_obj.send_cetp(resp)
+            else:
+                self._logger.error(" CES-to-CES negotiation could not be initiated. Why? ")
 
     def resource_cleanup(self):
         """ Shall cancel the pending tasks and delete the object """

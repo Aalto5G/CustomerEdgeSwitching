@@ -57,7 +57,7 @@ class H2HTransaction(object):
         """ Default CETP fields for signalling message """
         version         = 1
         cetp_header     = {}
-        cetp_header['ver']          = version
+        cetp_header['VER']          = version
         cetp_header['SST']          = sstag
         cetp_header['DST']          = dstag
         if len(req_tlvs):
@@ -743,7 +743,7 @@ class C2CTransaction(object):
         """ Default CETP fields for signalling message """
         version         = 1
         cetp_header     = {}
-        cetp_header['ver']          = version
+        cetp_header['VER']          = version
         cetp_header['SST']          = sstag
         cetp_header['DST']          = dstag
         if len(req_tlvs):
@@ -1193,7 +1193,6 @@ class iC2CTransaction(C2CTransaction):
         self.proto              = proto
         self.direction          = "inbound"
         self.ces_params         = ces_params
-        
         self.name               = name
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_iC2CTransaction)
@@ -1211,8 +1210,7 @@ class iC2CTransaction(C2CTransaction):
         pass
 
     def _pre_process(self, cetp_packet):
-        """ Enforce version field, minimum set of required fields, and minimum set of TLVs .. Extracts 'cesid'
-        """
+        """ Enforce version field, minimum set of required fields, and minimum set of TLVs .. Extracts 'r_cesid' """
         try:
             ver, sstag, dstag = cetp_packet['VER'], cetp_packet['SST'], cetp_packet['DST']
             if "info" in cetp_packet:       i_info = cetp_packet['info']
@@ -1255,9 +1253,11 @@ class iC2CTransaction(C2CTransaction):
         if "query" in self.packet:      i_req = self.packet['query']
         if "info" in self.packet:       i_info = self.packet['info']
         if "response" in self.packet:   i_resp = self.packet['response']
-
-        # iCES first checks if its requirements are met... If not met, sends all queries. If met, then verifies the offered/responded policies. 
-        # If all TLVs are verified, it responds to the remote end's requirements.
+        
+        """
+        iCES first checks if its requirements are met... If not met, sends all queries. If met, then verifies the offered/responded policies. 
+        If all TLVs are verified, it responds to the remote end's requirements.
+        """
         
         for tlv in i_info:                              
             if tlv["group"] == "ces" and tlv["code"]== "terminate":
@@ -1335,7 +1335,7 @@ class iC2CTransaction(C2CTransaction):
     def _export_to_stateful(self):
         new_transaction = oC2CTransaction(self._loop, l_cesid=self.l_cesid, r_cesid=self.r_cesid, c_sstag=self.sstag, c_dstag=self.dstag, policy_mgr= self.policy_mgr, cetp_state_mgr=self.cetpstate_mgr, ces_params=self.ces_params, direction="inbound")
         new_transaction.load_policies(self.l_cesid, self.proto, direction="inbound")
-        self.cetpstate_mgr.add((self.sstag, self.dstag), new_transansaction)
+        self.cetpstate_mgr.add((self.sstag, self.dstag), new_transaction)
         return new_transaction
 
     def report_host(self):
