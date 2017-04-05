@@ -268,9 +268,19 @@ def verify_ces_keepalive(**kwargs):
 def verify_ces_keepalive_cycle(**kwargs):
     tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
     policy_code = cetpTransaction.CES_CODE_TO_POLICY[code]
+    
     if 'cmp' in tlv:
         if tlv['cmp'] == "NotAvailable":
             return False
+    try:
+        keepalive_cycle = tlv['value']
+        if (keepalive_cycle < 2) or (keepalive_cycle > 3600):
+            print("The keepalive cycle is either too small or too large.")
+            return False
+    except Exception as msg:
+        print("Exception in verify_ces_keepalive_cycle")
+        return False
+        
     return True
 
 def verify_ces_certificate(**kwargs):
@@ -284,9 +294,21 @@ def verify_ces_certificate(**kwargs):
 def verify_ces_session_limit(**kwargs):
     tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
     policy_code = cetpTransaction.CES_CODE_TO_POLICY[code]
+    
     if 'cmp' in tlv:
         if tlv['cmp'] == "NotAvailable":
             return False
+    try:
+        ces_session_limit = tlv['value']
+        max_simultaneous_ces_sessions = ces_params['max_ces_session_limit']
+    
+        if (ces_session_limit < 1) or (ces_session_limit > max_simultaneous_ces_sessions):
+            print("CES does not support {} simultaneous H2H transactions.".format(ces_session_limit))
+            return False
+    except Exception as msg:
+        print("Exception in verify_ces_session_limit")
+        return False
+        
     return True
 
 def verify_ces_host_ratelimit(**kwargs):
