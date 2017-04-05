@@ -259,10 +259,9 @@ class iCETPManager:
         """ Check if the remote node has history of misbehavior """
         return False
 
-    def create_c2c_layer(self, r_cesid, c2c_transaction):
+    def create_c2c_layer(self, r_cesid):
         """ Creates a new c2cLayer for cesid AND passes the negotiated ces-to-ces transaction """
         ic2c_layer = icetpLayering.iCETPC2CLayer(r_cesid, self)
-        ic2c_layer.add_c2c_transactions(c2c_transaction)
         self.register_c2c_layer(r_cesid, ic2c_layer)
         return ic2c_layer
     
@@ -319,13 +318,12 @@ class iCETPManager:
             r_cesid = stateful_transaction.r_cesid
             
             if not self.has_c2c_layer(r_cesid): 
-                c2c_layer = self.create_c2c_layer(r_cesid, stateful_transaction)                                        # Stateful C2C transaction is also passed to the iC2C layer
+                c2c_layer = self.create_c2c_layer(r_cesid)
                 c2c_layer.create_cetp_server(r_cesid, self._loop, self.policy_mgr, self.cetpstate_mgr, self.l_cesid)    # Top layer to handle inbound H2H            
             else:
-                c2c_layer = self.get_c2c_layer(r_cesid)             # Gets existing c2c-layer for remote ’cesid’
-                # Missing: the insertion of new stateful transaction, on an established 2c2 layer.
-                
-            c2c_layer.add_connected_transport(transport)
+                c2c_layer = self.get_c2c_layer(r_cesid)                 # Gets existing c2c-layer for remote ’cesid’
+            
+            c2c_layer.register_transport_c2cTransaction(transport, stateful_transaction)
             transport.set_c2c_details(r_cesid, c2c_layer)
             transport.send_cetp(cetp_resp)
 
@@ -340,7 +338,7 @@ class iCETPManager:
         peer_addr = transport.peername
         proto     = transport.proto
         ic2c_transaction = cetpTransaction.iC2CTransaction(self._loop, r_addr=peer_addr, sstag=sstag, dstag=sstag, l_cesid=self.l_cesid, policy_mgr=self.policy_mgr, \
-                                                           cetpstate_mgr=self.cetpstate_mgr, ces_params=self.ces_params, proto=proto)
+                                                           cetpstate_mgr=self.cetpstate_mgr, ces_params=self.ces_params, proto=proto, transport=transport)
         response = ic2c_transaction.process_c2c_transaction(cetp_msg)
         return (response, ic2c_transaction)
 
