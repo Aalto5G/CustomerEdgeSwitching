@@ -198,8 +198,8 @@ class DNSServer(asyncio.DatagramProtocol):
         else:
             print("Domain names doesn't exist.. Returning the default result")
             default_dns_rec = []
-            naptr_rr1 = (search_domain, 'cesb.demo.lte', '127.0.0.1', '49003', 'tls')
-            naptr_rr2 = (search_domain, 'cesb.demo.lte', '127.0.0.1', '49003', 'tls')
+            naptr_rr1 = (search_domain, 'cesb.demo.lte', '127.0.0.1', '49001', 'tcp')
+            naptr_rr2 = (search_domain, 'cesb.demo.lte', '127.0.0.1', '49002', 'tcp')
             naptr_rr3 = (search_domain, 'cesb.demo.lte', '127.0.0.1', '49003', 'tls')
             default_dns_rec = [naptr_rr1, naptr_rr2, naptr_rr3]
             return default_dns_rec
