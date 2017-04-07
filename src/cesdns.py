@@ -196,7 +196,7 @@ class DNSServer(asyncio.DatagramProtocol):
             naptr_resp = self.naptr_records[search_domain]
             return [naptr_resp]
         else:
-            print("Domain names doesn't exist.. Returning the default result")
+            #print("Domain names doesn't exist.. Returning the default result")
             default_dns_rec = []
             naptr_rr1 = (search_domain, 'cesb.demo.lte', '127.0.0.1', '49001', 'tcp')
             naptr_rr2 = (search_domain, 'cesb.demo.lte', '127.0.0.1', '49002', 'tcp')
@@ -218,7 +218,7 @@ class DNSServer(asyncio.DatagramProtocol):
         opcode = query.opcode()
         key = (query.id, name, rdtype, rdclass, addr)
         
-        print("\nReceived DNS query for '%s'" % str(name))
+        #print("\nReceived DNS query for '%s'" % str(name))
         naptr_response_list = self.resolve_naptr(name)
         for naptr_resp in naptr_response_list:
             dest_id, r_cesid, r_ip, r_port, r_transport = naptr_resp                # This shall be improved for case, where a domain can be reached through 2 (inbound) CES nodes. 

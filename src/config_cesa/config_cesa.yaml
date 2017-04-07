@@ -8,7 +8,8 @@ CESParameters:
     ca_certificate: config_cesa/ca.crt
     dp_ttl: 3600
     keepalive_timeout: 2
-    keepalive_cycle: 20
+    keepalive_cycle: 30
+    connection_expiry: 150
     caces: 127.0.0.1
     fw_version: 0.1
     ces_session_limit: 30
