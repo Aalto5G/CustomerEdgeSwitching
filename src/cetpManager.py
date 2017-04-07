@@ -124,19 +124,16 @@ class CETPManager:
         try:
             self._logger.info("Initiating CETPServer on {} protocol @ {}.{}".format(proto, server_ip, server_port))
             if proto == "tcp":
-                protocol_factory = icetpLayering.iCESServerTransportTCP(self._loop, policy_mgr=self.policy_mgr, \
-                                                                        cetpstate_mgr=self.cetp_state_mgr, c2c_mgr= self.ic2c_mgr )
-                coro = self._loop.create_server(lambda: protocol_factory, host=server_ip, port=server_port)     # pre-created objects or Class() are used with 'lambda'
-            
+                coro = self._loop.create_server(lambda: icetpLayering.iCESServerTransportTCP(self._loop, c2c_mgr= self.ic2c_mgr ), host=server_ip, port=server_port)             # pre-created objects in protocol factory utilize same object for all accepted connections. So we avoid it.
+                
             elif proto == "tls":
                 sc = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
                 sc.verify_mode = ssl.CERT_REQUIRED
                 sc.load_cert_chain(self.ces_certificate_path, self.ces_privatekey_path)
                 #sc.check_hostname = True
                 sc.load_verify_locations(self.ca_certificate_path)
-                protocol_factory = icetpLayering.iCESServerTransportTLS(self._loop, self.ces_certificate_path, self.ca_certificate_path, \
-                                                                        policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetp_state_mgr, c2c_mgr= self.ic2c_mgr)
-                coro = self._loop.create_server(lambda: protocol_factory, host=server_ip, port=server_port, ssl=sc)
+                coro = self._loop.create_server(lambda: icetpLayering.iCESServerTransportTLS(self._loop, self.ces_certificate_path, self.ca_certificate_path, \
+                                                                                             c2c_mgr= self.ic2c_mgr), host=server_ip, port=server_port, ssl=sc)
                 
             server = self._loop.run_until_complete(coro)            # Returns the task object
             self.register_server_endpoint(server)                   # Perhaps, store the protocol_factory instead of the task object. Can we close CETPServer etc via task.cancel()?
