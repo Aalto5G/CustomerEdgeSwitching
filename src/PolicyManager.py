@@ -68,7 +68,7 @@ class PolicyManager(object):
         if host_id in self.fqdn_to_policy:
             return self.fqdn_to_policy[host_id]
         else:
-            self._logger.info("No reachability policy exists for this host")
+            #self._logger.info("No reachability policy exists for this host")
             self._logger.info("Assgning a random policy for testing sake")
             return 1
 

@@ -60,11 +60,11 @@ class CETPServer:
         yield from asyncio.sleep(0.01)                              # Simulating the delay upon interaction with the policy management system
         
         if inbound_sst == 0:
-            self._logger.error("Inbound SST shall not be zero")     # Sender must choose an SST
+            self._logger.error(" Inbound SST cannot be zero")     # Sender must choose an SST
             return
             
         elif inbound_dst == 0:
-            self._logger.info("No prior Outbound H2H-transaction found -> Initiating Inbound H2HTransaction (SST={} -> DST={})".format(inbound_sst, inbound_dst))
+            self._logger.info(" No prior Outbound H2H-transaction found -> Initiating Inbound H2HTransaction (SST={} -> DST={})".format(inbound_sst, inbound_dst))
             i_h2h = cetpTransaction.H2HTransactionInbound(cetp_msg, sstag=sstag, dstag=sstag, l_cesid=self.l_cesid, r_cesid=self.r_cesid, \
                                                              policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr)
             cetp_resp = i_h2h.start_cetp_processing(cetp_msg)
@@ -73,7 +73,7 @@ class CETPServer:
             
         elif self.cetpstate_mgr.has((sstag, dstag)):
             oh2h = self.cetpstate_mgr.get((sstag, dstag))
-            self._logger.info("Outbound H2HTransaction found for (SST={}, DST={})".format(inbound_sst, inbound_dst))
+            self._logger.info(" Outbound H2HTransaction found for (SST={}, DST={})".format(inbound_sst, inbound_dst))
             cetp_resp = oh2h.post_cetp_negotiation(cetp_msg)
             if cetp_resp != None:    
                 transport.send_cetp(cetp_resp)
@@ -161,7 +161,9 @@ class iCETPC2CLayer:
             de_queue = yield from self.q.get()
             try:
                 data, transport = de_queue
+                #self._logger.debug("data: {!r}".format(data))
                 cetp_msg = json.loads(data)
+                #self._logger.debug("cetp_msg: {!r}".format(cetp_msg))
                 inbound_sst, inbound_dst = cetp_msg['SST'], cetp_msg['DST']
             except Exception as msg:
                 self._logger.info(" Exception in the received message")
@@ -207,13 +209,13 @@ class iCETPC2CLayer:
         pass
 
 
+CETP_MSG_LEN = 2    
+
 
 class iCESServerTransportTCP(asyncio.Protocol):
-    def __init__(self, loop, policy_mgr=None, cetpstate_mgr=None, c2c_mgr = None, name="iCESServerTransportTCP"):
+    def __init__(self, loop, c2c_mgr = None, name="iCESServerTransportTCP"):
         self._loop           = loop
         self.proto           = "tcp"
-        self.policy_mgr      = policy_mgr
-        self.cetpstate_mgr   = cetpstate_mgr
         self.c2c_mgr         = c2c_mgr                  # c2c-Manager handles a newly connected client, and assigns as C2C layer if the c2c-negotiation (trust) establishes.
         self.r_cesid         = None                     # Indicates if iCES knows the remote 'r_cesid' (having negotiated the c2c-policy with remote endpoint).
         self.c2c_layer       = None
@@ -248,29 +250,51 @@ class iCESServerTransportTCP(asyncio.Protocol):
         self.c2c_layer  = c2c_layer
 
     def send_cetp(self, msg):
-        msg = self.message_framing(msg)
-        self.transport.write(msg)
+        to_send = self.message_framing(msg)
+        self.transport.write(to_send)
 
     def message_framing(self, msg):
-        self._logger.debug("Message sent: {!r}".format(msg))
-        cetp_frame = msg.encode()
-        return cetp_frame
-
-    def data_received(self, data):
-        cetp_msg = self.unframe(data)
-        self._logger.debug('Data received: {!r}'.format(cetp_msg))
+        self._logger.debug("Message to send: {!r}".format(msg))
+        cetp_msg = msg.encode()
+        msg_length = len(cetp_msg)                                                   # Instead of binary encoding - what could be the fastest encoding of length field.
+        len_bytes = (msg_length).to_bytes(CETP_MSG_LEN, byteorder="big")        # Time-it the pyhton's binary encoding.
+        to_send = len_bytes + cetp_msg
+        return to_send
         
-        if self.r_cesid is None:
-            self.c2c_mgr.process_inbound_message(cetp_msg, self)                # Forward the message to inbound-c2cmanager for C2C negotiation.
-        else:
-            self._logger.debug("Forward the message to CETP-C2C layer")
-            self.c2c_layer.enqueue_transport_message_nowait((cetp_msg, self))        # Sending the transport alongside the message, for sending reply.
-
-    def unframe(self, data):
-        # After some processing on data
-        msg = data.decode()
-        return msg
+    def data_received(self, data):
+        self.buffer_and_parse_stream(data)
     
+    def buffer_and_parse_stream(self, data):
+        """ 
+        1. Appends new data from the wire to a buffer;  2. Parses the stream into CETP messages; 
+        3. invokes CETP process to handle message;      4. Removes processed data from the buffer.
+        """
+        
+        self.data_buffer = self.data_buffer+data
+        #print(self.data_buffer)
+        while True:
+            if len(self.data_buffer) < CETP_MSG_LEN:
+                break
+            
+            len_field = self.data_buffer[0:CETP_MSG_LEN]                                            # Possible to read length field in the buffered data
+            msg_length = int.from_bytes(len_field, byteorder='big')
+
+            if len(self.data_buffer) >= (CETP_MSG_LEN + msg_length):
+                #self._logger.debug(" Reading CETP message from streamed data.")
+                cetp_data = self.data_buffer[CETP_MSG_LEN:CETP_MSG_LEN+msg_length]
+                cetp_msg = cetp_data.decode()
+                #self._logger.debug('Data received: {!r}'.format(cetp_msg))
+                self.data_buffer = self.data_buffer[CETP_MSG_LEN+msg_length:]           # Moving ahead in the buffered data
+
+                if self.r_cesid is None:
+                    self.c2c_mgr.process_inbound_message(cetp_msg, self)                # Forward the message to inbound-c2cmanager for C2C negotiation.
+                else:
+                    self._logger.debug(" Forward the message to CETP-C2C layer")
+                    self.c2c_layer.enqueue_transport_message_nowait((cetp_msg, self))   # Sending the transport alongside the message, for sending reply.
+            else:
+                break
+
+            
     def connection_lost(self, ex):
         """ Called by asyncio framework """
         self._logger.info("Remote endpoint closed the connection")
@@ -287,13 +311,11 @@ class iCESServerTransportTCP(asyncio.Protocol):
 
 
 class iCESServerTransportTLS(asyncio.Protocol):
-    def __init__(self, loop, ces_certificate, ca_certificate, policy_mgr=None, cetpstate_mgr=None, c2c_mgr = None, name="iCESServerTransportTLS"):
+    def __init__(self, loop, ces_certificate, ca_certificate, c2c_mgr = None, name="iCESServerTransportTLS"):
         self._loop           = loop
         self.ces_certificate = ces_certificate
         self.ca_certificate  = ca_certificate
         self.proto           = "tls"
-        self.policy_mgr      = policy_mgr
-        self.cetpstate_mgr   = cetpstate_mgr
         self.c2c_mgr         = c2c_mgr                  # c2c-Manager handles a newly connected client, and assigns as C2C layer if the c2c-negotiation (trust) establishes with remote end.
         self.r_cesid         = None                     # Indicates if iCES knows the remote 'cesid' (having negotiated the c2c-policy with remote endpoint).
         self.c2c_layer       = None
@@ -308,7 +330,7 @@ class iCESServerTransportTLS(asyncio.Protocol):
         self._logger.info('Connection from {}'.format(self.peername))
         self.transport = transport
         ip_addr, port = self.peername
-        
+
         if self.c2c_mgr.remote_endpoint_malicious_history(ip_addr) == True:
             self._logger.info("Closing: Remote endpoint has the misbehavior history.")
             self.close()
@@ -328,29 +350,51 @@ class iCESServerTransportTLS(asyncio.Protocol):
         self.c2c_layer  = c2c_layer
 
     def send_cetp(self, msg):
-        msg = self.message_framing(msg)
-        self.transport.write(msg)
+        to_send = self.message_framing(msg)
+        self.transport.write(to_send)
 
     def message_framing(self, msg):
-        self._logger.debug("Message sent: {!r}".format(msg))
-        cetp_frame = msg.encode()
-        return cetp_frame
+        self._logger.debug("Message to send: {!r}".format(msg))
+        cetp_msg = msg.encode()
+        msg_length = len(cetp_msg)                                                   # Instead of binary encoding - what could be the fastest encoding of length field.
+        len_bytes = (msg_length).to_bytes(CETP_MSG_LEN, byteorder="big")        # Time-it the pyhton's binary encoding.
+        to_send = len_bytes + cetp_msg
+        return to_send
+
 
     def data_received(self, data):
-        cetp_msg = self.unframe(data)
-        self._logger.debug('Data received: {!r}'.format(cetp_msg))
-        
-        if self.r_cesid is not None:
-            self._logger.debug("Forward the message to CETP-C2C layer")
-            self.c2c_layer.enqueue_transport_message_nowait((cetp_msg, self))            #Sending the transport alongside the message, for sending reply.
-        else:
-            self.c2c_mgr.process_inbound_message(cetp_msg, self)      # Forwarding message to c2cmanager for ces-ces policy negotiation.
+        self.buffer_and_parse_stream(data)
 
-    def unframe(self, data):
-        # After some processing on data
-        msg = data.decode()
-        return msg
-    
+    def buffer_and_parse_stream(self, data):
+        """ 
+        1. Appends new data from the wire to a buffer;  2. Parses the stream into CETP messages; 
+        3. invokes CETP process to handle message;      4. Removes processed data from the buffer.
+        """
+        
+        self.data_buffer = self.data_buffer+data
+        while True:
+            if len(self.data_buffer) < CETP_MSG_LEN:
+                break
+            
+            len_field = self.data_buffer[0:CETP_MSG_LEN]                                            # Possible to read length field in the buffered data
+            msg_length = int.from_bytes(len_field, byteorder='big')
+
+            if len(self.data_buffer) >= (CETP_MSG_LEN + msg_length):
+                #self._logger.debug(" Reading CETP message from streamed data.")
+                cetp_data = self.data_buffer[CETP_MSG_LEN:CETP_MSG_LEN+msg_length]
+                cetp_msg  = cetp_data.decode()
+                #self._logger.debug('Data received: {!r}'.format(cetp_msg))
+                self.data_buffer = self.data_buffer[CETP_MSG_LEN + msg_length:]           # Moving ahead in the buffered data
+
+                if self.r_cesid is None:
+                    self.c2c_mgr.process_inbound_message(cetp_msg, self)                # Forward the message to inbound-c2cmanager for C2C negotiation.
+                else:
+                    self._logger.info(" Forward the message to CETP-C2C layer")
+                    self.c2c_layer.enqueue_transport_message_nowait((cetp_msg, self))   # Sending the transport alongside the message, for sending reply.
+            else:
+                break
+
+        
     def connection_lost(self, ex):
         self._logger.info("Remote endpoint closed the connection")
         if (self.c2c_layer != None) and (self.is_closed == False):

@@ -246,7 +246,6 @@ class H2HTransactionOutbound(H2HTransaction):
         self._logger.info("Continue establishing connection (%d -> %d)" %(self.sstag, self.dstag))
         # self._logger.info(" ---- Outbound policy: ", self.opolicy)
         self.pprint(cetp_packet)
-        self._logger.info(" ")
         
         if self.rtt > NEGOTIATION_RTT_THRESHOLD:
             return False                            # Prevents infinite loop of CETP negotiation, Where remote end repeatedly sends only Requests-TLVs (or incomplete message??)
@@ -329,6 +328,7 @@ class H2HTransactionOutbound(H2HTransaction):
         else:                
             self._logger.info("H2H negotiation succeeded --> Executing the DNS callback")
             self._cetp_established(cetp_packet)
+            self.h2h_negotiation_status = True
             cb_args=(self.dnsmsg, self.local_addr)
             self._execute_dns_callback(cb_args)
             return None
@@ -881,9 +881,10 @@ class oC2CTransaction(C2CTransaction):
 
     def handle_c2c(self):
         now = time.time()
-        print("handle_c2c()")
         if ( (now-self.start_time) > DEFAULT_CONNECTION_EXPIRY_TIME) and (not self.c2c_negotiation_status):
-            self.cetpstate_mgr.remove((self.sstag, 0))
+            self._logger.debug(" Outbound C2CTransaction did not complete in time To.")
+            if self.cetpstate_mgr.has((self.sstag, 0)):
+                self.cetpstate_mgr.remove((self.sstag, 0))
 
     def generate_session_tags(self, sstag):
         if sstag == 0:
@@ -980,6 +981,11 @@ class oC2CTransaction(C2CTransaction):
         Such list shall be maintained by a CETPSecurity monitoring module 
         """
         pass
+    
+    # Methods for:
+        # Function for -- CES2CES-FSM, security, remote CES feedback, evidence collection, and other indicators.
+        # At some point, we gotta use report_host():  OR enforce_ratelimits():        # Invoking these methods to report a misbehaving host to remote CES.
+
 
     def continue_c2c_negotiation(self, cetp_packet, transport):
         """ Continues CES policy negotiation towards remote CES """
