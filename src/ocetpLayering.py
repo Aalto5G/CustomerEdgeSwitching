@@ -11,7 +11,8 @@ import traceback
 import json
 import ssl
 import cetpManager
-import cetpTransaction
+import C2CTransaction
+import H2HTransaction
 import icetpLayering
 import ocetpLayering
 
@@ -147,7 +148,7 @@ class CETPClient:
     @asyncio.coroutine
     def h2h_transaction_start(self, cb_args, dst_id):
         dns_q, addr = cb_args
-        h2h = cetpTransaction.H2HTransactionOutbound(loop=self._loop, dns_q=dns_q, local_addr=addr, src_id="", dst_id=dst_id, l_cesid=self.l_cesid, r_cesid=self.r_cesid, \
+        h2h = H2HTransaction.H2HTransactionOutbound(loop=self._loop, dns_q=dns_q, local_addr=addr, src_id="", dst_id=dst_id, l_cesid=self.l_cesid, r_cesid=self.r_cesid, \
                                                         policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetp_state_mgr, dns_callback=self.cb_func)
         cetp_packet = yield from h2h.start_cetp_processing()
         self._logger.debug(" Sending message from h2h_transaction_start() ")
@@ -372,11 +373,13 @@ class oCES2CESLayer:
                 self.c2c_negotiated = True
                 transport.report_c2c_status(status)
                 self.cetp_client.c2c_negotiation_status(status=True)
+                self.transport_layer.register_c2c_to_transport(o_c2c, transport)
                 
             elif status == False:
                 if len(cetp_resp) > 0:  self.send(cetp_resp)
                 self.cetp_client.c2c_negotiation_status(status=False)
                 self._logger.debug(" Closing the transport endpoint towards {}.".format(self.r_cesid))
+                self.transport_layer.unregister_c2c_to_transport(transport)
                 transport.close()
                 
             elif status == None:
@@ -406,7 +409,7 @@ class oCES2CESLayer:
 
     def initiate_c2c_transaction(self, transport_obj):
         """ Initiates/Continues CES-to-CES negotiation """
-        c2c_transaction  = cetpTransaction.oC2CTransaction(self._loop, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetp_state_mgr=self.cetp_state_mgr, \
+        c2c_transaction  = C2CTransaction.oC2CTransaction(self._loop, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetp_state_mgr=self.cetp_state_mgr, \
                                                            policy_mgr=self.policy_mgr, proto=transport_obj.proto, ces_params=self.ces_params)
         cetp_resp = c2c_transaction.initiate_c2c_negotiation()
         self.transport_c2c_binding[transport_obj] = c2c_transaction
@@ -442,10 +445,11 @@ class oCESTransportMgr:
         self.r_cesid                = r_cesid
         self.initiated_transports   = []
         self.connected_transports   = []
+        self.transport_c2c_binding  = {}
         self.ces_params             = ces_params
-        self.ces_certificate_path   = self.ces_params['certificate']
-        self.ces_privatekey_path    = self.ces_params['private_key']
-        self.ca_certificate_path    = self.ces_params['ca_certificate']
+        self.count                  = 0
+        
+        
         self._loop                  = loop
         self._logger                = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_oCESTransportMgr)
@@ -456,6 +460,53 @@ class oCESTransportMgr:
     def remote_endpoint_malicious_history(self, r_cesid, ip_addr):
         """ Dummy function, emulating the check that if 'cesid'  or the 'ip-address' has previous history of misbehavior """
         return False
+    
+    def register_c2c_to_transport(self, c2c_transaction, transport):
+        self.transport_c2c_binding[transport] = c2c_transaction
+    
+    def unregister_c2c_to_transport(self, transport):
+        del self.transport_c2c_binding[transport]
+    
+    def get_c2c_for_transport(self, transport):
+        return self.transport_c2c_binding[transport]
+
+    def select_transport(self):
+        """ Select the outgoing CETP-transport based on: 1) load_balancing and 2): a) active health indicator; 2) Lowest-RTT (best health); 3) OR based on priority field in the inbound NAPTR """ 
+        total_transports = len(self.connected_transports)
+        index = random.randint(0, total_transports-1)
+        transport = self.connected_transports[index]
+        if total_transports==1:
+            return transport
+        
+        oc2c = self.get_c2c_for_transport(transport)
+        if oc2c.health_report:
+            (ip, port) = transport.peername
+            if port==50001:
+                self.count +=1
+                print("self.count: ", self.count)
+
+            return transport
+        
+        print()
+        print('#'*30)
+        print("Unresponsive transport {}".format(transport.peername))
+
+
+        for transport in self.connected_transports:
+            oc2c = self.get_c2c_for_transport(transport)
+            if oc2c.health_report:                          # Select the next transport with good health
+                print("New transport {}".format(transport.peername))
+                return transport
+
+        # If all transports have bad health, Then return any connected transport.        
+        transport = self.connected_transports[index]
+        return transport
+    
+
+    def send_cetp(self, msg):
+        current_transport = self.select_transport()
+        current_transport.send_cetp(msg)
+
     
     def register_connected_transports(self, transport):
         """ Registers the connected CETP Transport """
@@ -496,6 +547,10 @@ class oCESTransportMgr:
             transport_instance = oCESTransportTCP(self, proto, self.r_cesid, loop=self._loop)
             
             if proto == "tls":
+                self.ces_certificate_path   = self.ces_params['certificate']
+                self.ces_privatekey_path    = self.ces_params['private_key']
+                self.ca_certificate_path    = self.ces_params['ca_certificate']
+
                 sc = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
                 sc.verify_mode = ssl.CERT_REQUIRED
                 sc.load_cert_chain(self.ces_certificate_path, self.ces_privatekey_path)
@@ -522,15 +577,6 @@ class oCESTransportMgr:
                     self.unregister_transport(transport_instance)
                     #print(ex)
 
-
-    def select_transport(self):
-        """ Can incorporate logic to select the outgoing cetp-transport, e.g. based on active health indicators or load_balancing() requirements """ 
-        for transport in self.connected_transports:
-            return transport
-
-    def send_cetp(self, msg):
-        current_transport = self.select_transport()
-        current_transport.send_cetp(msg)
 
     def report_connectivity(self, transport_obj, status=True):
         """ Gets connectivity report from CETPTransport and forwards it to CETP-C2C layer """
@@ -592,8 +638,8 @@ class oCESTransportTCP(asyncio.Protocol):
             self.close()
         else:
             self.transport = transport
-            peername = transport.get_extra_info('peername')
-            self._logger.info('Connected to {}'.format(peername))
+            self.peername = transport.get_extra_info('peername')
+            self._logger.info('Connected to {}'.format(self.peername))
             self.is_connected = True
             self.t_mgr.report_connectivity(self)                 # Reporting the connectivity to upper layer.
 
