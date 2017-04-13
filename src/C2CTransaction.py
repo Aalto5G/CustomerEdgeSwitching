@@ -664,6 +664,7 @@ class iC2CTransaction(C2CTransaction):
         self._logger.info("{}".format(30*'#') )
         negotiation_status  = None
         cetp_response       = ""
+        #time.sleep(7)
         
         if not self._pre_process(cetp_packet):
             self._logger.info("Inbound packet failed the pre-processing()")

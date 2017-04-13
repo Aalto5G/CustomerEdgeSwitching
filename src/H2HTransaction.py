@@ -247,7 +247,7 @@ class H2HTransactionOutbound(H2HTransaction):
                     ret_tlvs = self._create_response_tlv(tlv)
                     ava_tlvs.append(ret_tlvs)
                 else:
-                    self._logger.info("oCES has notAvailable TLV" + tlv['group']+"."+ tlv['code'])
+                    self._logger.info("oCES has notAvailable TLV {}.{}".format(tlv['group'], tlv['code']))
                     self._get_unavailable_response(tlv)
                     ava_tlvs.append(tlv)
                     # I guess it shall locally terminate outgoing connection
@@ -435,7 +435,7 @@ class H2HTransactionInbound(H2HTransaction):
                 #error = True
 
         if len(self.ipolicy_tmp.required)>0:
-            self._logger.info("# of iCES requirements not satisfied: ", len(self.ipolicy_tmp.get_required()))
+            self._logger.info("{} iCES requirements not satisfied: ".format(len(self.ipolicy_tmp.get_required())) )
             self._logger.info("Initiate full query")
             # Generating Full Query message
             req_tlvs, offer_tlvs, ava_tlvs = [], [], []

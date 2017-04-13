@@ -11,7 +11,8 @@ import traceback
 import json
 import ssl
 import cetpManager
-import cetpTransaction
+import C2CTransaction
+import H2HTransaction
 import ocetpLayering
 import icetpLayering
 import copy
