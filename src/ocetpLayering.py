@@ -76,6 +76,7 @@ class CETPClient:
 
             except Exception as msg:
                 self._logger.info(" Exception in CETPClient queue towards {}".format(self.r_cesid))
+                self.client_q.task_done()
             
     def c2c_negotiation_status(self, status=True):
         """ Reports that c2c-negotiation completed and whether it Succeeded/Failed """
@@ -151,22 +152,22 @@ class CETPClient:
 
     def resource_cleanup(self):
         """ Deletes the CETPClient instance towards r_cesid, cancels the pending tasks, and handles the pending <H2H DNS-NAPTR responses. """
-        
-        # Issues DNS NXDOMAIN (if pending H2H-DNS queries < N in size)
-        if self.client_q.qsize() < self.DNS_Cleanup_Threshold:
+        pending_dns_queries = self.client_q.qsize()
+        if (pending_dns_queries>0) and (pending_dns_queries < self.DNS_Cleanup_Threshold):          # Issues DNS NXDOMAIN (if pending H2H-DNS queries < N in size)
             try:
                 queued_data = self.client_q.get_nowait()
                 (naptr_rr, cb_args) = queued_data
                 self.dns_nxdomain_callback(cb_args)
             except Exception as msg:
                 self._logger.info(" Exception in resource cleanup towards {}".format(self.r_cesid))
+                print(msg)
         
         for tsk in self.pending_tasks:
             self._logger.debug("Cleaning the pending tasks")
             tsk.cancel()
         
         self.cetp_mgr.remove_local_endpoint(self.r_cesid)               # This ordering is important 
-        del(self)
+        #del(self)
 
 
 
@@ -217,7 +218,7 @@ class oCES2CESLayer:
         self.cetp_client.enqueue_message_from_c2c_nowait(msg)
 
     def _pre_process(self, msg):
-        """ Checks whether inbound message conform to CETP packet format. """
+        """ Checks whether inbound message conforms to CETP packet format. """
         try:
             cetp_msg = json.loads(msg)
             inbound_sstag, inbound_dstag, ver = cetp_msg['SST'], cetp_msg['DST'], cetp_msg['VER']
@@ -232,7 +233,7 @@ class oCES2CESLayer:
                 return False
 
         except Exception as msg:
-            self._logger.error(" Exception in parsing the received message.")
+            self._logger.error(" Exception in pre-processing the received message.")
             return False
         
         return True

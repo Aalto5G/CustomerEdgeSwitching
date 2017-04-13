@@ -11,7 +11,9 @@ import traceback
 import json
 import ssl
 import cetpManager
-import cetpTransaction
+import CETP
+import C2CTransaction
+import H2HTransaction
 import ocetpLayering
 import icetpLayering
 import PolicyManager
@@ -40,7 +42,7 @@ class CETPManager:
         self.ces_privatekey_path    = self.ces_params['private_key']
         self.ca_certificate_path    = self.ces_params['ca_certificate']                           # Path of X.509 certificate of trusted CA, for validating the remote node's certificate.
         
-        self.cetp_state_mgr         = cetpTransaction.CETPConnectionObject()                      # Records the established CETP transactions (both h2h & c2c). Required for preventing the re-allocation already in-use SST & DST (in CETP transaction).
+        self.cetp_state_mgr         = CETP.CETPConnectionObject()                      # Records the established CETP transactions (both h2h & c2c). Required for preventing the re-allocation already in-use SST & DST (in CETP transaction).
         self.policy_mgr             = PolicyManager.PolicyManager(policy_file= host_policies)     # Shall ideally fetch the policies from Policy Management System (of Hassaan)    - And will be called, policy_sys_agent
         self._loop                  = loop
         self.name                   = name
@@ -124,7 +126,8 @@ class CETPManager:
         try:
             self._logger.info("Initiating CETPServer on {} protocol @ {}.{}".format(proto, server_ip, server_port))
             if proto == "tcp":
-                coro = self._loop.create_server(lambda: icetpLayering.iCESServerTransportTCP(self._loop, c2c_mgr= self.ic2c_mgr ), host=server_ip, port=server_port)             # pre-created objects in protocol factory utilize same object for all accepted connections. So we avoid it.
+                coro = self._loop.create_server(lambda: icetpLayering.iCESServerTransportTCP(self._loop, self.ces_params, c2c_mgr= self.ic2c_mgr ),\
+                                                 host=server_ip, port=server_port)             # Not utilizing any pre-created objects.
                 
             elif proto == "tls":
                 sc = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
@@ -132,7 +135,7 @@ class CETPManager:
                 sc.load_cert_chain(self.ces_certificate_path, self.ces_privatekey_path)
                 #sc.check_hostname = True
                 sc.load_verify_locations(self.ca_certificate_path)
-                coro = self._loop.create_server(lambda: icetpLayering.iCESServerTransportTLS(self._loop, self.ces_certificate_path, self.ca_certificate_path, \
+                coro = self._loop.create_server(lambda: icetpLayering.iCESServerTransportTLS(self._loop, self.ces_params, self.ces_certificate_path, self.ca_certificate_path, \
                                                                                              c2c_mgr= self.ic2c_mgr), host=server_ip, port=server_port, ssl=sc)
                 
             server = self._loop.run_until_complete(coro)            # Returns the task object
@@ -156,7 +159,8 @@ class CETPManager:
         for cesid, client_ep in self._localEndpoints.items():
             #self._logger.info("r_cesid: ", cesid)
             #self.remove_local_endpoint(cesid)
-            del(client_ep)
+            #del(client_ep)
+            client_ep.resource_cleanup()
     
         # for cesid, ep in self._localEndpoints.items():
         #    ep.enqueue_h2h_requests_nowait(None, ())
@@ -221,7 +225,7 @@ class CETPManager:
         
 class iCETPManager:
     """ 
-    Manager class to aggregate different CETP Transport endpoints from a remote CES-ID, such that at end there is only one c2c-layer between two CES nodes.
+    Manager class to aggregate different CETP Transport endpoints from a remote CES-ID under one c2c-layer between two CES nodes.
     """
     def __init__(self, loop=None, policy_mgr=None, cetp_state_mgr=None, l_cesid=None, ces_params=None, name="iCETPManager"):
         self._loop              = loop
@@ -233,9 +237,6 @@ class iCETPManager:
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_iCETPManager)
 
-    def register_c2c_layer(self, r_cesid, ic2c_layer):
-        self.c2c_register[r_cesid] = ic2c_layer
-
     def has_c2c_layer(self, r_cesid):
         return r_cesid in self.c2c_register
 
@@ -245,6 +246,9 @@ class iCETPManager:
     def delete_c2c_layer(self, r_cesid):
         if self.has_c2c_layer(r_cesid):
             del self.c2c_register[r_cesid]
+            
+    def register_c2c_layer(self, r_cesid, ic2c_layer):
+        self.c2c_register[r_cesid] = ic2c_layer
 
     def get_all_c2c_layers(self):
         c2c_layers = []
@@ -253,7 +257,7 @@ class iCETPManager:
         return c2c_layers
     
     def remote_endpoint_malicious_history(self, ip_addr):
-        """ Check if the remote node has history of misbehavior """
+        """ Informs whether the remote node has history of misbehavior """
         return False
 
     def create_c2c_layer(self, r_cesid):
@@ -265,36 +269,39 @@ class iCETPManager:
     def _pre_process(self, msg):
         """ Pre-processes the received packet """
         try:
-            self._logger.info(" New CETP Transport is connected -> Initiate/continue C2C-negotiation")
+            self._logger.info(" Initiate/continue C2C-negotiation on new CETP Transport")
             cetp_msg = json.loads(msg)
-            inbound_sstag, inbound_dstag = cetp_msg['SST'], cetp_msg['DST']
+            inbound_sstag, inbound_dstag, ver = cetp_msg['SST'], cetp_msg['DST'], cetp_msg['VER']
             sstag, dstag    = inbound_dstag, inbound_sstag
+            
+            if ( (sstag==0) and (dstag ==0)) or (sstag < 0) or (dstag < 0) or (inbound_sstag == 0):
+                self._logger.info(" Session tag values are not acceptable")
+                return False
+            
+            if inbound_dstag !=0:
+                self._logger.debug(" iCETPManager does not processes completed CETPTransactions.")
+                self._logger.warning(" Remote endpoint is scanning the Session-Tag space? ")
+                return False
+        
+            if ver!=1:
+                self._logger.info(" The CETP version is not supported.")
+                return False
+            
         except Exception as ex:
-            self._logger.error(" Exception in parsing the received message.")
+            self._logger.error(" Exception in pre-processing the received message.")
             return False
 
-        if inbound_sstag == 0:
-            self._logger.error(" Inbound SST cannot be zero")            # Sender must choose an SST
-            return False
-        
-        elif inbound_dstag !=0:
-            self._logger.debug(" Remote endpoint is scanning the Session-Tag space?")
-            self._logger.warning(" Unexpected CETP (SST={}, DST={}) -> As negotiated C2CTransactions are processed in iCETPC2CLayering ".format(inbound_sstag, inbound_dstag))
-            return False
-        
         return True
-        # I guess this Incorporates the work done for preventing the abuse of connection states from remote entity scanning the connection state table.
+        # is iCES secure against a remote-connected CES from scanning our the session states table?
         
     
     def process_inbound_message(self, msg, transport):
-        """  Called on the first few packets from a (newly) connected end-point, until the C2C-policies are negotiated.
-        """
+        """ Processes first few packets from a newly connected 'endpoint', until the C2C-policies are negotiated. """
         result = self._pre_process(msg)
         if result == False:
             transport.close()
         
-        response, ic2c_transaction = self.prcoess_c2c_negotiation(msg, transport)
-        (status, cetp_resp) = response
+        (status, cetp_resp) = self.prcoess_c2c_negotiation(msg, transport)
         
         if status == False:
             self._logger.info(" CES-to-CES negotiation failed with remote edge.")
@@ -330,12 +337,14 @@ class iCETPManager:
         cetp_msg = json.loads(msg)
         inbound_sstag, inbound_dstag = cetp_msg['SST'], cetp_msg['DST']
         sstag, dstag    = inbound_dstag, inbound_sstag
-        self._logger.info("No prior Outbound C2CTransaction -> Initiating inbound C2CTransaction (SST={} -> DST={})".format(inbound_sstag, inbound_dstag))
+
+        if not self.cetpstate_mgr.has( (sstag, dstag)):
+            self._logger.info("No prior Outbound C2CTransaction -> Initiating inbound C2CTransaction (SST={} -> DST={})".format(inbound_sstag, inbound_dstag))
+            peer_addr = transport.peername
+            proto     = transport.proto
+            ic2c_transaction = C2CTransaction.iC2CTransaction(self._loop, r_addr=peer_addr, sstag=sstag, dstag=sstag, l_cesid=self.l_cesid, policy_mgr=self.policy_mgr, \
+                                                               cetpstate_mgr=self.cetpstate_mgr, ces_params=self.ces_params, proto=proto, transport=transport)
+            response = ic2c_transaction.process_c2c_transaction(cetp_msg)
+            return response
         
-        peer_addr = transport.peername
-        proto     = transport.proto
-        ic2c_transaction = cetpTransaction.iC2CTransaction(self._loop, r_addr=peer_addr, sstag=sstag, dstag=sstag, l_cesid=self.l_cesid, policy_mgr=self.policy_mgr, \
-                                                           cetpstate_mgr=self.cetpstate_mgr, ces_params=self.ces_params, proto=proto, transport=transport)
-        response = ic2c_transaction.process_c2c_transaction(cetp_msg)
-        return (response, ic2c_transaction)
 
