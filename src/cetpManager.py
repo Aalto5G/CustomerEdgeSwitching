@@ -35,7 +35,6 @@ class CETPManager:
         self._localEndpoints        = {}                           # Dictionary of local client instances to remote CESIDs.
         self._remoteEndpoints       = {}                           # Dictionary of remote client instances connected to this CES.
         self._serverEndpoints       = []                           # List of server instances listening for CETP flows.
-        self._pending_tasks         = {}                           # Contains the list of tasks that shall be terminated upon closing the CETPClient instance {client1:[task1, task2], client2:[task1, task2]}  - Not functional
         self.cesid                  = cesid                        # Local ces-id
         self.ces_params             = ces_params
         self.ces_certificate_path   = self.ces_params['certificate']
@@ -104,18 +103,16 @@ class CETPManager:
         """ Provides list of all CETP server endpoints """
         return self._serverEndpoints
         
-    def delete_server_endpoint(self, ep):
-        """ 
-        Removes a given server endpoint from the list of all CETP server endpoints, AND stops listening the CETP service on (Ip, port, proto).
-        """
-        if ep in self._serverEndpoints:
+    def close_server_endpoint(self, ep):
+        """ Stops listening the CETP service on (Ip, port, proto) """
+        if ep in self.get_server_endpoints():
             self._serverEndpoints.remove(ep)
-            del ep                                          # Can additionally use ep.cancel() for FIN/ACK based termination, instead of RST used now.
+            ep.close()
 
-    def delete_all_server_endpoints(self):
-        """ Stops listening on all server endpoints for new connections """
-        for server_ep in self._serverEndpoints:
-            self.delete_server_endpoint(ep)
+    def close_server_endpoints(self):
+        """ Stops the listening CETP service on all server endpoints """
+        for server_ep in self.get_server_endpoints():
+            self.close_server_endpoint(server_ep)
 
     def create_server_endpoint(self, server_ip, server_port, proto):
         """ Creates CETPServer Endpoint for accepting connections from remote oCES """
@@ -147,32 +144,24 @@ class CETPManager:
         """ Closes CETPClient towards a remote cesid """
         for cesid, client_ep in self._localEndpoints.items():
             if cesid == r_cesid:
-                client_ep.interrupt_handler()
+                client_ep.handle_interrupt()
         
     def close_all_local_client_endpoints(self):
         """ Closes CETPClient instances towards remote CES """
         for cesid, client_ep in self._localEndpoints.items():
-            client_ep.interrupt_handler()
+            client_ep.handle_interrupt()
     
     def close_connected_remote_endpoint(self, r_cesid):
         """ Closes the connection from remote CETPClient """
-        pass
+        self.ic2c_mgr.delete_c2c_layer(r_cesid)
     
     def close_all_connected_remote_endpoints(self):
         """ Closes the connection from remote CETPClients """
         for c2c_layer in self.ic2c_mgr.get_all_c2c_layers():
             c2c_layer.handle_interrupt()
         
-
-    def close_all(self):
-        """ Closes all the server endpoints, all the local client endpoints, and all the remote client endpoints 
-        """
-        # self.delete_all_server_endpoints()
-        self.close_all_local_client_endpoints()
-        #self.close_all_connected_remote_endpoints()
-        
     # Asyncio.Task has a method to get list of all ongoing or pending tasks.
-    # Is It best if the C2C-Layer for remote end is instantiated by the CETPManager, upon request from CETPClient.
+    # C2C-Layer could be instantiated by the CETPManager, upon request from CETPClient.
 
 
         

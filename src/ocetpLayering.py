@@ -179,10 +179,10 @@ class CETPClient:
         del(self)
 
 
-    def interrupt_handler(self):
-        """ Deletes the CETPClient instance towards r_cesid, cancels the pending tasks, and handles the pending <H2H DNS-NAPTR responses. """
+    def handle_interrupt(self):
+        """ Deletes the CETPClient instance, C2CLayer and pending tasks towards remote CES nodes """
         self.set_closure_signal()
-        self.c2c.interrupt_handler()
+        self.c2c.handle_interrupt()
         self.close_pending_tasks()
         
 
@@ -217,10 +217,9 @@ class oCES2CESLayer:
         self._logger                    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_oCES2CESLayer)
         self._logger.info("Initiating outbound CES2CESLayer towards cesid '{}'".format(r_cesid) )
-        self._initiate()
         self.initiate_cetp_transport(naptr_list)
 
-    def _initiate(self):
+    def _initiate_task(self):
         tsk = asyncio.ensure_future(self.consume_transport_message())
         self.pending_tasks.append(tsk)
 
@@ -356,6 +355,9 @@ class oCES2CESLayer:
     """ Functions for managing transport-layer connectivity b/w CES nodes """ 
     def report_connectivity(self, transport_obj, status=True):
         if status == True:
+            if len(self.connected_transports)==0:
+                self._logger.debug("Initiating task to consume messages from CETPTransport, on first connected transport.")
+                self._initiate_task()
             self._logger.info(" CETP Transport is connected -> Exchange the CES-to-CES policies.")
             self.register_connected_transports(transport_obj)
             self.initiate_c2c_transaction(transport_obj)
@@ -397,13 +399,13 @@ class oCES2CESLayer:
                 self._logger.debug("Canceling the pending task")
                 tsk.cancel()
         
-    def interrupt_handler(self):
+    def handle_interrupt(self):
         self.set_closure_signal()
         self.cancel_pending_tasks()
     
     def resource_cleanup(self):
-        """ Cancels the pending tasks and delete the object """
-        self.interrupt_handler()
+        """ Cancels the pending tasks and deletes the object """
+        self.handle_interrupt()
         self.cetp_client.resource_cleanup()
         del(self)
         

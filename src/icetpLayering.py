@@ -59,10 +59,9 @@ class CETPServer:
                 self._logger.info("Exception in task for consuming c2c message")
                 if self._closure_signal: break
                 
-    
     def set_closure_signal(self):
         self._closure_signal = True
-        
+    
     @asyncio.coroutine
     def process_h2h_transaction(self, msg, transport):
         #self.count += 1
@@ -151,10 +150,7 @@ class iCETPC2CLayer:
         self.remove_c2c_transactions(ic2c_transaction)
         self.remove_connected_transport(transport)
         del self.transport_c2c_binding[transport]
-        
-        self._closure_signal = True
-        self.cetp_server.set_closure_signal()
-        self.cancel_pending_tasks()
+        self.handle_interrupt()
         
         if len(self.connected_transports) ==0:
             self._logger.info("No connected transport with remote CES '{}'".format(self.r_cesid))

@@ -168,21 +168,21 @@ class CustomerEdgeSwitch(object):
         self._logger.critical('Got signal %s: exit' % signame)
         try:
             self._logger.info(" Closing the CETP listening service.")
-            for server_obj in self.cetp_mgr.get_server_endpoints():
-                server_obj.close()
+            self.cetp_mgr.close_server_endpoints()
             
             self._logger.info(" Closing the CETPClients towards remote CES nodes.")
             self.cetp_mgr.close_all_local_client_endpoints()
 
+            self._logger.info(" Closing the remote endpoints to local CES.")
+            self.cetp_mgr.close_all_connected_remote_endpoints()
+            
             self._logger.info(" Closing the DNS listening servers.")
             #addr = self._dns['addr'][k]
             #self._logger.warning('Terminating DNS Server {} @{}:{}'.format(k, addr[0],addr[1]))
             #v.connection_lost(None)
-            
-            self._logger.info(" Closing the remote endpoints to local CES.")
-            self.cetp_mgr.close_all_connected_remote_endpoints()
 
-            yield from asyncio.sleep(0.5)                             # Prevents asyncio-loop from stopping, and thus allows Asyncio task.cancel() to complete.
+            yield from asyncio.sleep(0.5)                             # Allows graceful execution of Asyncio task.cancel() by Prevents asyncio-loop from stopping.
+                                                                      # Could possibly use asyncio.wait_for(*tasks)
             
             
         except:
