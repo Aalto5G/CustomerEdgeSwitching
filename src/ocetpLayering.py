@@ -36,6 +36,7 @@ class CETPClient:
         self.policy_mgr                 = policy_mgr
         self.ces_params                 = ces_params
         self.cetp_mgr                   = ocetp_mgr
+        self._closure_signal            = False
         
         self.client_q                   = asyncio.Queue()           # Enqueues the naptr responses triggered by private hosts (served by CES)
         self.c2c_q                      = asyncio.Queue()           # Enqueues the response from remote peer (iCES), to H2H transactions
@@ -76,6 +77,7 @@ class CETPClient:
 
             except Exception as msg:
                 self._logger.info(" Exception in CETPClient queue towards {}".format(self.r_cesid))
+                if self._closure_signal: break
                 self.client_q.task_done()
             
     def c2c_negotiation_status(self, status=True):
@@ -86,7 +88,12 @@ class CETPClient:
             self.pending_tasks.append(t1)
             t2=asyncio.ensure_future(self.consume_message_from_c2c())                   # Task for consuming message from c2c-layer 
             self.pending_tasks.append(t2)
-
+    
+    def close_pending_tasks(self):
+        for tsk in self.pending_tasks:
+            if not tsk.cancelled():
+                self._logger.debug("Cleaning the pending tasks")
+                tsk.cancel()
         
     def dns_nxdomain_callback(self, cb_args):
         """ Executes callback upon H2H-Policy negotiation success or failure """
@@ -99,7 +106,7 @@ class CETPClient:
         h2h = H2HTransaction.H2HTransactionOutbound(loop=self._loop, dns_q=dns_q, local_addr=addr, src_id="", dst_id=dst_id, l_cesid=self.l_cesid, r_cesid=self.r_cesid, \
                                                         policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetp_state_mgr, dns_callback=self.cb_func)
         cetp_packet = yield from h2h.start_cetp_processing()
-        self._logger.debug(" Sending message from h2h_transaction_start() ")
+        self._logger.debug(" Message from h2h_transaction_start() ")
         self.send(cetp_packet)
 
     @asyncio.coroutine
@@ -146,10 +153,14 @@ class CETPClient:
                 asyncio.ensure_future(self.h2h_transaction_continue(msg, transport))        # Handling exception raised within task? Shall use the returned task object?
                 self.c2c_q.task_done()
             except Exception as msg:
-                self._logger.info("Exception in consuming message from c2c-layer")
+                self._logger.info(" Exception in consuming message from c2c-layer")
+                if self._closure_signal: break
+                self.c2c_q.task_done()
                 # What could be this exception? What does it mean? And how to prevent it from happening? Look in above algo.
 
-
+    def set_closure_signal(self):
+        self._closure_signal = True
+    
     def resource_cleanup(self):
         """ Deletes the CETPClient instance towards r_cesid, cancels the pending tasks, and handles the pending <H2H DNS-NAPTR responses. """
         pending_dns_queries = self.client_q.qsize()
@@ -162,13 +173,18 @@ class CETPClient:
                 self._logger.info(" Exception in resource cleanup towards {}".format(self.r_cesid))
                 print(msg)
         
-        for tsk in self.pending_tasks:
-            self._logger.debug("Cleaning the pending tasks")
-            tsk.cancel()
-        
+        self.set_closure_signal()
+        self.close_pending_tasks()
         self.cetp_mgr.remove_local_endpoint(self.r_cesid)               # This ordering is important 
-        #del(self)
+        del(self)
 
+
+    def interrupt_handler(self):
+        """ Deletes the CETPClient instance towards r_cesid, cancels the pending tasks, and handles the pending <H2H DNS-NAPTR responses. """
+        self.set_closure_signal()
+        self.c2c.interrupt_handler()
+        self.close_pending_tasks()
+        
 
 
 class oCES2CESLayer:
@@ -197,6 +213,7 @@ class oCES2CESLayer:
         
         self.q                          = asyncio.Queue()        # Enqueues the CETP message from CETP Transport
         self.c2c_negotiated             = False
+        self._closure_signal            = False
         self._logger                    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_oCES2CESLayer)
         self._logger.info("Initiating outbound CES2CESLayer towards cesid '{}'".format(r_cesid) )
@@ -242,28 +259,33 @@ class oCES2CESLayer:
     def consume_transport_message(self):
         """ Consumes CETP messages queued by the CETP Transport. """
         while True:
-            de_queue = yield from self.q.get()
-            msg, transport = de_queue
-            if not self._pre_process(msg):
-                self.q.task_done()
-                continue                        # For repeated non-CETP packets, shall we terminate the connection?
-            
-            cetp_msg = json.loads(msg)
-            inbound_sst, inbound_dst = cetp_msg['SST'], cetp_msg['DST']
-            sstag, dstag = inbound_dst, inbound_sst
-
-            if not self.c2c_negotiated:
-                self._logger.debug(" C2C-policy is not negotiated with remote-cesid '{}'".format(self.r_cesid))
-                asyncio.ensure_future(self.process_c2c(cetp_msg, transport))
-                self.q.task_done()
-            else:
-                if self.is_c2c_transaction(sstag, dstag):
+            try:
+                de_queue = yield from self.q.get()
+                msg, transport = de_queue
+                if not self._pre_process(msg):
+                    self.q.task_done()
+                    continue                        # For repeated non-CETP packets, shall we terminate the connection?
+                
+                cetp_msg = json.loads(msg)
+                inbound_sst, inbound_dst = cetp_msg['SST'], cetp_msg['DST']
+                sstag, dstag = inbound_dst, inbound_sst
+    
+                if not self.c2c_negotiated:
+                    self._logger.debug(" C2C-policy is not negotiated with remote-cesid '{}'".format(self.r_cesid))
                     asyncio.ensure_future(self.process_c2c(cetp_msg, transport))
                     self.q.task_done()
                 else:
-                    self._logger.debug(" Forwarding packet to H2H-layer")
-                    self.forward_to_h2h_layer(de_queue)
-                    self.q.task_done()
+                    if self.is_c2c_transaction(sstag, dstag):
+                        asyncio.ensure_future(self.process_c2c(cetp_msg, transport))
+                        self.q.task_done()
+                    else:
+                        self._logger.debug(" Forwarding packet to H2H-layer")
+                        self.forward_to_h2h_layer(de_queue)
+                        self.q.task_done()
+            except Exception as msg:
+                self._logger.info("Exception in task for consuming messages from CETP Transport ")
+                if self._closure_signal: 
+                    break
             
 
     def is_c2c_transaction(self, sstag, dstag):
@@ -369,17 +391,25 @@ class oCES2CESLayer:
             self._logger.info(" Close CETP-C2C and CETPClient layer")
             self.resource_cleanup()
     
-
+    def cancel_pending_tasks(self):
+        for tsk in self.pending_tasks:
+            if not tsk.cancelled():
+                self._logger.debug("Canceling the pending task")
+                tsk.cancel()
+        
+    def interrupt_handler(self):
+        self.set_closure_signal()
+        self.cancel_pending_tasks()
+    
     def resource_cleanup(self):
         """ Cancels the pending tasks and delete the object """
-        for tsk in self.pending_tasks:
-            self._logger.debug("Canceling the pending task")
-            tsk.cancel()
-            
+        self.interrupt_handler()
         self.cetp_client.resource_cleanup()
         del(self)
         
-            
+    def set_closure_signal(self):
+        self._closure_signal = True
+           
     def register_c2c_to_transport(self, c2c_transaction, transport):
         self.transport_c2c_binding[transport] = c2c_transaction
     

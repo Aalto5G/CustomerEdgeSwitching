@@ -9,6 +9,8 @@ import hashcash
 import hashlib
 import time
 
+ACCEPTABLE_ZEROS = 12
+
 
 def send_ces_cesid(**kwargs):
     tlv, code, ces_params, query = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["query"] 
@@ -121,7 +123,6 @@ def send_ces_pow(**kwargs):
     
     if query==True:
         POW_SECRET = "HammadTAKEsII"                                                              # This must be managed later
-        ACCEPTABLE_ZEROS = 15
         ch = r_cesid + ":" + POW_SECRET                             # FOR Now, For testing .. Challenge shall be more complicated (to prevent guessing)
         ch_hash = hashlib.sha256(ch.encode()).hexdigest()
         ch_hash = ch_hash[0:16]
@@ -355,7 +356,6 @@ def verify_ces_pow(**kwargs):
             return False
     
     POW_SECRET = "HammadTAKEsII"                                                              # This must be managed later
-    ACCEPTABLE_ZEROS = 15
     ch = r_cesid + ":" + POW_SECRET                            # FOR Now, For testing .. Challenge shall be more complicated (to prevent guessing)
     ch_hash = hashlib.sha256(ch.encode()).hexdigest()
     ch_hash = ch_hash[0:16]
@@ -373,6 +373,7 @@ def verify_ces_pow(**kwargs):
             print("Proof-of-work verified")
         else:
             print("Failed")
+            return False
         
     return True
 

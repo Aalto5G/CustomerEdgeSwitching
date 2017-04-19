@@ -7,6 +7,7 @@ import logging
 import signal
 import sys
 import traceback
+import time
 import yaml
 import json
 import cesdns
@@ -70,7 +71,13 @@ class CustomerEdgeSwitch(object):
     
     def _capture_signal(self):
         for signame in ('SIGINT', 'SIGTERM'):
+            loop.add_signal_handler(getattr(signal, signame), lambda: asyncio.ensure_future(self._signal_handler(signame)))
+    
+    """
+    def _capture_signal(self):
+        for signame in ('SIGINT', 'SIGTERM'):
             loop.add_signal_handler(getattr(signal, signame), functools.partial(self._signal_handler, signame))
+    """
         
     
     def _read_configuration(self, filename):
@@ -155,36 +162,28 @@ class CustomerEdgeSwitch(object):
         self._logger.warning('Enabling logging.DEBUG')
         logging.basicConfig(level=logging.DEBUG)
         self._loop.set_debug(True)
-        
+    
+    @asyncio.coroutine
     def _signal_handler(self, signame):
         self._logger.critical('Got signal %s: exit' % signame)
         try:
-            self._logger.info(" Closing the listening CETPServer endpoints.")
+            self._logger.info(" Closing the CETP listening service.")
             for server_obj in self.cetp_mgr.get_server_endpoints():
                 server_obj.close()
-
-            """
-            When you CTRL+C, the event loop gets stopped, so calls to task.cancel() don't actually affect. t.cancel() works for while the event loop is not interrupted. Normal closing of CETPClient with remote end.
-            For the tasks to be cancelled, you need to start the loop back up again.
-            self.cetp_mgr.close_all_pending_tasks()     # Terminating the ongoing tasks
-            """
-            self._logger.info(" Close the CETP clients connected to remote endpoints.")
-            self.cetp_mgr.close_all_local_client_endpoints()
-            #self._loop.run_until_complete(asyncio.sleep(1.0))
             
-            self._logger.info(" Close the DNS listening servers.")
+            self._logger.info(" Closing the CETPClients towards remote CES nodes.")
+            self.cetp_mgr.close_all_local_client_endpoints()
+
+            self._logger.info(" Closing the DNS listening servers.")
             #addr = self._dns['addr'][k]
             #self._logger.warning('Terminating DNS Server {} @{}:{}'.format(k, addr[0],addr[1]))
             #v.connection_lost(None)
             
-            self._logger.info(" Close the remote endpoints connected to local CES.")
+            self._logger.info(" Closing the remote endpoints to local CES.")
             self.cetp_mgr.close_all_connected_remote_endpoints()
+
+            yield from asyncio.sleep(0.5)                             # Prevents asyncio-loop from stopping, and thus allows Asyncio task.cancel() to complete.
             
-            """
-            for tsk in self.cetp_mgr.get_all_pending_tasks():
-                tsk.cancel()
-                OR at termination of CETPClient instance insert value None, to queue and terminate queue on receiving None values.
-            """
             
         except:
             trace()

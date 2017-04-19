@@ -31,6 +31,7 @@ class CETPServer:
         self.policy_mgr         = policy_mgr
         self.cetpstate_mgr      = cetpstate_mgr
         self.count              = 0                             # For debugging
+        self._closure_signal    = False
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPServer)
         self._logger.info("CETPServer created for cesid {}".format(l_cesid))
@@ -49,11 +50,19 @@ class CETPServer:
     def consume_c2c_message(self):
         """ Retrieves the enqueued CETP message for H2H CETP processing """
         while True:
-            de_queue = yield from self.c2c_q.get()
-            msg, transport = de_queue
-            asyncio.ensure_future(self.process_h2h_transaction(msg, transport))
-            self.c2c_q.task_done()
-
+            try:
+                de_queue = yield from self.c2c_q.get()
+                msg, transport = de_queue
+                asyncio.ensure_future(self.process_h2h_transaction(msg, transport))
+                self.c2c_q.task_done()
+            except Exception as msg:
+                self._logger.info("Exception in task for consuming c2c message")
+                if self._closure_signal: break
+                
+    
+    def set_closure_signal(self):
+        self._closure_signal = True
+        
     @asyncio.coroutine
     def process_h2h_transaction(self, msg, transport):
         #self.count += 1
@@ -89,6 +98,7 @@ class iCETPC2CLayer:
         self.r_cesid                = r_cesid
         self.icetp_mgr              = icetp_mgr
         self.transport_c2c_binding  = {}
+        self._closure_signal        = False
         self._logger                = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_iCETPC2CLayer)
         self._initiate_coroutines()
@@ -121,7 +131,19 @@ class iCETPC2CLayer:
         self.cetp_server = CETPServer(c2c_layer=self, l_cesid=l_cesid, r_cesid=r_cesid, loop=loop, policy_mgr=policy_mgr, cetpstate_mgr=cetpstate_mgr)
         t = asyncio.ensure_future(self.cetp_server.consume_c2c_message())
         self.pending_tasks.append(t)
-        
+    
+    def cancel_pending_tasks(self):
+        self._logger.info("Terminating pending tasks for cesid '{}'".format(self.r_cesid))
+        for tsk in self.pending_tasks:
+            self._logger.debug("Cancelling the pending tasks")
+            if not tsk.cancelled():
+                tsk.cancel()
+
+    def handle_interrupt(self):
+        self._closure_signal = True
+        self.cetp_server.set_closure_signal()
+        self.cancel_pending_tasks()
+    
     def report_connection_closure(self, transport):
         """ Removes connected client & checks for C2C-level connectivity """
         ic2c_transaction = self.transport_c2c_binding[transport]
@@ -130,13 +152,14 @@ class iCETPC2CLayer:
         self.remove_connected_transport(transport)
         del self.transport_c2c_binding[transport]
         
+        self._closure_signal = True
+        self.cetp_server.set_closure_signal()
+        self.cancel_pending_tasks()
+        
         if len(self.connected_transports) ==0:
             self._logger.info("No connected transport with remote CES '{}'".format(self.r_cesid))
             self.icetp_mgr.delete_c2c_layer(self.r_cesid)                   # Remove the c2c-layer registered to 'r_cesid'
-            
-            self._logger.info("Terminating pending tasks for cesid '{}'".format(self.r_cesid))
-            for tsk in self.pending_tasks:
-                tsk.cancel()
+            self.cancel_pending_tasks()
                 
             self._logger.info("Terminating inbound C2C-Layer and CETPServer for cesid '{}'".format(self.r_cesid))
             del(self.cetp_server)                                               # CETPServer's task is already deleted
@@ -158,26 +181,31 @@ class iCETPC2CLayer:
     @asyncio.coroutine
     def consume_transport_message(self):
         while True:
-            de_queue = yield from self.q.get()
-            msg, transport = de_queue
-            if not self._pre_process(msg):
-                self.q.task_done()
-                continue                                        # What to do for repeated failures?
+            try:
+                de_queue = yield from self.q.get()
+                msg, transport = de_queue
+                if not self._pre_process(msg):
+                    self.q.task_done()
+                    continue                                        # What to do for repeated failures?
+                    
+                #self._logger.debug("data: {!r}".format(msg))
+                #self._logger.debug("cetp_msg: {!r}".format(cetp_msg))
+                cetp_msg = json.loads(msg)
+                inbound_sst, inbound_dst = cetp_msg['SST'], cetp_msg['DST']
+                sst, dst = inbound_dst, inbound_sst
                 
-            #self._logger.debug("data: {!r}".format(msg))
-            #self._logger.debug("cetp_msg: {!r}".format(cetp_msg))
-            cetp_msg = json.loads(msg)
-            inbound_sst, inbound_dst = cetp_msg['SST'], cetp_msg['DST']
-            sst, dst = inbound_dst, inbound_sst
+                if self.is_c2c_transaction(sst, dst):
+                    self._logger.debug(" Inbound packet belongs to an established C2C transaction.")
+                    self.process_c2c(cetp_msg, transport)
+                    self.q.task_done()
+                else:
+                    self._logger.debug(" Forward the packet to H2H-layer")
+                    self.forward_h2h(de_queue)
+                    self.q.task_done()
             
-            if self.is_c2c_transaction(sst, dst):
-                self._logger.debug(" Inbound packet belongs to an established C2C transaction.")
-                self.process_c2c(cetp_msg, transport)
-                self.q.task_done()
-            else:
-                self._logger.debug(" Forward the packet to H2H-layer")
-                self.forward_h2h(de_queue)
-                self.q.task_done()
+            except Exception as msg:
+                self._logger.info(" Exception in consuming Transport message")
+                if self._closure_signal: break
 
     def _pre_process(self, msg):
         """ Checks whether inbound message conforms to CETP packet format. """

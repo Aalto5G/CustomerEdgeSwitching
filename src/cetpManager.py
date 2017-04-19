@@ -75,7 +75,7 @@ class CETPManager:
 
 
     def has_local_endpoint(self, r_cesid):
-        """ If CES already has a client instance towards r_cesid """
+        """ If client instance towards r_cesid exists """
         return r_cesid in self._localEndpoints
 
     def add_local_endpoint(self, r_cesid, ep):
@@ -97,8 +97,6 @@ class CETPManager:
             end_points.append(ep)
         return end_points
 
-    """ Server Endpoint shall have a listening service on advertised (IP, port, proto), and corresponding python object to process a connected client """
-    
     def register_server_endpoint(self, ep):
         self._serverEndpoints.append(ep)
         
@@ -108,13 +106,11 @@ class CETPManager:
         
     def delete_server_endpoint(self, ep):
         """ 
-        Removes a given server endpoint from the list of all CETP server endpoints,     [Done]
-        Stops listening on the server endpoint for new connections, AND the connected remote endpoints are closed separately.
+        Removes a given server endpoint from the list of all CETP server endpoints, AND stops listening the CETP service on (Ip, port, proto).
         """
         if ep in self._serverEndpoints:
             self._serverEndpoints.remove(ep)
-            del ep                                          # Is this a correct way of achieving things?
-            #ep.cancel()
+            del ep                                          # Can additionally use ep.cancel() for FIN/ACK based termination, instead of RST used now.
 
     def delete_all_server_endpoints(self):
         """ Stops listening on all server endpoints for new connections """
@@ -138,8 +134,8 @@ class CETPManager:
                 coro = self._loop.create_server(lambda: icetpLayering.iCESServerTransportTLS(self._loop, self.ces_params, self.ces_certificate_path, self.ca_certificate_path, \
                                                                                              c2c_mgr= self.ic2c_mgr), host=server_ip, port=server_port, ssl=sc)
                 
-            server = self._loop.run_until_complete(coro)            # Returns the task object
-            self.register_server_endpoint(server)                   # Perhaps, store the protocol_factory instead of the task object. Can we close CETPServer etc via task.cancel()?
+            server = self._loop.run_until_complete(coro)            # Returns the server
+            self.register_server_endpoint(server)
             self._logger.info(' CETP Server is listening on {} protocol: {}:{}'.format(proto, server_ip, server_port))
                 
         except Exception as ex:
@@ -147,85 +143,43 @@ class CETPManager:
             self._logger.warning(ex)
 
 
-
-    """ Methods for closing Client and Server Endpoints managed by CES (on Ctrl+C)  - Not Correct (Gotta re-check and improve """
-        
-    def close_local_client_endpoint(self):
-        """ Yet to implement """
-        pass
-
-    def close_all_local_client_endpoints(self):
-        """ Yet to implement """
+    def close_local_client_endpoint(self, r_cesid):
+        """ Closes CETPClient towards a remote cesid """
         for cesid, client_ep in self._localEndpoints.items():
-            #self._logger.info("r_cesid: ", cesid)
-            #self.remove_local_endpoint(cesid)
-            #del(client_ep)
-            client_ep.resource_cleanup()
-    
-        # for cesid, ep in self._localEndpoints.items():
-        #    ep.enqueue_h2h_requests_nowait(None, ())
-        # Some other links to terminate the tassk: http://stackoverflow.com/questions/33505066/python3-asyncio-task-was-destroyed-but-it-is-pending-with-some-specific-condit
-        # http://stackoverflow.com/questions/27796294/when-using-asyncio-how-do-you-allow-all-running-tasks-to-finish-before-shutting
-        # http://stackoverflow.com/questions/30765606/whats-the-correct-way-to-clean-up-after-an-interrupted-event-loop
+            if cesid == r_cesid:
+                client_ep.interrupt_handler()
         
-    def close_connected_remote_endpoint(self, ep):
-        """ Not very apparent, how this can be done in CETPManager class, as it doesn't instantiate it"""
+    def close_all_local_client_endpoints(self):
+        """ Closes CETPClient instances towards remote CES """
+        for cesid, client_ep in self._localEndpoints.items():
+            client_ep.interrupt_handler()
+    
+    def close_connected_remote_endpoint(self, r_cesid):
+        """ Closes the connection from remote CETPClient """
         pass
     
     def close_all_connected_remote_endpoints(self):
-        """ Not very apparent, how this can be done in CETPManager class, as it doesn't instantiate it"""
-        pass
-
+        """ Closes the connection from remote CETPClients """
+        for c2c_layer in self.ic2c_mgr.get_all_c2c_layers():
+            c2c_layer.handle_interrupt()
+        
 
     def close_all(self):
-        """Closes all the server endpoints, all the local client endpoints, and all the remote client endpoints 
-            This can be useful, for example in gracefully closing the CES (which may be in interaction with many remote endpoints).
+        """ Closes all the server endpoints, all the local client endpoints, and all the remote client endpoints 
         """
         # self.delete_all_server_endpoints()
         self.close_all_local_client_endpoints()
         #self.close_all_connected_remote_endpoints()
-
-
-    """ To terminate the pending asyncio tasks """
-    def has_client(self, client):
-        return client in self._pending_tasks
-
-    def add_pending_tasks(self, client, task):
-        if not self.has_client(client):
-            self._pending_tasks[client] = [task]
-        else:
-            self._pending_tasks[client].append(task)
-    
-    def get_pending_tasks(self, client):
-        for k, v in self._pending_tasks.items():
-            if k == client:
-                return v
-        return None
-
-    def get_all_pending_tasks(self):
-        tsks = []
-        for k, task_list in self._pending_tasks.items():
-            for tsk in task_list:
-                tsks.append(tsk)
-        return tsks
-
-    def close_all_pending_tasks(self):
-        """ Terminating the tasks pending per client """
-        for client, tsk_list in self._pending_tasks.items():
-            for tsk in tsk_list:
-                self._logger.warning("Closing a task")
-                tsk.cancel() 
         
-    """
-    For consolidated management of things, (i.e. initiatied tasks)
-    Its probably best that c2cLayer for remote end is instantiated by the CETPManager, upon request from CETPClient.
-    """
+    # Asyncio.Task has a method to get list of all ongoing or pending tasks.
+    # Is It best if the C2C-Layer for remote end is instantiated by the CETPManager, upon request from CETPClient.
 
 
         
 class iCETPManager:
     """ 
-    Manager class to aggregate different CETP Transport endpoints from a remote CES-ID under one c2c-layer between two CES nodes.
+    Manager class for inbound CETPClients
+    1. Aggregates different CETP Transport endpoints from a remote CES-ID under one C2C-Layer between CES nodes.
     """
     def __init__(self, loop=None, policy_mgr=None, cetp_state_mgr=None, l_cesid=None, ces_params=None, name="iCETPManager"):
         self._loop              = loop
@@ -252,7 +206,7 @@ class iCETPManager:
 
     def get_all_c2c_layers(self):
         c2c_layers = []
-        for cesid, c2clayer in self.c2c_register:
+        for cesid, c2clayer in self.c2c_register.items():
             c2c_layers.append(c2clayer)
         return c2c_layers
     
@@ -292,7 +246,7 @@ class iCETPManager:
             return False
 
         return True
-        # is iCES secure against a remote-connected CES from scanning our the session states table?
+        # is iCES secure against a remote-connected CES from scanning the CETP session states table?
         
     
     def process_inbound_message(self, msg, transport):
