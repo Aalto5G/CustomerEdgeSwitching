@@ -181,7 +181,7 @@ class CustomerEdgeSwitch(object):
             #self._logger.warning('Terminating DNS Server {} @{}:{}'.format(k, addr[0],addr[1]))
             #v.connection_lost(None)
 
-            yield from asyncio.sleep(0.5)                             # Allows graceful execution of Asyncio task.cancel() by Prevents asyncio-loop from stopping.
+            yield from asyncio.sleep(0.2)                             # Allows graceful execution of Asyncio task.cancel() by Prevents asyncio-loop from stopping.
                                                                       # Could possibly use asyncio.wait_for(*tasks)
             
             

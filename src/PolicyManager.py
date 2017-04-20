@@ -21,15 +21,17 @@ import copy
 LOGLEVEL_PolicyCETP         = logging.INFO
 LOGLEVEL_PolicyManager      = logging.INFO
 
+
+
 class PolicyManager(object):
     # Loads policies, and keeps policy elements as CETPTLV objects
-    def __init__(self, policy_file=None, name="PolicyManager"):
-        self._cespolicy                     = None         # asPolicyCETP
-        self._hostpolicy                    = None         #_asPolicyCETP
+    def __init__(self, l_cesid, policy_file=None, name="PolicyManager"):
+        self._cespolicy                     = {}         # key: PolicyCETP()
+        self._hostpolicy                    = {}         # key: PolicyCETP()
+        self.l_cesid                        = l_cesid
         self._logger                        = logging.getLogger(name)
+        self.config_file                    = policy_file
         self._logger.setLevel(LOGLEVEL_PolicyManager)             # Within this class, logger will only handle message with this or higher level.    (Otherwise, default value of basicConfig() will apply)
-
-        self.config_file = policy_file
         self.load_policies(self.config_file)
         self.assign_policy_to_host()
         
@@ -37,11 +39,10 @@ class PolicyManager(object):
         try:
             f = open(config_file)
             self._config = json.load(f)
-            self._cespolicy_lst = self._config["cespolicy"]
-            self._hostpolicies_lst = self._config["hostpolicies"]
             self.load_CES_policy()
             self.load_host_policy()
         except Exception:
+            self._logger.info("Exception in loading CES/Host policies")
             return False
         
     def _get_ces_policy(self):
@@ -65,7 +66,7 @@ class PolicyManager(object):
         self.fqdn_to_policy['www.aalto.fi']      = 2
     
     def mapping_srcId_to_policy(self, host_id):
-        """ Return policy corresponding to a source-id """
+        #Return policy corresponding to a source-id 
         if host_id in self.fqdn_to_policy:
             return self.fqdn_to_policy[host_id]
         else:
@@ -77,40 +78,41 @@ class PolicyManager(object):
         return self._hostpolicies
     
     def get_ces_policy(self, proto="tcp", direction="outbound"):
-        policy = self._cespolicy[proto][direction]
+        policy_type = "cespolicy"
+        l_cesid = self.l_cesid
+        key = policy_type+":"+proto+":"+direction+":"+l_cesid
+        policy = self._cespolicy[key]
         return copy.deepcopy(policy)
     
-    def get_host_policy(self, index, direction):
+    def get_host_policy(self, direction, hostid=""):
         """ The search key for host-policy number 0 is 'policy-0' """
-        key="hostpolicy-%d" %index
-        return self._hostpolicies[key][direction]
-
-    def _get_copy_host_policy(self, index, direction):
-        key="hostpolicy-%d" %index
-        policy = self._hostpolicies[key][direction]
-        return copy.deepcopy(policy)                            # Shall always return a copy for use. Else, inbound packet would manipulate policy for subsequent interactions 
+        policy_type = "hostpolicy"
+        if hostid=="":
+            hostid="hosta1.demo.lte"
+        key = policy_type +":"+ direction +":"+ hostid
+        policy = self._hostpolicy[key]
+        return copy.deepcopy(policy)
 
     def load_CES_policy(self):
-        self._cespolicy = {}
-        for policy_dict in self._cespolicy_lst:
-            for transp, transport_policy in policy_dict.items():
-                self._cespolicy[transp] = {}
-            
-                for dir_dict in transport_policy:
-                    for direction, direction_policy in dir_dict.items():
-                        self._cespolicy[transp][direction] = PolicyCETP(direction_policy)
+        for policy in self._config:
+            if 'type' in policy:
+                if policy['type'] == "cespolicy":
+                    policy_type, proto, direction, l_cesid, ces_policy = policy['type'], policy['proto'], policy['direction'], policy['cesid'], policy['policy']
+                    key = policy_type+":"+proto+":"+direction+":"+l_cesid
+                    p = PolicyCETP(ces_policy)
+                    self._cespolicy[key] = p
+
 
     def load_host_policy(self):
-        self._hostpolicies = {}
-        for pol_dict in self._hostpolicies_lst:
-            for host_id, host_policy in pol_dict.items():
-                self._hostpolicies[host_id] = {}
-                
-                for policy_direction, policy in host_policy.items():
-                    self._hostpolicies[host_id][policy_direction] = PolicyCETP(policy)
-                
+        for policy in self._config:
+            if 'type' in policy:
+                if policy['type'] == "hostpolicy":
+                    policy_type, direction, hostid, host_policy = policy['type'], policy['direction'], policy['fqdn'], policy['policy']
+                    key = policy_type +":"+ direction +":"+ hostid
+                    p = PolicyCETP(host_policy)
+                    self._hostpolicy[key] = p
 
-
+    
 
 class PolicyCETP(object):
     def __init__(self, policy, name="PolicyCETP"):

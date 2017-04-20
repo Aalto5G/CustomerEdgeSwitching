@@ -42,7 +42,7 @@ class CETPManager:
         self.ca_certificate_path    = self.ces_params['ca_certificate']                           # Path of X.509 certificate of trusted CA, for validating the remote node's certificate.
         
         self.cetp_state_mgr         = CETP.CETPConnectionObject()                      # Records the established CETP transactions (both h2h & c2c). Required for preventing the re-allocation already in-use SST & DST (in CETP transaction).
-        self.policy_mgr             = PolicyManager.PolicyManager(policy_file= host_policies)     # Shall ideally fetch the policies from Policy Management System (of Hassaan)    - And will be called, policy_sys_agent
+        self.policy_mgr             = PolicyManager.PolicyManager(self.cesid, policy_file= host_policies)     # Shall ideally fetch the policies from Policy Management System (of Hassaan)    - And will be called, policy_sys_agent
         self._loop                  = loop
         self.name                   = name
         self._logger                = logging.getLogger(name)
@@ -192,7 +192,7 @@ class iCETPManager:
             
     def register_c2c_layer(self, r_cesid, ic2c_layer):
         self.c2c_register[r_cesid] = ic2c_layer
-
+        
     def get_all_c2c_layers(self):
         c2c_layers = []
         for cesid, c2clayer in self.c2c_register.items():

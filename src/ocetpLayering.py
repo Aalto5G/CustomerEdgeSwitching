@@ -76,8 +76,8 @@ class CETPClient:
                 self.client_q.task_done()
 
             except Exception as msg:
-                self._logger.info(" Exception in CETPClient queue towards {}".format(self.r_cesid))
                 if self._closure_signal: break
+                self._logger.info(" Exception in CETPClient queue towards {}".format(self.r_cesid))
                 self.client_q.task_done()
             
     def c2c_negotiation_status(self, status=True):
@@ -153,8 +153,8 @@ class CETPClient:
                 asyncio.ensure_future(self.h2h_transaction_continue(msg, transport))        # Handling exception raised within task? Shall use the returned task object?
                 self.c2c_q.task_done()
             except Exception as msg:
-                self._logger.info(" Exception in consuming message from c2c-layer")
                 if self._closure_signal: break
+                self._logger.info(" Exception in consuming message from c2c-layer")
                 self.c2c_q.task_done()
                 # What could be this exception? What does it mean? And how to prevent it from happening? Look in above algo.
 
@@ -282,9 +282,8 @@ class oCES2CESLayer:
                         self.forward_to_h2h_layer(de_queue)
                         self.q.task_done()
             except Exception as msg:
+                if self._closure_signal:    break
                 self._logger.info("Exception in task for consuming messages from CETP Transport ")
-                if self._closure_signal: 
-                    break
             
 
     def is_c2c_transaction(self, sstag, dstag):

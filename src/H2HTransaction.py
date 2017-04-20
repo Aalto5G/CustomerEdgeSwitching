@@ -81,7 +81,7 @@ class H2HTransaction(object):
         self._logger.info("CETP Packet")
         for k, v in packet.items():
             if k not in ['query', 'info', 'response']:
-                print(k+" : ", v)
+                print(str(k)+": "+ str(v))
         
         for k in ['query', 'info', 'response']:
             if k in packet:
@@ -136,10 +136,10 @@ class H2HTransactionOutbound(H2HTransaction):
         self.ipolicy, self.ipolicy_tmp  = None, None
         self.opolicy, self.opolicy_tmp  = None, None
 
-        self.opolicy        = self.policy_mgr._get_copy_host_policy(index, direction)
-        self.opolicy_tmp    = self.policy_mgr._get_copy_host_policy(index, direction)
-        self.ipolicy        = self.policy_mgr._get_copy_host_policy(index, "inbound")
-        self.ipolicy_tmp    = self.policy_mgr._get_copy_host_policy(index, "inbound")
+        self.opolicy        = self.policy_mgr.get_host_policy(direction)
+        self.opolicy_tmp    = self.policy_mgr.get_host_policy(direction)
+        self.ipolicy        = self.policy_mgr.get_host_policy("inbound")
+        self.ipolicy_tmp    = self.policy_mgr.get_host_policy("inbound")
 
     def generate_session_tags(self, sstag):
         if sstag == 0:
@@ -168,9 +168,10 @@ class H2HTransactionOutbound(H2HTransaction):
     @asyncio.coroutine
     def start_cetp_processing(self):
         """ Returns CETP message containing [Offer & Request] tlvs towards iCES """
+        self._logger.info("Starting H2H-CETP session negotiation (SST= {}, DST={}) towards {}".format(self.sstag, self.dstag, self.dst_id))
         self.req_tlvs, self.offer_tlvs, self.ava_tlvs = [], [], []
         dstep_tlv = self.append_dstep_info()
-        self.offer_tlvs.append(dstep_tlv)        
+        self.offer_tlvs.append(dstep_tlv)
         # print("self.opolicy: ", self.opolicy)
         # We shall check if src_id supports the id_type as of the destination-id, otherwise maybe not even initiate a transaction? or initiate with a default ID-type?
         # And regardless of id_type being used, FQDN of host shall be made part of the messages exchanged?
@@ -183,8 +184,9 @@ class H2HTransactionOutbound(H2HTransaction):
             tlv["value"] = "offer"
             self.offer_tlvs.append(tlv)
 
-        cetp_signaling = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, req_tlvs=self.req_tlvs, offer_tlvs=self.offer_tlvs, avail_tlvs=self.ava_tlvs)
-        cetp_packet = json.dumps(cetp_signaling)
+        cetp_msg = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, req_tlvs=self.req_tlvs, offer_tlvs=self.offer_tlvs, avail_tlvs=self.ava_tlvs)
+        cetp_packet = json.dumps(cetp_msg)
+        self.pprint(cetp_msg)
         self.last_packet_sent = cetp_packet
         self.cetp_negotiation_history.append(cetp_packet)
         self.rtt += 1
@@ -229,7 +231,6 @@ class H2HTransactionOutbound(H2HTransaction):
         self.packet = cetp_packet
         self._logger.info("Continue establishing connection (%d -> %d)" %(self.sstag, self.dstag))
         # self._logger.info(" ---- Outbound policy: ", self.opolicy)
-        #self.pprint(cetp_packet)
         
         if self.rtt > NEGOTIATION_RTT_THRESHOLD:
             return False                            # Prevents infinite loop of CETP negotiation, Where remote end repeatedly sends only Requests-TLVs (or incomplete message??)
@@ -260,9 +261,11 @@ class H2HTransactionOutbound(H2HTransaction):
             dstep_tlv = self.append_dstep_info()
             ava_tlvs.append(dstep_tlv)
             
-            cetp_signaling = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, req_tlvs=req_tlvs, offer_tlvs=ava_tlvs, avail_tlvs=[])           # Send 'response' as 'info'
+            cetp_msg = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, req_tlvs=req_tlvs, offer_tlvs=ava_tlvs, avail_tlvs=[])           # Send 'response' as 'info'
             cetp_packet = json.dumps(cetp_signaling)
+            self.pprint(cetp_msg)
             self.last_packet_sent = cetp_packet
+            self.pprint(cetp_packet)
             self.cetp_negotiation_history.append(cetp_packet)
             self.rtt += 1
             #self._logger.info("self.rtt: "+ self.rtt)
@@ -307,6 +310,7 @@ class H2HTransactionOutbound(H2HTransaction):
                 cetp_signaling = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, offer_tlvs=ava_tlvs)        # Send as 'Info' TLV
                 cetp_packet = json.dumps(cetp_signaling)
                 self.last_packet_sent = cetp_packet
+                self.pprint(cetp_packet)
                 self.cetp_negotiation_history.append(cetp_packet)
                 return cetp_packet
         else:                
@@ -348,10 +352,10 @@ class H2HTransactionInbound(H2HTransaction):
         direction = "inbound"
         self.ipolicy, self.ipolicy_tmp  = None, None
         self.opolicy, self.opolicy_tmp  = None, None
-        self.ipolicy        = self.policy_mgr._get_copy_host_policy(index, direction)
-        self.ipolicy_tmp    = self.policy_mgr._get_copy_host_policy(index, direction)
-        self.opolicy        = self.policy_mgr._get_copy_host_policy(index, "outbound")
-        self.opolicy_tmp    = self.policy_mgr._get_copy_host_policy(index, "outbound")
+        self.ipolicy        = self.policy_mgr.get_host_policy(direction)
+        self.ipolicy_tmp    = self.policy_mgr.get_host_policy(direction)
+        self.opolicy        = self.policy_mgr.get_host_policy("outbound")
+        self.opolicy_tmp    = self.policy_mgr.get_host_policy("outbound")
     
     def _pre_process(self):
         self.cetp_req, self.cetp_info, self.cetp_resp = [], [], []

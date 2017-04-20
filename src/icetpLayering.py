@@ -56,8 +56,8 @@ class CETPServer:
                 asyncio.ensure_future(self.process_h2h_transaction(msg, transport))
                 self.c2c_q.task_done()
             except Exception as msg:
-                self._logger.info("Exception in task for consuming c2c message")
                 if self._closure_signal: break
+                self._logger.info("Exception in task for consuming c2c message")
                 
     def set_closure_signal(self):
         self._closure_signal = True
@@ -200,8 +200,8 @@ class iCETPC2CLayer:
                     self.q.task_done()
             
             except Exception as msg:
-                self._logger.info(" Exception in consuming Transport message")
                 if self._closure_signal: break
+                self._logger.info(" Exception in consuming Transport message")
 
     def _pre_process(self, msg):
         """ Checks whether inbound message conforms to CETP packet format. """
