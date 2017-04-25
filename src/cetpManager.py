@@ -17,6 +17,7 @@ import H2HTransaction
 import ocetpLayering
 import icetpLayering
 import PolicyManager
+import CETPSecurity
 
 LOGLEVEL_CETPManager    = logging.DEBUG            # Sets the root level of Logger. Any message of this and above level will be printed.    WARNING > INFO > DEBUG
 LOGLEVEL_iCETPManager   = logging.INFO
@@ -31,7 +32,7 @@ class CETPManager:
     Not tested: Registers the remote-client instances as per 'cesid'. And management
     """
     
-    def __init__(self, host_policies, cesid, ces_params, loop=None, name="CETPManager"):
+    def __init__(self, cetp_policies, cesid, ces_params, loop=None, name="CETPManager"):
         self._localEndpoints        = {}                           # Dictionary of local client instances to remote CESIDs.
         self._remoteEndpoints       = {}                           # Dictionary of remote client instances connected to this CES.
         self._serverEndpoints       = []                           # List of server instances listening for CETP flows.
@@ -39,15 +40,17 @@ class CETPManager:
         self.ces_params             = ces_params
         self.ces_certificate_path   = self.ces_params['certificate']
         self.ces_privatekey_path    = self.ces_params['private_key']
-        self.ca_certificate_path    = self.ces_params['ca_certificate']                           # Path of X.509 certificate of trusted CA, for validating the remote node's certificate.
-        
-        self.cetp_state_mgr         = CETP.CETPConnectionObject()                      # Records the established CETP transactions (both h2h & c2c). Required for preventing the re-allocation already in-use SST & DST (in CETP transaction).
-        self.policy_mgr             = PolicyManager.PolicyManager(self.cesid, policy_file= host_policies)     # Shall ideally fetch the policies from Policy Management System (of Hassaan)    - And will be called, policy_sys_agent
+        self.ca_certificate_path    = self.ces_params['ca_certificate']                                       # Path of X.509 certificate of trusted CA, for validating the remote node's certificate.
+        self.cetp_security          = CETPSecurity.CETPSecurity()
+
+
+        self.cetpstate_mgr         = CETP.CETPConnectionObject()                                             # Records the established CETP transactions (both H2H & C2C). Required for preventing the re-allocation already in-use SST & DST (in CETP transaction).
+        self.policy_mgr             = PolicyManager.PolicyManager(self.cesid, policy_file= cetp_policies)     # Shall ideally fetch the policies from Policy Management System (of Hassaan)    - And will be called, policy_sys_agent
         self._loop                  = loop
         self.name                   = name
         self._logger                = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPManager)
-        self.ic2c_mgr               = iCETPManager(loop=loop, policy_mgr=self.policy_mgr, cetp_state_mgr=self.cetp_state_mgr, l_cesid=cesid, ces_params=self.ces_params)
+        self.ic2c_mgr               = iCETPManager(loop=loop, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, l_cesid=cesid, ces_params=self.ces_params)
         
 
     def process_outbound_cetp(self, r_cesid, naptr_list, dns_cb_func, cb_args):
@@ -65,7 +68,7 @@ class CETPManager:
     
     def create_local_endpoint(self, l_cesid, r_cesid, naptr_list, dns_cb_func):
         """ Creates the local CETPClient for connecting to the remote CES-ID """
-        client_ep = ocetpLayering.CETPClient(l_cesid = l_cesid, r_cesid = r_cesid, cb_func=dns_cb_func, cetp_state_mgr= self.cetp_state_mgr, \
+        client_ep = ocetpLayering.CETPClient(l_cesid = l_cesid, r_cesid = r_cesid, cb_func=dns_cb_func, cetpstate_mgr= self.cetpstate_mgr, \
                                policy_mgr=self.policy_mgr, policy_client=None, loop=self._loop, ocetp_mgr=self, ces_params=self.ces_params)
         
         self.add_local_endpoint(r_cesid, client_ep)
@@ -114,7 +117,7 @@ class CETPManager:
         for server_ep in self.get_server_endpoints():
             self.close_server_endpoint(server_ep)
 
-    def create_server_endpoint(self, server_ip, server_port, proto):
+    def initiate_cetp_service(self, server_ip, server_port, proto):
         """ Creates CETPServer Endpoint for accepting connections from remote oCES """
         try:
             self._logger.info("Initiating CETPServer on {} protocol @ {}.{}".format(proto, server_ip, server_port))
@@ -170,10 +173,10 @@ class iCETPManager:
     Manager class for inbound CETPClients
     1. Aggregates different CETP Transport endpoints from a remote CES-ID under one C2C-Layer between CES nodes.
     """
-    def __init__(self, loop=None, policy_mgr=None, cetp_state_mgr=None, l_cesid=None, ces_params=None, name="iCETPManager"):
+    def __init__(self, loop=None, policy_mgr=None, cetpstate_mgr=None, l_cesid=None, ces_params=None, name="iCETPManager"):
         self._loop              = loop
         self.policy_mgr         = policy_mgr
-        self.cetpstate_mgr      = cetp_state_mgr
+        self.cetpstate_mgr      = cetpstate_mgr
         self.l_cesid            = l_cesid
         self.ces_params         = ces_params
         self.c2c_register       = {}                        # Registers a c2clayer corresponding to a remote 'cesid' --- Format: {cesid1: c2c_layer, cesid2: c2c_layer}
@@ -261,7 +264,7 @@ class iCETPManager:
             self._logger.debug(" CES-to-CES policies negotiated -> Create CETPServer and C2CLayer")
             tmp_cetp = json.loads(cetp_resp)
             sstag, dstag = tmp_cetp['SST'], tmp_cetp['DST']
-            stateful_transaction = self.cetpstate_mgr.get((sstag, dstag))
+            stateful_transaction = self.cetpstate_mgr.get_established_transaction((sstag, dstag))
             r_cesid = stateful_transaction.r_cesid
             
             if not self.has_c2c_layer(r_cesid): 
@@ -280,8 +283,8 @@ class iCETPManager:
         cetp_msg = json.loads(msg)
         inbound_sstag, inbound_dstag = cetp_msg['SST'], cetp_msg['DST']
         sstag, dstag    = inbound_dstag, inbound_sstag
-
-        if not self.cetpstate_mgr.has( (sstag, dstag)):
+        
+        if not self.cetpstate_mgr.has_initiated_transaction( (sstag, dstag)):
             self._logger.info("No prior Outbound C2CTransaction -> Initiating inbound C2CTransaction (SST={} -> DST={})".format(inbound_sstag, inbound_dstag))
             peer_addr = transport.peername
             proto     = transport.proto

@@ -76,6 +76,22 @@ class H2HTransaction(object):
     def _create_response_tlv(self, tlv):
         tlv['value'] = "Some value"
         return tlv
+    
+    def generate_session_tags(self, dstag=0):
+        """ Returns a session-tag of 4-byte length, if sstag is not part of an connecting or ongoing transaction """
+        while True:
+            sstag = random.randint(0, 2**32)
+            if dstag ==0:
+                # For oCES, it checks the connecting transactions
+                if not self.cetpstate_mgr.has_initiated_transaction((sstag, 0)):
+                    return sstag
+            
+            elif dstag:
+                self._logger.info("iCES is requesting source session tag")
+                """ iCES checks if upon assigning 'sstag' the resulting (SST, DST) pair will lead to a unique transaction. """
+                if not self.cetpstate_mgr.has_established_transaction((sstag, dstag)):                   # Checks connected transactions
+                    return sstag
+
 
     def pprint(self, packet):
         self._logger.info("CETP Packet")
@@ -94,7 +110,8 @@ class H2HTransaction(object):
 
 
 class H2HTransactionOutbound(H2HTransaction):
-    def __init__(self, loop=None, sstag=0, dstag=0, dns_q=None, src_id="", dst_id="", local_addr=None, l_cesid="", r_cesid="", remote_addr=None, policy_mgr= None, cetpstate_mgr=None, dns_callback=None, name="H2HTransactionOutbound"):
+    def __init__(self, loop=None, sstag=0, dstag=0, dns_q=None, src_id="", dst_id="", local_addr=None, l_cesid="", r_cesid="", remote_addr=None, policy_mgr= None, \
+                 cetpstate_mgr=None, dns_callback=None, cetp_cleint=None, name="H2HTransactionOutbound"):
         self.sstag, self.dstag  = sstag, dstag
         self.dnsmsg             = dns_q
         self.src_id             = src_id                    # FQDN
@@ -107,17 +124,17 @@ class H2HTransactionOutbound(H2HTransaction):
         self.cetpstate_mgr      = cetpstate_mgr
         self.dns_cb             = dns_callback
         self._loop              = loop
-        self.h2h_negotiation_status = False
-
+        self.cetp_client        = cetp_cleint
+        self.rtt                = 0
         self.name               = name
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HTransactionOutbound)
         self.start_time         = time.time()
 
-        self.rtt                = 0
+        self.h2h_negotiation_status = False
         self.cetp_negotiation_history   = []
         self.load_policies(self.src_id)
-        self.generate_session_tags(sstag)
+        self.sstag              = self.generate_session_tags()
         # self.dns_callback   = dns_callback        # Function to execute DNS response
         # self.cb_args        = cb_args             # Arguments required to execute DNS callback.
         if self.dstag == 0:
@@ -126,8 +143,9 @@ class H2HTransactionOutbound(H2HTransaction):
     def handle_h2h(self):
         now = time.time()
         if ( (now-self.start_time) > DEFAULT_CONNECTION_EXPIRY_TIME) and (not self.h2h_negotiation_status):
-            self.cetpstate_mgr.remove((self.sstag, 0))
-            self._logger.info("Removing the H2H-state for dst_id {}".format(self.dst_id))
+            self.cetpstate_mgr.remove_initiated_transaction((self.sstag, 0))
+            self.cetp_client.update_H2H_transaction_count(initiated=False)
+            self._logger.info(" Expiring the incomplete H2H-state for dst_id {}".format(self.dst_id))
 
     
     def load_policies(self, src_id):
@@ -141,13 +159,6 @@ class H2HTransactionOutbound(H2HTransaction):
         self.ipolicy        = self.policy_mgr.get_host_policy("inbound")
         self.ipolicy_tmp    = self.policy_mgr.get_host_policy("inbound")
 
-    def generate_session_tags(self, sstag):
-        if sstag == 0:
-            self.sstag = random.randint(0, 2**32)
-            self.dstag = self.dstag
-        else:
-            self.sstag = sstag
-            self.dstag = random.randint(0, 2**32)           # later on, add checks for conflicts with other (sstag, dstag)
 
     def _pre_process(self, msg):
         self.cetp_req, self.cetp_info, self.cetp_resp = [], [], []
@@ -168,31 +179,35 @@ class H2HTransactionOutbound(H2HTransaction):
     @asyncio.coroutine
     def start_cetp_processing(self):
         """ Returns CETP message containing [Offer & Request] tlvs towards iCES """
-        self._logger.info("Starting H2H-CETP session negotiation (SST= {}, DST={}) towards {}".format(self.sstag, self.dstag, self.dst_id))
-        self.req_tlvs, self.offer_tlvs, self.ava_tlvs = [], [], []
-        dstep_tlv = self.append_dstep_info()
-        self.offer_tlvs.append(dstep_tlv)
-        # print("self.opolicy: ", self.opolicy)
-        # We shall check if src_id supports the id_type as of the destination-id, otherwise maybe not even initiate a transaction? or initiate with a default ID-type?
-        # And regardless of id_type being used, FQDN of host shall be made part of the messages exchanged?
-        
-        for tlv in self.opolicy.get_required():
-            tlv["value"] = ""
-            self.req_tlvs.append(tlv)
-        
-        for tlv in self.opolicy.get_offer():
-            tlv["value"] = "offer"
-            self.offer_tlvs.append(tlv)
-
-        cetp_msg = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, req_tlvs=self.req_tlvs, offer_tlvs=self.offer_tlvs, avail_tlvs=self.ava_tlvs)
-        cetp_packet = json.dumps(cetp_msg)
-        self.pprint(cetp_msg)
-        self.last_packet_sent = cetp_packet
-        self.cetp_negotiation_history.append(cetp_packet)
-        self.rtt += 1
-        self.cetpstate_mgr.add((self.sstag,0), self)                # Register state in Connection table to continue negotiating h2h-transaction later
-        return cetp_packet
-        
+        try:            
+            self._logger.info("Starting H2H-CETP session negotiation (SST= {}, DST={}) towards {}".format(self.sstag, self.dstag, self.dst_id))
+            self.req_tlvs, self.offer_tlvs, self.ava_tlvs = [], [], []
+            dstep_tlv = self.append_dstep_info()
+            self.offer_tlvs.append(dstep_tlv)
+            # print("self.opolicy: ", self.opolicy)
+            # We shall check if src_id supports the id_type as of the destination-id, otherwise maybe not even initiate a transaction? or initiate with a default ID-type?
+            # And regardless of id_type being used, FQDN of host shall be made part of the messages exchanged?
+            
+            for tlv in self.opolicy.get_required():
+                tlv["value"] = ""
+                self.req_tlvs.append(tlv)
+            
+            for tlv in self.opolicy.get_offer():
+                tlv["value"] = "offer"
+                self.offer_tlvs.append(tlv)
+    
+            cetp_msg = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, req_tlvs=self.req_tlvs, offer_tlvs=self.offer_tlvs, avail_tlvs=self.ava_tlvs)
+            cetp_packet = json.dumps(cetp_msg)
+            self.pprint(cetp_msg)
+            self.last_packet_sent = cetp_packet
+            self.cetp_negotiation_history.append(cetp_packet)
+            self.rtt += 1
+            self.cetpstate_mgr.add_initiated_transaction((self.sstag,0), self)                # Register state in Connection table to continue negotiating h2h-transaction later
+            self.cetp_client.update_H2H_transaction_count()
+            return cetp_packet
+        except Exception as msg:
+            self._logger.info("Exception consumed locally in start_cetp_processing()")
+            
         #policies = yield from self.get_policies_from_PolicySystem(r_id, r_cesid)
 
     def append_dstep_info(self):
@@ -203,8 +218,8 @@ class H2HTransactionOutbound(H2HTransaction):
     def _cetp_established(self, cetp_packet):
         # It can perhaps execute DNS callback as well
         self.dstag = cetp_packet['DST']
-        self.cetpstate_mgr.remove((self.sstag, 0))
-        self.cetpstate_mgr.add((self.sstag, self.dstag), self)
+        self.cetpstate_mgr.remove_initiated_transaction((self.sstag, 0))
+        self.cetpstate_mgr.add_established_transaction((self.sstag, self.dstag), self)
     
     def _execute_dns_callback(self, cb_args, resolution=True):
         self._logger.debug(" Executing DNS callback")
@@ -299,6 +314,7 @@ class H2HTransactionOutbound(H2HTransaction):
 
         if error:
             self._logger.info("CETP negotiation failed")
+            self.cetp_client.update_H2H_transaction_count(initiated=False)
             if self.dstag==0:
                 # Return false, and execute DNS failure callback
                 cb_args=(self.dnsmsg, self.local_addr)
@@ -315,6 +331,7 @@ class H2HTransactionOutbound(H2HTransaction):
                 return cetp_packet
         else:                
             self._logger.info("H2H negotiation succeeded --> Executing the DNS callback")
+            self.cetp_client.update_H2H_transaction_count(initiated=False)                              # To reduce number of ongoing transactions.
             self._cetp_established(cetp_packet)
             self.h2h_negotiation_status = True
             cb_args=(self.dnsmsg, self.local_addr)
@@ -451,11 +468,11 @@ class H2HTransactionInbound(H2HTransaction):
         
         if (len(self.ipolicy_tmp.required)==0) and not error:
             #All the destination requirements are met -> Accept/Create CETP connection (i.e. by assigning 'SST') and Export to stateful (for post_establishment etc)
-            o_cetp_sstag = random.randint(0, 2**32)
-            self.sstag, self.dstag = o_cetp_sstag, i_cetp_sstag
+            self.dstag = i_cetp_sstag
+            self.sstag = self.generate_session_tags(self.dstag)
             self._logger.info("H2H-policy negotiation succeeded -> Create stateful transaction (SST={}, DST={})".format(self.sstag, self.dstag))
             stateful_transansaction = self._export_to_stateful()
-            self.cetpstate_mgr.add((o_cetp_sstag, i_cetp_sstag), stateful_transansaction)
+            self.cetpstate_mgr.add_established_transaction((o_cetp_sstag, i_cetp_sstag), stateful_transansaction)
         
         cetp_signaling = self.get_cetp_packet(sstag=o_cetp_sstag, dstag=i_cetp_sstag, req_tlvs=req_tlvs, offer_tlvs=offer_tlvs, avail_tlvs=ava_tlvs)
         #self.pprint(cetp_signaling)

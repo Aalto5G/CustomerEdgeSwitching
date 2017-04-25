@@ -16,24 +16,66 @@ import ocetpLayering
 import cetpOperations
 import copy
 
-LOGLEVELCETP                    = logging.DEBUG
+KEY_INITIATED_CETP                  = 0
+KEY_ESTABLISHED_CETP                = 1
+LOGLEVELCETP                        = logging.DEBUG
 
 class CETPConnectionObject(object):
     def __init__(self):
-        self.cetp_transactions = {}                     #{(SST,0): A, (SST,DST): B}            #{KEY_ONgoing: [(SST,0): A, (SST,0): B], KEY_Established: [(SST,DST): C, (SST,DST): D]}
-        
-    def has(self, session_tag):
-        return session_tag in self.cetp_transactions
+        self.cetp_transactions                          = {}                     #{(SST,0): A, (SST,DST): B}            #{KEY_ONgoing: [(SST,0): A, (SST,0): B], KEY_Established: [(SST,DST): C, (SST,DST): D]}
+        self.cetp_transactions[KEY_INITIATED_CETP]      = {}
+        self.cetp_transactions[KEY_ESTABLISHED_CETP]    = {}
     
-    def add(self, session_tag, transaction):
-        self.cetp_transactions[session_tag] = transaction
+    def has_initiated_transaction(self, session_tag):
+        keytype = KEY_INITIATED_CETP
+        return self._has(keytype, session_tag)
         
-    def get(self, session_tag):
-        return self.cetp_transactions[session_tag]
+    def has_established_transaction(self, session_tag):
+        keytype = KEY_ESTABLISHED_CETP
+        return self._has(keytype, session_tag)
     
-    def remove(self, session_tag):
-        del self.cetp_transactions[session_tag]
+    def add_initiated_transaction(self, session_tag, transaction):
+        keytype = KEY_INITIATED_CETP
+        self._add(keytype, session_tag, transaction)
+        
+    def add_established_transaction(self, session_tag, transaction):
+        keytype = KEY_ESTABLISHED_CETP
+        self._add(keytype, session_tag, transaction)
+        
+    def remove_initiated_transaction(self, session_tag):
+        keytype = KEY_INITIATED_CETP
+        if self._has(keytype, session_tag):
+            self._remove(keytype, session_tag)
 
+    def remove_established_transaction(self, session_tag):
+        keytype = KEY_ESTABLISHED_CETP
+        if self._has(keytype, session_tag):
+            self._remove(keytype, session_tag)
+            
+    def get_initiated_transaction(self, session_tag):
+        keytype = KEY_INITIATED_CETP
+        if self.has_initiated_transaction(session_tag):
+            return self._get(keytype, session_tag)
+
+    def get_established_transaction(self, session_tag):
+        keytype = KEY_ESTABLISHED_CETP
+        if self.has_established_transaction(session_tag):
+            return self._get(keytype, session_tag)
+
+    def _has(self, keytype, session_tag):
+        if keytype in self.cetp_transactions:
+            return session_tag in self.cetp_transactions[keytype]
+        return False
+
+    def _add(self, keytype, session_tag, transaction):
+        self.cetp_transactions[keytype][session_tag] = transaction
+        
+    def _get(self, keytype, session_tag):
+        return self.cetp_transactions[keytype][session_tag]
+    
+    def _remove(self, keytype, session_tag):
+        del self.cetp_transactions[keytype][session_tag]
+        
 
 class CETP(object):
     pass                        # CETP class will have multiple instances of CETP TLV

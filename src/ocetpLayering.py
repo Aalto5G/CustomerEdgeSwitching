@@ -26,17 +26,19 @@ CETP_MSG_LEN_FIELD              = 2         # in bytes
 
 
 class CETPClient:
-    def __init__(self, loop=None, l_cesid= None, r_cesid=None, cb_func=None, cetp_state_mgr= None, policy_client=None, policy_mgr=None, ocetp_mgr=None, ces_params=None, name="CETPClient"):
+    def __init__(self, loop=None, l_cesid= None, r_cesid=None, cb_func=None, cetpstate_mgr= None, policy_client=None, policy_mgr=None, ocetp_mgr=None, ces_params=None, name="CETPClient"):
         self._loop                      = loop
         self.l_cesid                    = l_cesid
         self.r_cesid                    = r_cesid
         self.cb_func                    = cb_func
-        self.cetp_state_mgr             = cetp_state_mgr
+        self.cetpstate_mgr              = cetpstate_mgr
         self.policy_client              = policy_client
         self.policy_mgr                 = policy_mgr
         self.ces_params                 = ces_params
         self.cetp_mgr                   = ocetp_mgr
         self._closure_signal            = False
+        self.ongoing_h2h_transactions   = 0
+        self.max_session_limit          = 20                        # Dummy value for now, In reality the value shall come from C2C negotiation with remote CES.
         
         self.client_q                   = asyncio.Queue()           # Enqueues the naptr responses triggered by private hosts (served by CES)
         self.c2c_q                      = asyncio.Queue()           # Enqueues the response from remote peer (iCES), to H2H transactions
@@ -48,7 +50,7 @@ class CETPClient:
 
     def create_cetp_c2c_layer(self, naptr_list):
         """ Initiates CETPc2clayer between two CES nodes """
-        self.c2c = oCES2CESLayer(self._loop, naptr_list=naptr_list, cetp_client=self, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetp_state_mgr= self.cetp_state_mgr, \
+        self.c2c = oCES2CESLayer(self._loop, naptr_list=naptr_list, cetp_client=self, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetpstate_mgr= self.cetpstate_mgr, \
                                  policy_mgr=self.policy_mgr, policy_client=self.policy_client, ces_params=self.ces_params)      # Can c2clayer be obtained from CETPManager as an object for 'r_cesid'? 
 
     def enqueue_h2h_requests_nowait(self, naptr_records, cb_args):
@@ -69,15 +71,19 @@ class CETPClient:
                 queued_data = yield from self.client_q.get()
                 (naptr_rr, cb_args) = queued_data                                       # Whether the list of naptr records is handled well?    
                                                                                         # Can they be used to reconnect to a terminated endpoint.
-                for naptr in naptr_rr:
+                for naptr in naptr_rr:                                                  # I am not using this information for anything as of now - Plan their use.
                     dest_id, r_cesid, r_ip, r_port, r_transport = naptr
                 
-                asyncio.ensure_future(self.h2h_transaction_start(cb_args, dest_id))     # Shall the created task have an exception handler too?
+                if self.ongoing_h2h_transactions < self.max_session_limit:
+                    asyncio.ensure_future(self.h2h_transaction_start(cb_args, dest_id))     # Exception within task shall be consumed locally
+                else:
+                    self._logger.info(" Number of Ongoing transactions have exceeded the C2C limit.")
+                
                 self.client_q.task_done()
 
             except Exception as msg:
                 if self._closure_signal: break
-                self._logger.info(" Exception in CETPClient queue towards {}".format(self.r_cesid))
+                self._logger.info(" Exception in consuming H2H request towards {}".format(self.r_cesid))
                 self.client_q.task_done()
             
     def c2c_negotiation_status(self, status=True):
@@ -104,7 +110,7 @@ class CETPClient:
     def h2h_transaction_start(self, cb_args, dst_id):
         dns_q, addr = cb_args
         h2h = H2HTransaction.H2HTransactionOutbound(loop=self._loop, dns_q=dns_q, local_addr=addr, src_id="", dst_id=dst_id, l_cesid=self.l_cesid, r_cesid=self.r_cesid, \
-                                                        policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetp_state_mgr, dns_callback=self.cb_func)
+                                                        policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, dns_callback=self.cb_func, cetp_cleint=self)
         cetp_packet = yield from h2h.start_cetp_processing()
         self._logger.debug(" Message from h2h_transaction_start() ")
         self.send(cetp_packet)
@@ -112,25 +118,25 @@ class CETPClient:
     @asyncio.coroutine
     def h2h_transaction_continue(self, cetp_packet, transport):
         o_transaction = None
-        yield from asyncio.sleep(0.01)
+        yield from asyncio.sleep(0.003)
         
         cetp_msg = json.loads(cetp_packet)
         inbound_sstag, inbound_dstag = cetp_msg['SST'], cetp_msg['DST']
         sstag, dstag    = inbound_dstag, inbound_sstag
         
-        if self.cetp_state_mgr.has( (sstag, 0) ):
+        if self.cetpstate_mgr.has_initiated_transaction( (sstag, 0) ):
             self._logger.info(" Continue resolving H2H-transaction (SST={} -> DST={})".format(sstag, dstag))
-            o_h2h = self.cetp_state_mgr.get( (sstag, 0) )
+            o_h2h = self.cetpstate_mgr.get_initiated_transaction( (sstag, 0) )
             msg = o_h2h.continue_cetp_processing(cetp_msg)
             if msg!=None:
-                self.send(msg)
+                transport.send_cetp(msg)
 
-        elif self.cetp_state_mgr.has( (sstag, dstag) ):
+        elif self.cetpstate_mgr.has_established_transaction( (sstag, dstag) ):
             self._logger.info(" CETP message for a negotiated transaction (SST={} -> DST={})".format(sstag, dstag))
-            o_h2h = self.cetp_state_mgr.get( (sstag, dstag) )
+            o_h2h = self.cetpstate_mgr.get_established_transaction( (sstag, dstag) )
             msg = o_h2h.post_c2c_negotiation(cetp_msg, transport)
             if msg!=None:
-                self.send(msg)
+                transport.send_cetp(msg)
         
     def send(self, msg):
         """ Forwards the message to CETP c2c layer"""
@@ -157,6 +163,13 @@ class CETPClient:
                 self._logger.info(" Exception in consuming message from c2c-layer")
                 self.c2c_q.task_done()
                 # What could be this exception? What does it mean? And how to prevent it from happening? Look in above algo.
+
+    def update_H2H_transaction_count(self, initiated=True):
+        """ To limit the number of H2H transaction to limit agreed in C2C Negotiation """
+        if initiated:
+            self.ongoing_h2h_transactions += 1
+        else:
+            self.ongoing_h2h_transactions -= 1
 
     def set_closure_signal(self):
         self._closure_signal = True
@@ -193,15 +206,15 @@ class oCES2CESLayer:
     Manages, registers/unregisters the CETP Transports, AND performs resource cleanup on CES-to-CES connectivity loss.
     Timely negotiation of the CES-to-CES policies, AND forwards C2C-level CETP message to corresponding C2CTransaction, in post-c2c-negotiation phase.
     After CES-to-CES is negotiated, it forwards H2H-CETP Transactions to/from the upper layer. 
-    Management of CETPTransport failover, Transparent to H2H-layer.
+    Management of CETPTransport failover, seemless to H2H-layer.
     """
-    def __init__(self, loop, naptr_list=[], cetp_client=None, l_cesid=None, r_cesid=None, cetp_state_mgr=None, policy_mgr=None, policy_client=None, ces_params=None, name="oCES2CESLayer"):
+    def __init__(self, loop, naptr_list=[], cetp_client=None, l_cesid=None, r_cesid=None, cetpstate_mgr=None, policy_mgr=None, policy_client=None, ces_params=None, name="oCES2CESLayer"):
         self._loop                      = loop
         self.naptr_list                 = naptr_list
         self.cetp_client                = cetp_client            # H2H layer manager for remote-cesid 
         self.l_cesid                    = l_cesid
         self.r_cesid                    = r_cesid
-        self.cetp_state_mgr             = cetp_state_mgr
+        self.cetpstate_mgr              = cetpstate_mgr
         self.policy_client              = policy_client
         self.policy_mgr                 = policy_mgr
         self.ces_params                 = ces_params
@@ -308,12 +321,13 @@ class oCES2CESLayer:
         """ Calls corresponding C2CTransaction method, depending on whether its an ongoing or completed C2C Transaction. """
         inbound_sstag, inbound_dstag = cetp_msg['SST'], cetp_msg['DST']
         sstag, dstag    = inbound_dstag, inbound_sstag
-    
-        if self.cetp_state_mgr.has( (sstag, 0) ):
+        
+        if self.cetpstate_mgr.has_initiated_transaction( (sstag, 0) ):
             self._logger.info(" Continue resolving c2c-transaction (SST={}, DST={})".format(sstag, dstag))
-            o_c2c = self.cetp_state_mgr.get( (sstag, 0) )
+            o_c2c = self.cetpstate_mgr.get_initiated_transaction( (sstag, 0) )
             result = o_c2c.continue_c2c_negotiation(cetp_msg, transport)
             (status, cetp_resp) = result
+
             
             if status == True:
                 self.c2c_negotiated = True
@@ -321,7 +335,7 @@ class oCES2CESLayer:
                 self.cetp_client.c2c_negotiation_status(status=True)
                 
             elif status == False:
-                if len(cetp_resp) > 0:  self.send(cetp_resp)
+                if len(cetp_resp) > 0:  transport.send_cetp(cetp_resp)
                 self._logger.debug(" Close the transport endpoint towards {}.".format(self.r_cesid))
                 self.unregister_c2c_to_transport(transport)
                 transport.close()
@@ -330,9 +344,9 @@ class oCES2CESLayer:
                 self._logger.info(" CES-to-CES is not negotiated yet.")
                 transport.send_cetp(cetp_resp)
 
-        elif self.cetp_state_mgr.has( (sstag, dstag) ):
+        elif self.cetpstate_mgr.has_established_transaction( (sstag, dstag) ):
             self._logger.debug(" CETP for a negotiated transaction (SST={}, DST={})".format(sstag, dstag))
-            o_c2c = self.cetp_state_mgr.get( (sstag, dstag) )
+            o_c2c = self.cetpstate_mgr.get_established_transaction( (sstag, dstag) )
             resp = o_c2c.post_c2c_negotiation(cetp_msg, transport)
             if resp!=None:
                 transport.send_cetp(resp)
@@ -340,7 +354,7 @@ class oCES2CESLayer:
 
     def initiate_c2c_transaction(self, transport_obj):
         """ Initiates/Continues CES-to-CES negotiation """
-        c2c_transaction  = C2CTransaction.oC2CTransaction(self._loop, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetp_state_mgr=self.cetp_state_mgr, \
+        c2c_transaction  = C2CTransaction.oC2CTransaction(self._loop, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetpstate_mgr=self.cetpstate_mgr, \
                                                            policy_mgr=self.policy_mgr, proto=transport_obj.proto, ces_params=self.ces_params)
         
         self.register_c2c_to_transport(c2c_transaction, transport_obj)
