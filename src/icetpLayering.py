@@ -69,7 +69,7 @@ class CETPServer:
         cetp_msg = json.loads(msg)
         inbound_sst, inbound_dst = cetp_msg['SST'], cetp_msg['DST']
         sstag, dstag    = inbound_dst, inbound_sst                  # SST of the remote-CES is DST of the local-CES. 
-        yield from asyncio.sleep(0.003)                             # Simulating the delay upon interaction with the policy management system
+        yield from asyncio.sleep(0.001)                             # Simulating the delay upon interaction with the policy management system
         
         if inbound_dst == 0:
             self._logger.info(" No prior Outbound H2H-transaction found -> Initiating Inbound H2HTransaction (SST={} -> DST={})".format(inbound_sst, inbound_dst))

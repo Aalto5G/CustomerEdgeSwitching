@@ -118,7 +118,7 @@ class CETPClient:
     @asyncio.coroutine
     def h2h_transaction_continue(self, cetp_packet, transport):
         o_transaction = None
-        yield from asyncio.sleep(0.003)
+        yield from asyncio.sleep(0.001)
         
         cetp_msg = json.loads(cetp_packet)
         inbound_sstag, inbound_dstag = cetp_msg['SST'], cetp_msg['DST']
@@ -323,11 +323,10 @@ class oCES2CESLayer:
         sstag, dstag    = inbound_dstag, inbound_sstag
         
         if self.cetpstate_mgr.has_initiated_transaction( (sstag, 0) ):
-            self._logger.info(" Continue resolving c2c-transaction (SST={}, DST={})".format(sstag, dstag))
+            self._logger.info(" Continue resolving c2c-transaction (SST={}, DST={})".format(sstag, 0))
             o_c2c = self.cetpstate_mgr.get_initiated_transaction( (sstag, 0) )
             result = o_c2c.continue_c2c_negotiation(cetp_msg, transport)
             (status, cetp_resp) = result
-
             
             if status == True:
                 self.c2c_negotiated = True
@@ -347,9 +346,7 @@ class oCES2CESLayer:
         elif self.cetpstate_mgr.has_established_transaction( (sstag, dstag) ):
             self._logger.debug(" CETP for a negotiated transaction (SST={}, DST={})".format(sstag, dstag))
             o_c2c = self.cetpstate_mgr.get_established_transaction( (sstag, dstag) )
-            resp = o_c2c.post_c2c_negotiation(cetp_msg, transport)
-            if resp!=None:
-                transport.send_cetp(resp)
+            o_c2c.post_c2c_negotiation(cetp_msg, transport)
 
 
     def initiate_c2c_transaction(self, transport_obj):
