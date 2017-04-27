@@ -159,6 +159,16 @@ class PolicyCETP(object):
             cmp   = tlv["cmp"]
         return (cmp, ext, group, code)
     
+    def is_mandatory_required(self, tlv):
+        cmp, ext, group, code = self.get_tlv_details(tlv)
+        for pol in self.required:
+            if (group in pol["group"]) and (code in pol["code"]):
+                if 'cmp' in pol['cmp']:
+                    if pol['cmp']=="optional":
+                        return False
+                return True
+        return True
+    
     def has_required(self, tlv):
         cmp, ext, group, code = self.get_tlv_details(tlv)
         for pol in self.required:

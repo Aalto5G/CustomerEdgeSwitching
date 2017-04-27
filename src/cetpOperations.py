@@ -20,7 +20,6 @@ def send_ces_cesid(**kwargs):
     else:
         tlv["value"] = ces_params[policy_code]
     return tlv
-
     
 def send_ces_ttl(**kwargs):
     tlv, code, ces_params, query = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["query"] 
@@ -61,7 +60,6 @@ def send_ces_keepalive(**kwargs):
         tlv["value"] = ""
     return tlv
 
-
 def send_ces_keepalive_cycle(**kwargs):
     tlv, code, ces_params, query = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["query"] 
     policy_code = CETP.CES_CODE_TO_POLICY[code]
@@ -98,6 +96,24 @@ def send_ces_host_ratelimit(**kwargs):
         tlv["value"] = ces_params[policy_code]
     return tlv
 
+def send_ces_evidence_share(**kwargs):
+    tlv, code, ces_params, query = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["query"] 
+    policy_code = CETP.CES_CODE_TO_POLICY[code]
+    if query==True:
+        tlv['value'] = ""
+    else:
+        tlv["value"] = ces_params[policy_code]
+    return tlv
+
+def send_ces_evidence(**kwargs):
+    tlv, code, ces_params, query = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["query"] 
+    policy_code = CETP.CES_CODE_TO_POLICY[code]
+    if query==True:
+        tlv['value'] = ""
+    else:
+        tlv["value"] = ces_params[policy_code]
+    return tlv
+
 def send_ces_caces(**kwargs):
     tlv, code, ces_params, query = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["query"] 
     policy_code = CETP.CES_CODE_TO_POLICY[code]
@@ -118,19 +134,15 @@ def send_ces_headersignature(**kwargs):
 
 
 def send_ces_pow(**kwargs):
-    tlv, code, ces_params, query, r_cesid = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["query"], kwargs["r_cesid"]
+    tlv, code, ces_params, query, r_cesid, cetp_security, r_addr = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["query"], kwargs["r_cesid"], kwargs['cetp_security'], kwargs['r_addr']
     policy_code = CETP.CES_CODE_TO_POLICY[code]
+    r_ip, r_port = r_addr
     
     if query==True:
-        POW_SECRET = "HammadTAKEsII"                                                              # This must be managed later
-        ch = r_cesid + ":" + POW_SECRET                             # FOR Now, For testing .. Challenge shall be more complicated (to prevent guessing)
-        ch_hash = hashlib.sha256(ch.encode()).hexdigest()
-        ch_hash = ch_hash[0:16]
-        challenge_token = str(ch_hash)+";"+str(ACCEPTABLE_ZEROS)
+        challenge_token = cetp_security.pow_challenge(r_cesid=r_cesid, r_ip=r_ip, r_port=r_port)
         tlv['value'] = challenge_token
     else:
-        tlv['value'] = ""                                           # Sender-oriented pow can be supported in Offer, only if a type field in TLV indicates that it is 
-                                                                    # sender-oriented pow, so that receiver decodes it differently than request/response pow.. Where the challenge must be verified before verifying POW.
+        tlv['value'] = ""
     return tlv
 
 def send_ces_terminate(**kwargs):
@@ -165,29 +177,34 @@ def send_ces_host_filtering(**kwargs):
 def response_ces_cesid(**kwargs):
     tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
+    tlv['ope'] = 'response'
     tlv["value"] = ces_params[policy_code]
     return tlv
 
 def response_ces_ttl(**kwargs):
     tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
+    tlv['ope'] = 'response'
     tlv["value"] = ces_params[policy_code]
     return tlv
 
 def response_ces_keepalive(**kwargs):
     tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
+    tlv['ope'] = 'response'
     tlv["value"] = ""
     return tlv
 
 def response_ces_keepalive_cycle(**kwargs):
     tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
+    tlv['ope'] = 'response'
     tlv["value"] = ces_params[policy_code]
     return tlv
 
 def response_ces_certificate(**kwargs):
     tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
+    tlv['ope'] = 'response'
     
     certificate_path = ces_params[policy_code]
     f = open(certificate_path, 'r')
@@ -198,52 +215,82 @@ def response_ces_certificate(**kwargs):
 def response_ces_fw_version(**kwargs):
     tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
+    tlv['ope'] = 'response'
     tlv["value"] = ces_params[policy_code]
     return tlv
 
 def response_ces_session_limit(**kwargs):
     tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
+    tlv['ope'] = 'response'
     tlv["value"] = ces_params[policy_code]
     return tlv
 
 def response_ces_host_ratelimit(**kwargs):
     tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
+    tlv['ope'] = 'response'
     tlv["value"] = ces_params[policy_code]
     return tlv
 
 def response_ces_caces(**kwargs):
     tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
+    tlv['ope'] = 'response'
     tlv["value"] = ces_params[policy_code]
+    return tlv
+
+def response_ces_evidence_share(**kwargs):
+    tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
+    policy_code = CETP.CES_CODE_TO_POLICY[code]
+    tlv['ope'] = 'response'
+    tlv["value"] = ""
+    return tlv
+
+def response_ces_evidence(**kwargs):
+    tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
+    policy_code = CETP.CES_CODE_TO_POLICY[code]
+    tlv['ope'] = 'response'
+    tlv["value"] = ""
     return tlv
 
 def response_ces_headersignature(**kwargs):
     tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
+    tlv['ope'] = 'response'
     tlv["value"] = "Not defined yet"
     return tlv
 
 def response_ces_pow(**kwargs):
-    tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
-    policy_code = CETP.CES_CODE_TO_POLICY[code]
-    
-    value = tlv["value"]
-    sender_challenge, ZEROS_IN_RESPONSE = value.split(";")
-    h = hashcash.make_token(sender_challenge.encode(), int(ZEROS_IN_RESPONSE))
-    pow_resp = str(sender_challenge)+";"+str(h)
-    tlv["value"] = pow_resp
-    return tlv
+    tlv, code, ces_params, cetp_security = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["cetp_security"]
+    tlv['ope'] = "response"
+    try:
+        policy_code = CETP.CES_CODE_TO_POLICY[code]
+        sender_challenge = tlv["value"]
+        pow_resp = cetp_security.respond_pow(challenge = sender_challenge)
+        tlv["value"] = pow_resp
+        return tlv
+    except Exception as msg:
+        print(" Exception in responding to POW challenge.")
+        return tlv
 
 
 
 def verify_ces_cesid(**kwargs):
-    tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
+    tlv, code, ces_params, r_cesid, transaction = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["r_cesid"], kwargs["transaction"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
-    if 'cmp' in tlv:
-        if tlv['cmp'] == "NotAvailable":
+    
+    try:
+        if 'cmp' in tlv:
+            if tlv['cmp'] == "NotAvailable":
+                return False
+        
+        if r_cesid != tlv["value"]:
             return False
+    except Exception as msg:
+        print("Exception in verifying remote cesid")
+        return False
+    
     return True
 
 
@@ -264,10 +311,18 @@ def verify_ces_certificate(**kwargs):
     return True
 
 def verify_ces_keepalive(**kwargs):
-    tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
+    tlv, code, ces_params, transaction = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["transaction"]
+    
     if 'cmp' in tlv:
         if tlv['cmp'] == "NotAvailable":
             return False
+    
+    value = tlv["value"]
+    if value == "":
+        transaction.last_seen = time.time()
+        transaction.health_report = True
+        transaction.keepalive_response = True
+                
     return True
 
 def verify_ces_keepalive_cycle(**kwargs):
@@ -332,6 +387,23 @@ def verify_ces_fw_version(**kwargs):
             return False
     return True
 
+def verify_ces_evidence(**kwargs):
+    tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
+    policy_code = CETP.CES_CODE_TO_POLICY[code]
+    if 'cmp' in tlv:
+        if tlv['cmp'] == "NotAvailable":
+            return False
+    return True
+
+def verify_ces_evidence_share(**kwargs):
+    tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
+    policy_code = CETP.CES_CODE_TO_POLICY[code]
+    if 'cmp' in tlv:
+        if tlv['cmp'] == "NotAvailable":
+            return False
+    return True
+
+
 def verify_ces_caces(**kwargs):
     tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
@@ -349,37 +421,17 @@ def verify_ces_headersignature(**kwargs):
     return True
 
 def verify_ces_pow(**kwargs):
-    tlv, code, ces_params, r_cesid = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["r_cesid"]
+    tlv, code, ces_params, r_cesid, cetp_security, r_addr = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["r_cesid"], kwargs['cetp_security'], kwargs['r_addr']
     policy_code = CETP.CES_CODE_TO_POLICY[code]
+    r_ip, r_port = r_addr
+
     if 'cmp' in tlv:
         if tlv['cmp'] == "NotAvailable":
             return False
-    
-    POW_SECRET = "HammadTAKEsII"                                                              # This must be managed later
-    ch = r_cesid + ":" + POW_SECRET                            # FOR Now, For testing .. Challenge shall be more complicated (to prevent guessing)
-    ch_hash = hashlib.sha256(ch.encode()).hexdigest()
-    ch_hash = ch_hash[0:16]
-    generated_ch = str(ch_hash)
-    
-    value = tlv['value']
-    inbound_challenge, inbound_solution = value.split(";")
-    
-    if generated_ch != inbound_challenge:
-        print("Proof-of-work failed: Inbound challenge is different than sent challenge")
-        return False
-    else:
-        print("Inbound challenge is same as the sent challenge")
-        if hashcash.verify_token(inbound_challenge.encode(), inbound_solution) >= ACCEPTABLE_ZEROS:
-            print("Proof-of-work verified")
-        else:
-            print("Failed")
-            return False
         
-    return True
-
-
-
-
+    value = tlv['value']
+    res = cetp_security.verify_pow(r_cesid=r_cesid, r_ip=r_ip, r_port=r_port, response=value)
+    return res
 
 
 def send_ctrl_dstep(**kwargs):

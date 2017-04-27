@@ -109,7 +109,8 @@ class CETPTLV(object):
         self.value=None
 
 
-CES_CODE_TO_POLICY= {'cesid':'cesid',                       'cesid':'cesid',                        #Contains the CES-ID
+CES_CODE_TO_POLICY= {
+                    'cesid':'cesid',                       'cesid':'cesid',                         #Contains the CES-ID
                     'ttl':'dp_ttl',                         'dp_ttl':'ttl',                         #Contains the TTL of the connection
                     'certificate':'certificate',            'certificate':'certificate',            #CES-Certificate
                     'keepalive_cycle':'keepalive_cycle',    'keepalive_cycle':'keepalive_cycle',    #Contains the keepalive cycle duration
@@ -119,7 +120,10 @@ CES_CODE_TO_POLICY= {'cesid':'cesid',                       'cesid':'cesid',    
                     'host_ratelimit':'host_ratelimit',      'host_ratelimit':'host_ratelimit',      #Sets the rate limit {packets/s,bytes/s}
                     'caces':'caces',                        'caces':'caces',                        #Contains the CA address for validating a CES
                     'pow_algo':'pow_algo',                  'pow_algo':'pow_algo',                  #Proof-of-work mechanism to push the burden of communication to the sender
-                    'pow':'pow',                            'pow':'pow'
+                    'pow':'pow',                            'pow':'pow',
+                    'evidence_share':'evidence_share',      'evidence_share':'evidence_share',
+                    'evidence':'evidence',                  'evidence':'evidence',
+                    'host_filtering':'host_filtering',      'host_filtering':'host_filtering'
                     }
 
 
@@ -166,7 +170,7 @@ SEND_TLV_CONTROL_CODE = {"dstep":cetpOperations.send_ctrl_dstep,
                       "dp_port":cetpOperations.send_ctrl_dp_port,
                       "dp_ratelimit":cetpOperations.send_ctrl_dp_ratelimit,
                       "terminate":cetpOperations.send_ctrl_terminate,
-                      "warning":cetpOperations.send_ctrl_warning
+                      "warning":cetpOperations.send_ctrl_warning,
                       }
 
 
@@ -191,7 +195,9 @@ SEND_TLV_CES_CODE =  {"cesid":cetpOperations.send_ces_cesid,
                       "port_filtering":cetpOperations.send_ces_port_filtering,                      
                       "host_filtering":cetpOperations.send_ces_host_filtering,                      
                       "terminate":cetpOperations.send_ces_terminate,
-                      "warning":cetpOperations.send_ctrl_warning
+                      "warning":cetpOperations.send_ctrl_warning,
+                      "evidence_share":cetpOperations.send_ces_evidence_share,
+                      "evidence":cetpOperations.send_ces_evidence
                       }
 
 SEND_TLV_GROUP = {TLV_GROUP["id"]:SEND_TLV_ID_CODE,
@@ -232,6 +238,8 @@ RESPONSE_TLV_CES_CODE     = { "cesid":cetpOperations.response_ces_cesid,
                               "caces":cetpOperations.response_ces_caces,
                               "headersignature":cetpOperations.response_ces_headersignature,
                               "pow":cetpOperations.response_ces_pow,
+                              "evidence_share":cetpOperations.response_ces_evidence_share,
+                              "evidence":cetpOperations.response_ces_evidence
                               }
 
 RESPONSE_TLV_GROUP = {TLV_GROUP["id"]:RESPONSE_TLV_ID_CODE,
@@ -271,6 +279,8 @@ VERIFY_TLV_CES_CODE     = { "cesid":cetpOperations.verify_ces_cesid,
                               "caces":cetpOperations.verify_ces_caces,
                               "headersignature":cetpOperations.verify_ces_headersignature,
                               "pow":cetpOperations.verify_ces_pow,
+                              "evidence_share":cetpOperations.verify_ces_evidence_share,
+                              "evidence":cetpOperations.verify_ces_evidence
                               }
 
 

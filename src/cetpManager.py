@@ -50,7 +50,7 @@ class CETPManager:
         self.name                   = name
         self._logger                = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPManager)
-        self.ic2c_mgr               = iCETPManager(loop=loop, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, l_cesid=cesid, ces_params=self.ces_params)
+        self.ic2c_mgr               = iCETPManager(loop=loop, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, l_cesid=cesid, ces_params=self.ces_params, cetp_security=self.cetp_security)
         
 
     def process_outbound_cetp(self, r_cesid, naptr_list, dns_cb_func, cb_args):
@@ -69,7 +69,7 @@ class CETPManager:
     def create_local_endpoint(self, l_cesid, r_cesid, naptr_list, dns_cb_func):
         """ Creates the local CETPClient for connecting to the remote CES-ID """
         client_ep = ocetpLayering.CETPClient(l_cesid = l_cesid, r_cesid = r_cesid, cb_func=dns_cb_func, cetpstate_mgr= self.cetpstate_mgr, \
-                               policy_mgr=self.policy_mgr, policy_client=None, loop=self._loop, ocetp_mgr=self, ces_params=self.ces_params)
+                               policy_mgr=self.policy_mgr, policy_client=None, loop=self._loop, ocetp_mgr=self, ces_params=self.ces_params, cetp_security=self.cetp_security)
         
         self.add_local_endpoint(r_cesid, client_ep)
         client_ep.create_cetp_c2c_layer(naptr_list)
@@ -173,12 +173,13 @@ class iCETPManager:
     Manager class for inbound CETPClients
     1. Aggregates different CETP Transport endpoints from a remote CES-ID under one C2C-Layer between CES nodes.
     """
-    def __init__(self, loop=None, policy_mgr=None, cetpstate_mgr=None, l_cesid=None, ces_params=None, name="iCETPManager"):
+    def __init__(self, loop=None, policy_mgr=None, cetpstate_mgr=None, l_cesid=None, ces_params=None, cetp_security=None, name="iCETPManager"):
         self._loop              = loop
         self.policy_mgr         = policy_mgr
         self.cetpstate_mgr      = cetpstate_mgr
         self.l_cesid            = l_cesid
         self.ces_params         = ces_params
+        self.cetp_security      = cetp_security
         self.c2c_register       = {}                        # Registers a c2clayer corresponding to a remote 'cesid' --- Format: {cesid1: c2c_layer, cesid2: c2c_layer}
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_iCETPManager)
@@ -289,7 +290,7 @@ class iCETPManager:
             peer_addr = transport.peername
             proto     = transport.proto
             ic2c_transaction = C2CTransaction.iC2CTransaction(self._loop, r_addr=peer_addr, sstag=sstag, dstag=sstag, l_cesid=self.l_cesid, policy_mgr=self.policy_mgr, \
-                                                               cetpstate_mgr=self.cetpstate_mgr, ces_params=self.ces_params, proto=proto, transport=transport)
+                                                               cetpstate_mgr=self.cetpstate_mgr, ces_params=self.ces_params, proto=proto, transport=transport, cetp_security=self.cetp_security)
             response = ic2c_transaction.process_c2c_transaction(cetp_msg)
             return response
         
