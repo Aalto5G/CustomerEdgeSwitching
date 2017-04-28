@@ -248,10 +248,12 @@ def response_ces_evidence_share(**kwargs):
     return tlv
 
 def response_ces_evidence(**kwargs):
-    tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
+    tlv, code, ces_params, cetp_security = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs['cetp_security']
     policy_code = CETP.CES_CODE_TO_POLICY[code]
+    evidence = tlv["value"]
+    resp = cetp_security.process_evidence(r_cesid, evidence)
     tlv['ope'] = 'response'
-    tlv["value"] = ""
+    tlv["value"] = resp             # Could be an ACK
     return tlv
 
 def response_ces_headersignature(**kwargs):

@@ -26,15 +26,22 @@ LOGLEVEL_CETPSecurity       = logging.INFO
 
 
 class CETPSecurity:
-    def __init__(self, name="CETPSecurity"):
+    def __init__(self, ces_params, name="CETPSecurity"):
         self.localhost_evidences             = {}                            # {host-fqdn: [evidence]}
         self.remotehost_evidence             = {}
         self.remote_ces_evidence             = {}
+        self.ces_params                      = ces_params
         self._logger                         = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPSecurity)
         self._initialize_pow()
         
     # CETPSecurity shall have specific 'CES-to-CES' view & aggregated view of all 'CES-to-CES' interactions
+    
+    def process_evidence(self, r_cesid, evidence):
+        """ Processes the evidence received from 'r_cesid' """
+        self.remote_ces_evidence[r_cesid] = evidence
+        # parse to retrieve the ID/FQDN of the host for which the evidence is received.        # ID could be a 'host-id' or 'cesid' itself
+        # Evidence could reveal more about the type of misbehavior observed from CES.
     
     def evidence_against_localhost(self, host_fqdn, r_cesid, evidence):
         """ Gets evidence against local-host's fqdn from remote-CES.
@@ -64,15 +71,15 @@ class CETPSecurity:
         """
         pass
     
-    def evidence_against_remote_ces(self, r_cesid):
-        """ Aggregates number (and severity) of non-compliance observed from remote-CES """
-        pass
-    
     def report_to_local_ces_admin(self):
         """ Reports local-CES of a misbehaving local-host, remote-host, or remote-CES """
         pass
     
-    def evidence_reporting_to_remote_CES(self, r_cesid, evidence):
+    def evidence_against_remote_ces(self, r_cesid):
+        """ Aggregates number (and severity) of non-compliance observed from remote-CES """
+        pass
+    
+    def report_evidence_to_remote_CES(self, r_cesid, evidence):
         """ Sends evidence report to a remote CES for one of its served-hosts """
         pass
     
@@ -193,4 +200,5 @@ class CETPSecurity:
             
             for it in secret_to_remove:
                 del self.pow_secret_management[it]            
+    
     
