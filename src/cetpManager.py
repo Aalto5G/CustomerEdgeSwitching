@@ -41,7 +41,7 @@ class CETPManager:
         self.ces_certificate_path   = self.ces_params['certificate']
         self.ces_privatekey_path    = self.ces_params['private_key']
         self.ca_certificate_path    = self.ces_params['ca_certificate']                                       # Path of X.509 certificate of trusted CA, for validating the remote node's certificate.
-        self.cetp_security          = CETPSecurity.CETPSecurity()
+        self.cetp_security          = CETPSecurity.CETPSecurity(ces_params)
 
 
         self.cetpstate_mgr         = CETP.CETPConnectionObject()                                             # Records the established CETP transactions (both H2H & C2C). Required for preventing the re-allocation already in-use SST & DST (in CETP transaction).
