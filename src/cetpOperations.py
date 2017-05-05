@@ -4,10 +4,12 @@ import CETP
 import C2CTransaction
 import H2HTransaction
 import sys, os
+from email import policy
 sys.path.append(os.path.join(os.path.dirname('hashcash.py'), 'lib'))
 import hashcash
 import hashlib
 import time
+import copy
 
 ACCEPTABLE_ZEROS = 12
 
@@ -87,7 +89,7 @@ def send_ces_session_limit(**kwargs):
         tlv["value"] = ces_params[policy_code]
     return tlv
 
-def send_ces_host_ratelimit(**kwargs):
+def send_ces_host_sessions(**kwargs):
     tlv, code, ces_params, query = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["query"] 
     policy_code = CETP.CES_CODE_TO_POLICY[code]
     if query==True:
@@ -226,7 +228,7 @@ def response_ces_session_limit(**kwargs):
     tlv["value"] = ces_params[policy_code]
     return tlv
 
-def response_ces_host_ratelimit(**kwargs):
+def response_ces_host_sessions(**kwargs):
     tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
     tlv['ope'] = 'response'
@@ -297,11 +299,24 @@ def verify_ces_cesid(**kwargs):
 
 
 def verify_ces_ttl(**kwargs):
-    tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
+    tlv, code, ces_params, transaction, session_established = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["transaction"], kwargs["session_established"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
     if 'cmp' in tlv:
         if tlv['cmp'] == "NotAvailable":
             return False
+        
+    r_ces_default_dp_ttl = tlv["value"]
+    if r_ces_default_dp_ttl  < 2:
+        print("default dp-ttl value is unacceptable")
+    
+    if session_established:
+        l_ces_default_dp_ttl = ces_params["dp_ttl"]
+                
+        if l_ces_default_dp_ttl > r_ces_default_dp_ttl:
+            transaction.default_dp_ttl = r_ces_default_dp_ttl
+        else:
+            transaction.default_dp_ttl = l_ces_default_dp_ttl
+    
     return True
 
 def verify_ces_certificate(**kwargs):
@@ -336,11 +351,12 @@ def verify_ces_keepalive_cycle(**kwargs):
             return False
     try:
         keepalive_cycle = tlv['value']
-        if (keepalive_cycle < 2) or (keepalive_cycle > 3600):
-            print("The keepalive cycle is either too small or too large.")
+        if keepalive_cycle < 2:
+            print("Invalid/Unacceptable value of the keepalive cycle.")
             return False
+        
     except Exception as msg:
-        print("Exception in verify_ces_keepalive_cycle")
+        print("Exception in verifying the ces_keepalive_cycle")
         return False
         
     return True
@@ -354,26 +370,28 @@ def verify_ces_certificate(**kwargs):
     return True
  
 def verify_ces_session_limit(**kwargs):
-    tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
+    tlv, code, ces_params, session_established, transaction = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["session_established"], kwargs["transaction"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
     
     if 'cmp' in tlv:
         if tlv['cmp'] == "NotAvailable":
             return False
     try:
-        ces_session_limit = tlv['value']
-        max_simultaneous_ces_sessions = ces_params['max_ces_session_limit']
-    
-        if (ces_session_limit < 1) or (ces_session_limit > max_simultaneous_ces_sessions):
-            print("CES does not support {} simultaneous H2H transactions.".format(ces_session_limit))
+        remote_ces_session_limit = tlv['value']
+        if remote_ces_session_limit < 1:
+            print("Remote CES supports {} simultaneous H2H transactions.".format(ces_session_limit))
             return False
+
+        if session_established:
+            transaction.session_limit = remote_ces_session_limit                # CES shall forward no more than these simultaneous sessions towards remote CES
+        
     except Exception as msg:
         print("Exception in verify_ces_session_limit")
         return False
         
     return True
 
-def verify_ces_host_ratelimit(**kwargs):
+def verify_ces_host_sessions(**kwargs):
     tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
     if 'cmp' in tlv:
@@ -435,151 +453,496 @@ def verify_ces_pow(**kwargs):
     res = cetp_security.verify_pow(r_cesid=r_cesid, r_ip=r_ip, r_port=r_port, response=value)
     return res
 
+def send_rloc(**kwargs):
+    tlv, code, query, policy = kwargs["tlv"], kwargs["code"], kwargs["query"], kwargs["policy"]
+    if query==True:
+        if 'value' in tlv:
+            tlv["value"] = ""
+    else:
+        if 'value' not in tlv:
+            tlv["value"] = ""
+    return tlv
+
+def send_payload(**kwargs):
+    tlv, code, query, policy = kwargs["tlv"], kwargs["code"], kwargs["query"], kwargs["policy"]
+    if query==True:
+        if 'value' in tlv:
+            tlv["value"] = ""
+    else:
+        if 'value' not in tlv:
+            tlv["value"] = ""
+    return tlv
+
+def response_rloc(**kwargs):
+    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+    return tlv
+
+def response_payload(**kwargs):
+    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+    return tlv
+
+def verify_rloc(**kwargs):
+    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+    return True
+
+def verify_payload(**kwargs):
+    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+    return True
+
+def send_id(**kwargs):
+    tlv, code, query, policy = kwargs["tlv"], kwargs["code"], kwargs["query"], kwargs["policy"]
+    new_tlv = copy.deepcopy(tlv)
+    if query==True:
+        if 'value' in new_tlv:
+            del new_tlv["value"]
+    else:
+        if not ('value' in new_tlv):
+            new_tlv["value"] = ""
+    return new_tlv
+
+def response_id(**kwargs):
+    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+    group, code, cmp, ext, response_value = policy.get_policy_to_respond(tlv)
+    tlv['ope'] = "response"
+    tlv["value"] = response_value
+    return tlv
+
+def verify_id(**kwargs):
+    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+    group, code, cmp, ext, value = policy.get_tlv_details(tlv)
+    
+    if cmp =="NotAvailable":
+        return False
+    
+    inbound_id = value
+    group, code, cmp, ext, allowed_value = policy.get_policy_to_enforce(tlv)
+    #print(inbound_id in allowed_value)
+    if inbound_id in allowed_value:
+        return True
+    else:
+        return False
 
 def send_ctrl_dstep(**kwargs):
     pass
 
 def send_ctrl_fqdn(**kwargs):
-    pass
-
+    tlv, code, query, policy = kwargs["tlv"], kwargs["code"], kwargs["query"], kwargs["policy"]
+    #policy_code = CETP.CES_CODE_TO_POLICY[code]
+    if query==True:
+        if 'value' in tlv:
+            tlv["value"] = ""
+    else:
+        if 'value' not in tlv:
+            tlv["value"] = ""
+        
+    return tlv
+    
 def send_ctrl_certificate(**kwargs):
-    pass
+    tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
+    #policy_code = CETP.CES_CODE_TO_POLICY[code]
+    new_tlv = copy.deepcopy(tlv)
+    if query==True:
+        if 'value' in new_tlv:
+            del new_tlv["value"]
+    else:
+        if not ('value' in new_tlv):
+            new_tlv["value"] = ""
+    return new_tlv
+
 
 def send_ctrl_caep(**kwargs):
-    pass
+    tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
+    #policy_code = CETP.CES_CODE_TO_POLICY[code]
+    
+    new_tlv = copy.deepcopy(tlv)
+    if query==True:
+        if 'value' in new_tlv:
+            del new_tlv["value"]
+    else:
+        if not ('value' in new_tlv):
+            new_tlv["value"] = ""
+    return new_tlv
 
 def send_ctrl_dp_rlocs(**kwargs):
-    pass
+    tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
+    #policy_code = CETP.CES_CODE_TO_POLICY[code]
+    new_tlv = copy.deepcopy(tlv)
+    if query==True:
+        if 'value' in new_tlv:
+            del new_tlv["value"]
+    else:
+        if not ('value' in new_tlv):
+            new_tlv["value"] = ""
+    return new_tlv
 
 def send_ctrl_dp_ttl(**kwargs):
-    pass
+    tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
+    #policy_code = CETP.CES_CODE_TO_POLICY[code]
+    new_tlv = copy.deepcopy(tlv)
+    if query==True:
+        if 'value' in new_tlv:
+            del new_tlv["value"]
+    else:
+        if not ('value' in new_tlv):
+            new_tlv["value"] = ""
+    return new_tlv
+
 
 def send_ctrl_dp_keepalive_cycle(**kwargs):
-    pass
+    tlv, code, query = kwargs["tlv"], kwargs["code"],  kwargs["query"] 
+    #policy_code = CETP.CES_CODE_TO_POLICY[code]
+    new_tlv = copy.deepcopy(tlv)
+    if query==True:
+        if 'value' in new_tlv:
+            del new_tlv["value"]
+    else:
+        if not ('value' in new_tlv):
+            new_tlv["value"] = ""
+    return new_tlv
 
 def send_ctrl_qos(**kwargs):
-    pass
+    tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
+    #policy_code = CETP.CES_CODE_TO_POLICY[code]
+    new_tlv = copy.deepcopy(tlv)
+    if query==True:
+        if 'value' in new_tlv:
+            del new_tlv["value"]
+    else:
+        if not ('value' in new_tlv):
+            new_tlv["value"] = ""
+    return new_tlv
 
 def send_ctrl_ack(**kwargs):
-    pass
+    tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
+    #policy_code = CETP.CES_CODE_TO_POLICY[code]
+    new_tlv = copy.deepcopy(tlv)
+    if query==True:
+        if 'value' in new_tlv:
+            del new_tlv["value"]
+    else:
+        if not ('value' in new_tlv):
+            new_tlv["value"] = ""
+    return new_tlv
 
 def send_ctrl_os_version(**kwargs):
-    pass
+    tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
+    #policy_code = CETP.CES_CODE_TO_POLICY[code]
+    new_tlv = copy.deepcopy(tlv)
+    if query==True:
+        if 'value' in new_tlv:
+            del new_tlv["value"]
+    else:
+        if not ('value' in new_tlv):
+            new_tlv["value"] = ""
+    return new_tlv
 
 def send_ctrl_policy_caching(**kwargs):
-    pass
+    tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
+    #policy_code = CETP.CES_CODE_TO_POLICY[code]
+    new_tlv = copy.deepcopy(tlv)
+    if query==True:
+        if 'value' in new_tlv:
+            del new_tlv["value"]
+    else:
+        if not ('value' in new_tlv):
+            new_tlv["value"] = ""
+    return new_tlv
 
 def send_ctrl_dp_proto(**kwargs):
-    pass
+    tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["query"] 
+    #policy_code = CETP.CES_CODE_TO_POLICY[code]
+    new_tlv = copy.deepcopy(tlv)
+    if query==True:
+        if 'value' in new_tlv:
+            del new_tlv["value"]
+    else:
+        if not ('value' in new_tlv):
+            new_tlv["value"] = ""
+    return new_tlv
 
 def send_ctrl_dp_port(**kwargs):
-    pass
+    tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
+    #policy_code = CETP.CES_CODE_TO_POLICY[code]
+    new_tlv = copy.deepcopy(tlv)
+    if query==True:
+        if 'value' in new_tlv:
+            del new_tlv["value"]
+    else:
+        if not ('value' in new_tlv):
+            new_tlv["value"] = ""
+    return new_tlv
 
 def send_ctrl_dp_ratelimit(**kwargs):
-    pass
+    tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
+    #policy_code = CETP.CES_CODE_TO_POLICY[code]
+    new_tlv = copy.deepcopy(tlv)
+    if query==True:
+        if 'value' in new_tlv:
+            del new_tlv["value"]
+    else:
+        if not ('value' in new_tlv):
+            new_tlv["value"] = ""
+    return new_tlv
 
 def send_ctrl_terminate(**kwargs):
-    pass
+    tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
+    #policy_code = CETP.CES_CODE_TO_POLICY[code]
+    new_tlv = copy.deepcopy(tlv)
+    if query==True:
+        if 'value' in new_tlv:
+            del new_tlv["value"]
+    else:
+        if not ('value' in new_tlv):
+            new_tlv["value"] = ""
+    return new_tlv
 
 def send_ctrl_warning(**kwargs):
-    pass
+    tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
+    #policy_code = CETP.CES_CODE_TO_POLICY[code]
+    new_tlv = copy.deepcopy(tlv)
+    if query==True:
+        if 'value' in new_tlv:
+            del new_tlv["value"]
+    else:
+        if not ('value' in new_tlv):
+            new_tlv["value"] = ""
+    return new_tlv
 
 
 def response_ctrl_dstep(**kwargs):
-    pass
+    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+    policy_code = CETP.CONTROL_CODES[code]
+    tlv['ope'] = 'response'
+    #tlv["value"] = "some-value"
+    return tlv
 
 def response_ctrl_fqdn(**kwargs):
-    pass
+    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+    policy_code = CETP.CONTROL_CODES[code]
+    tlv['ope'] = 'response'
+    #tlv["value"] = "some-value"
+    return tlv
 
 def response_ctrl_certificate(**kwargs):
-    pass
+    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+    policy_code = CETP.CONTROL_CODES[code]
+    tlv['ope'] = 'response'
+    #tlv["value"] = "some-value"
+    return tlv
 
 def response_ctrl_caep(**kwargs):
-    pass
+    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+    #policy_code = CETP.CONTROL_CODES[code]
+    
+    group, code, cmp, ext, response_value = policy.get_policy_to_respond(tlv)
+    print("response_value", response_value)
+    tlv['ope'] = "response"
+    tlv["value"] = response_value
+    return tlv
 
 def response_ctrl_dp_rlocs(**kwargs):
-    pass
+    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+    policy_code = CETP.CONTROL_CODES[code]
+    tlv['ope'] = 'response'
+    #tlv["value"] = "some-value"
+    return tlv
 
 def response_ctrl_dp_ttl(**kwargs):
-    pass
+    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+    policy_code = CETP.CONTROL_CODES[code]
+    tlv['ope'] = 'response'
+    #tlv["value"] = "some-value"
+    return tlv
 
 def response_ctrl_dp_keepalive_cycle(**kwargs):
-    pass
+    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+    policy_code = CETP.CONTROL_CODES[code]
+    tlv['ope'] = 'response'
+    #tlv["value"] = "some-value"
+    return tlv
 
 def response_ctrl_qos(**kwargs):
-    pass
+    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+    tlv['ope'] = 'response'
+    #tlv["value"] = "some-value"
+    return tlv
 
 def response_ctrl_ack(**kwargs):
-    pass
+    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+    tlv['ope'] = 'response'
+    #tlv["value"] = "some-value"
+    return tlv
 
 def response_ctrl_os_version(**kwargs):
-    pass
+    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+    tlv['ope'] = 'response'
+    #tlv["value"] = "some-value"
+    return tlv
 
 def response_ctrl_policy_caching(**kwargs):
-    pass
+    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+    tlv['ope'] = 'response'
+    #tlv["value"] = "some-value"
+    return tlv
 
 def response_ctrl_dp_proto(**kwargs):
-    pass
+    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+    tlv['ope'] = 'response'
+    #tlv["value"] = "some-value"
+    return tlv
 
 def response_ctrl_dp_port(**kwargs):
-    pass
+    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+    tlv['ope'] = 'response'
+    #tlv["value"] = "some-value"
+    return tlv
 
 def response_ctrl_dp_ratelimit(**kwargs):
-    pass
+    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+    tlv['ope'] = 'response'
+    #tlv["value"] = "some-value"
+    return tlv
 
 def response_ctrl_terminate(**kwargs):
-    pass
+    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+    tlv['ope'] = 'response'
+    return tlv
 
 def response_ctrl_warning(**kwargs):
-    pass
+    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+    tlv['ope'] = 'response'
+    #tlv["value"] = "some-value"
+    return tlv
 
 
 def verify_ctrl_dstep(**kwargs):
-    pass
+    tlv, code = kwargs["tlv"], kwargs["code"]
+    #policy_code = CETP.CONTROL_CODES[code]
+    if 'cmp' in tlv:
+        if tlv['cmp'] == "NotAvailable":
+            return False
+    return True
 
 def verify_ctrl_fqdn(**kwargs):
-    pass
+    tlv, code = kwargs["tlv"], kwargs["code"]
+    #policy_code = CETP.CONTROL_CODES[code]
+    if 'cmp' in tlv:
+        if tlv['cmp'] == "NotAvailable":
+            return False
+    return True
 
 def verify_ctrl_certificate(**kwargs):
-    pass
+    tlv, code = kwargs["tlv"], kwargs["code"]
+    #policy_code = CETP.CONTROL_CODES[code]
+    if 'cmp' in tlv:
+        if tlv['cmp'] == "NotAvailable":
+            return False
+    return True
 
 def verify_ctrl_caep(**kwargs):
-    pass
+    tlv, code = kwargs["tlv"], kwargs["code"]
+    #policy_code = CETP.CONTROL_CODES[code]
+    if 'cmp' in tlv:
+        if tlv['cmp'] == "NotAvailable":
+            return False
+    return True
 
 def verify_ctrl_dp_rlocs(**kwargs):
-    pass
+    tlv, code = kwargs["tlv"], kwargs["code"]
+    #policy_code = CETP.CONTROL_CODES[code]
+    if 'cmp' in tlv:
+        if tlv['cmp'] == "NotAvailable":
+            return False
+    return True
 
 def verify_ctrl_dp_ttl(**kwargs):
-    pass
+    tlv, code = kwargs["tlv"], kwargs["code"]
+    #policy_code = CETP.CONTROL_CODES[code]
+    if 'cmp' in tlv:
+        if tlv['cmp'] == "NotAvailable":
+            return False
+    return True
 
 def verify_ctrl_dp_keepalive_cycle(**kwargs):
-    pass
+    tlv, code = kwargs["tlv"], kwargs["code"]
+    #policy_code = CETP.CONTROL_CODES[code]
+    if 'cmp' in tlv:
+        if tlv['cmp'] == "NotAvailable":
+            return False
+    return True
 
 def verify_ctrl_qos(**kwargs):
-    pass
+    tlv, code = kwargs["tlv"], kwargs["code"]
+    #policy_code = CETP.CONTROL_CODES[code]
+    if 'cmp' in tlv:
+        if tlv['cmp'] == "NotAvailable":
+            return False
+    return True
 
 def verify_ctrl_ack(**kwargs):
-    pass
+    tlv, code = kwargs["tlv"], kwargs["code"]
+    #policy_code = CETP.CONTROL_CODES[code]
+    if 'cmp' in tlv:
+        if tlv['cmp'] == "NotAvailable":
+            return False
+    return True
 
 def verify_ctrl_os_version(**kwargs):
-    pass
+    tlv, code = kwargs["tlv"], kwargs["code"]
+    #policy_code = CETP.CES_CODE_TO_POLICY[code]
+    if 'cmp' in tlv:
+        if tlv['cmp'] == "NotAvailable":
+            return False
+    return True
 
 def verify_ctrl_policy_caching(**kwargs):
-    pass
+    tlv, code = kwargs["tlv"], kwargs["code"]
+    #policy_code = CETP.CONTROL_CODES[code]
+    if 'cmp' in tlv:
+        if tlv['cmp'] == "NotAvailable":
+            return False
+    return True
 
 def verify_ctrl_dp_proto(**kwargs):
-    pass
+    tlv, code = kwargs["tlv"], kwargs["code"]
+    #policy_code = CETP.CONTROL_CODES[code]
+    if 'cmp' in tlv:
+        if tlv['cmp'] == "NotAvailable":
+            return False
+    return True
 
 def verify_ctrl_dp_port(**kwargs):
-    pass
+    tlv, code = kwargs["tlv"], kwargs["code"]
+    #policy_code = CETP.CONTROL_CODES[code]
+    if 'cmp' in tlv:
+        if tlv['cmp'] == "NotAvailable":
+            return False
+    return True
 
 def verify_ctrl_dp_ratelimit(**kwargs):
-    pass
+    tlv, code = kwargs["tlv"], kwargs["code"]
+    #policy_code = CETP.CONTROL_CODES[code]
+    if 'cmp' in tlv:
+        if tlv['cmp'] == "NotAvailable":
+            return False
+    return True
+
 
 def verify_ctrl_terminate(**kwargs):
-    pass
+    tlv, code = kwargs["tlv"], kwargs["code"]
+    #policy_code = CETP.CONTROL_CODES[code]
+    if 'cmp' in tlv:
+        if tlv['cmp'] == "NotAvailable":
+            return False
+    return True
 
 def verify_ctrl_warning(**kwargs):
-    pass
+    tlv, code = kwargs["tlv"], kwargs["code"]
+    #policy_code = CETP.CONTROL_CODES[code]
+    if 'cmp' in tlv:
+        if tlv['cmp'] == "NotAvailable":
+            return False
+    return True
+
 
 

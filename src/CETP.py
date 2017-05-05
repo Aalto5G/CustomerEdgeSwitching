@@ -117,7 +117,7 @@ CES_CODE_TO_POLICY= {
                     'keepalive':'keepalive',                'keepalive':'keepalive',                #Keepalive
                     'fw_version':'fw_version',              'fw_version':'fw_version',              #Contains terminating codes {error, timeout} 
                     'session_limit':'ces_session_limit',    'ces_session_limit':'session_limit',    #Contains waning codes {backoff}
-                    'host_ratelimit':'host_ratelimit',      'host_ratelimit':'host_ratelimit',      #Sets the rate limit {packets/s,bytes/s}
+                    'host_sessions':'host_sessions',        'host_sessions':'host_sessions',        #Sets the rate limit {packets/s,bytes/s}
                     'caces':'caces',                        'caces':'caces',                        #Contains the CA address for validating a CES
                     'pow_algo':'pow_algo',                  'pow_algo':'pow_algo',                  #Proof-of-work mechanism to push the burden of communication to the sender
                     'pow':'pow',                            'pow':'pow',
@@ -126,8 +126,11 @@ CES_CODE_TO_POLICY= {
                     'host_filtering':'host_filtering',      'host_filtering':'host_filtering'
                     }
 
+CONTROL_CODES = {'caep':'caep',     'caep':'caep',
+                 'ack':'ack',       'ack':'ack'
+                }
 
-ALL_C2C_CODES = {'cesid', 'ttl', 'cert', 'keepalive_cycle', 'fw_ver', 'session_limit', 'terminate', 'warning', 'host_ratelimit', 'headersignature', \
+ALL_C2C_CODES = {'cesid', 'ttl', 'cert', 'keepalive_cycle', 'fw_ver', 'session_limit', 'terminate', 'warning', 'host_sessions', 'headersignature', \
                  'caces', 'pow', 'keepalive'}
 
 
@@ -141,18 +144,77 @@ TLV_GROUP = {'id':'id',                 'id':'id',
              'ces':'ces',               'ces':'ces'
              }
 
-SEND_TLV_ID_CODE            = {}
-SEND_TLV_RLOC_CODE          = {}
-SEND_TLV_PAYLOAD_CODE       = {}
 
-RESPONSE_TLV_ID_CODE        = {}
-RESPONSE_TLV_PAYLOAD_CODE   = {}
-RESPONSE_TLV_RLOC_CODE      = {}
+VERIFY_TLV_RLOC_CODE      = {"ipv4":cetpOperations.verify_rloc,
+                       "ipv6":cetpOperations.verify_rloc,
+                       "eth":cetpOperations.verify_rloc}
 
-VERIFY_TLV_ID_CODE        = {}
-VERIFY_TLV_PAYLOAD_CODE   = {}
-VERIFY_TLV_RLOC_CODE      = {}
 
+VERIFY_TLV_PAYLOAD_CODE   = {#"all"cetpOperations.verify_payload,
+                          "ipv4":cetpOperations.verify_payload,
+                          "ipv6":cetpOperations.verify_payload,
+                          "eth":cetpOperations.verify_payload}
+
+
+
+SEND_TLV_PAYLOAD_CODE   = {#"all"cetpOperations.send_payload,
+                          "ipv4":cetpOperations.send_payload,
+                          "ipv6":cetpOperations.send_payload,
+                          "eth":cetpOperations.send_payload}
+
+SEND_TLV_RLOC_CODE      = {#"all"cetpOperations.send_rloc,
+                       "ipv4":cetpOperations.send_rloc,
+                       "ipv6":cetpOperations.send_rloc,
+                       "eth":cetpOperations.send_rloc}
+
+RESPONSE_TLV_PAYLOAD_CODE = {#"all"cetpOperations.response_payload,
+                          "ipv4":cetpOperations.response_payload,
+                          "ipv6":cetpOperations.response_payload,
+                          "eth":cetpOperations.response_payload}
+
+RESPONSE_TLV_RLOC_CODE = {#"all"cetpOperations.response_rloc,
+                       "ipv4":cetpOperations.response_rloc,
+                       "ipv6":cetpOperations.response_rloc,
+                       "eth":cetpOperations.response_rloc}
+
+
+SEND_TLV_ID_CODE        = {"fqdn":cetpOperations.send_id,
+                         "maid":cetpOperations.send_id,
+                         "moc":cetpOperations.send_id,
+                         "hash":cetpOperations.send_id,
+                         "temp":cetpOperations.send_id,
+                         "random":cetpOperations.send_id,
+                         "bbbbid":cetpOperations.send_id,
+                         "msisdn":cetpOperations.send_id,
+                         "sip_uri":cetpOperations.send_id,
+                         "impu":cetpOperations.send_id
+                         }
+
+
+RESPONSE_TLV_ID_CODE     = {"fqdn":cetpOperations.response_id,
+                         "maid":cetpOperations.response_id,
+                         "moc":cetpOperations.response_id,
+                         "hash":cetpOperations.response_id,
+                         "temp":cetpOperations.response_id,
+                         "random":cetpOperations.response_id,
+                         "bbbbid":cetpOperations.response_id,
+                         "msisdn":cetpOperations.response_id,
+                         "sip_uri":cetpOperations.response_id,
+                         "impu":cetpOperations.response_id
+                         }
+
+
+VERIFY_TLV_ID_CODE       = {"fqdn":cetpOperations.verify_id,
+                         "maid":cetpOperations.verify_id,
+                         "moc":cetpOperations.verify_id,
+                         "hash":cetpOperations.verify_id,
+                         "temp":cetpOperations.verify_id,
+                         "random":cetpOperations.verify_id,
+                         "bbbbid":cetpOperations.verify_id,
+                         "msisdn":cetpOperations.verify_id,
+                         "sip_uri":cetpOperations.verify_id,
+                         "impu":cetpOperations.verify_id
+                         }
 
 
 SEND_TLV_CONTROL_CODE = {"dstep":cetpOperations.send_ctrl_dstep,
@@ -188,7 +250,7 @@ SEND_TLV_CES_CODE =  {"cesid":cetpOperations.send_ces_cesid,
                       "keepalive_cycle":cetpOperations.send_ces_keepalive_cycle,
                       "fw_version":cetpOperations.send_fw_version,
                       "session_limit":cetpOperations.send_ces_session_limit,
-                      "host_ratelimit":cetpOperations.send_ces_host_ratelimit,
+                      "host_sessions":cetpOperations.send_ces_host_sessions,
                       "caces":cetpOperations.send_ces_caces,
                       "headersignature":cetpOperations.send_ces_headersignature,
                       "pow":cetpOperations.send_ces_pow,
@@ -234,7 +296,7 @@ RESPONSE_TLV_CES_CODE     = { "cesid":cetpOperations.response_ces_cesid,
                               "keepalive_cycle":cetpOperations.response_ces_keepalive_cycle,
                               "fw_version":cetpOperations.response_ces_fw_version,
                               "session_limit":cetpOperations.response_ces_session_limit,
-                              "host_ratelimit":cetpOperations.response_ces_host_ratelimit,
+                              "host_sessions":cetpOperations.response_ces_host_sessions,
                               "caces":cetpOperations.response_ces_caces,
                               "headersignature":cetpOperations.response_ces_headersignature,
                               "pow":cetpOperations.response_ces_pow,
@@ -275,7 +337,7 @@ VERIFY_TLV_CES_CODE     = { "cesid":cetpOperations.verify_ces_cesid,
                               "keepalive_cycle":cetpOperations.verify_ces_keepalive_cycle,
                               "fw_version":cetpOperations.verify_ces_fw_version,
                               "session_limit":cetpOperations.verify_ces_session_limit,
-                              "host_ratelimit":cetpOperations.verify_ces_host_ratelimit,
+                              "host_sessions":cetpOperations.verify_ces_host_sessions,
                               "caces":cetpOperations.verify_ces_caces,
                               "headersignature":cetpOperations.verify_ces_headersignature,
                               "pow":cetpOperations.verify_ces_pow,
