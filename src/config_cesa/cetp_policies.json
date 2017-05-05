@@ -14,7 +14,7 @@
         { "ope":"query", "group": "ces", "code": "keepalive"},
         { "ope":"query", "group": "ces", "code": "keepalive_cycle"},
         { "ope":"query", "group": "ces", "code": "session_limit"},
-        { "ope":"query", "group": "ces", "code": "host_ratelimit"}
+        { "ope":"query", "group": "ces", "code": "host_sessions"}
     ],
     "offer": [
         { "ope":"info", "group": "ces", "code": "cesid"},
@@ -24,7 +24,7 @@
         { "ope":"info", "group": "ces", "code": "keepalive"},
         { "ope":"info", "group": "ces", "code": "keepalive_cycle"},
         { "ope":"info", "group": "ces", "code": "session_limit"},
-        { "ope":"info", "group": "ces", "code": "host_ratelimit"}
+        { "ope":"info", "group": "ces", "code": "host_sessions"}
     ],
     "available": [
         { "ope":"response", "group": "ces", "code": "cesid"},
@@ -35,9 +35,7 @@
         { "ope":"response", "group": "ces", "code": "keepalive"},
         { "ope":"response", "group": "ces", "code": "keepalive_cycle"},
         { "ope":"response", "group": "ces", "code": "session_limit"},
-        { "ope":"response", "group": "ces", "code": "host_ratelimit"},
-        { "ope":"response", "group": "ces", "code": "parallel_sessions"},
-        { "ope":"response", "group": "ces", "code": "parallel_host_sessions"}
+        { "ope":"response", "group": "ces", "code": "host_sessions"}
     ]                
     }
 },
@@ -57,7 +55,7 @@
         { "ope":"query", "group": "ces", "code": "keepalive"},
         { "ope":"query", "group": "ces", "code": "keepalive_cycle"},
         { "ope":"query", "group": "ces", "code": "session_limit"},
-        { "ope":"query", "group": "ces", "code": "host_ratelimit"}
+        { "ope":"query", "group": "ces", "code": "host_sessions"}
     ],
     "available": [
         { "ope":"response", "group": "ces", "code": "cesid"},
@@ -68,7 +66,7 @@
         { "ope":"response", "group": "ces", "code": "keepalive"},
         { "ope":"response", "group": "ces", "code": "keepalive_cycle"},
         { "ope":"response", "group": "ces", "code": "session_limit"},
-        { "ope":"response", "group": "ces", "code": "host_ratelimit"}
+        { "ope":"response", "group": "ces", "code": "host_sessions"}
     ]    
     }
 },
@@ -87,7 +85,7 @@
         { "ope":"query", "group": "ces", "code": "keepalive"},
         { "ope":"query", "group": "ces", "code": "keepalive_cycle"},
         { "ope":"query", "group": "ces", "code": "session_limit"},
-        { "ope":"query", "group": "ces", "code": "host_ratelimit"}
+        { "ope":"query", "group": "ces", "code": "host_sessions"}
     ],
     "offer": [
         { "ope":"info", "group": "ces", "code": "cesid"},
@@ -97,7 +95,7 @@
         { "ope":"info", "group": "ces", "code": "keepalive"},
         { "ope":"info", "group": "ces", "code": "keepalive_cycle"},
         { "ope":"info", "group": "ces", "code": "session_limit"},
-        { "ope":"info", "group": "ces", "code": "host_ratelimit"}
+        { "ope":"info", "group": "ces", "code": "host_sessions"}
     ],
     "available": [
         { "ope":"response", "group": "ces", "code": "cesid"},
@@ -108,9 +106,7 @@
         { "ope":"response", "group": "ces", "code": "keepalive"},
         { "ope":"response", "group": "ces", "code": "keepalive_cycle"},
         { "ope":"response", "group": "ces", "code": "session_limit"},
-        { "ope":"response", "group": "ces", "code": "host_ratelimit"},
-        { "ope":"response", "group": "ces", "code": "parallel_sessions"},
-        { "ope":"response", "group": "ces", "code": "parallel_host_sessions"}
+        { "ope":"response", "group": "ces", "code": "host_sessions"}
     ]                
     }
 },
@@ -130,7 +126,7 @@
         { "ope":"query", "group": "ces", "code": "keepalive"},
         { "ope":"query", "group": "ces", "code": "keepalive_cycle"},
         { "ope":"query", "group": "ces", "code": "session_limit"},
-        { "ope":"query", "group": "ces", "code": "host_ratelimit"}
+        { "ope":"query", "group": "ces", "code": "host_sessions"}
     ],
     "available": [
         { "ope":"response", "group": "ces", "code": "cesid"},
@@ -141,7 +137,7 @@
         { "ope":"response", "group": "ces", "code": "keepalive"},
         { "ope":"response", "group": "ces", "code": "keepalive_cycle"},
         { "ope":"response", "group": "ces", "code": "session_limit"},
-        { "ope":"response", "group": "ces", "code": "host_ratelimit"}
+        { "ope":"response", "group": "ces", "code": "host_sessions"}
     ]    
     }
 },
@@ -165,9 +161,7 @@
     "available": [
         { "ope":"response", "group": "id", "code": "fqdn" },
         { "ope":"response", "group": "rloc", "code": "eth" },
-        { "ope":"response", "group": "payload", "code": "eth" },
-        { "ope":"response", "group": "control", "code": "ack" },
-        { "ope":"response", "group": "control", "code": "caep" }
+        { "ope":"response", "group": "payload", "code": "eth" }
     ]
     }
 },
@@ -274,6 +268,70 @@
     ],
     "available": [
         { "ope":"response", "group": "id", "code": "fqdn" },
+        { "ope":"response", "group": "rloc", "code": "eth" },
+        { "ope":"response", "group": "payload", "code": "eth" },
+        { "ope":"response", "group": "control", "code": "caep" }
+    ]
+    }
+},
+{
+"type": "hostpolicy",
+"fqdn": "son1.raimo.aalto.lte",
+"direction": "outbound",
+"policy": {
+    "request": [
+        { "ope":"query", "group": "id", "code": "fqdn", "value":["raimo.aalto.lte"] },
+        { "ope":"query", "group": "rloc", "code": "eth" },
+        { "ope":"query", "group": "payload", "code": "eth" },
+        { "ope":"query", "group": "control", "code": "caep", "value":["195.148.124.145"] }
+    ],
+    "offer": [
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"son1.raimo.aalto.lte" },
+        { "ope":"info", "group": "rloc", "code": "eth" },
+        { "ope":"info", "group": "payload", "code": "eth" },
+        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" }
+    ],
+    "available": [
+        { "ope":"response", "group": "id", "code": "fqdn", "value":"son1.raimo.aalto.lte" },
+        { "ope":"response", "group": "rloc", "code": "eth" },
+        { "ope":"response", "group": "payload", "code": "eth" },
+        { "ope":"response", "group": "control", "code": "ack" },
+        { "ope":"response", "group": "control", "code": "caep", "value":"195.148.124.145" }
+    ]
+    }
+},
+{
+"type": "hostpolicy",
+"fqdn": "son1.raimo.aalto.lte",
+"direction": "inbound",
+"policy": {
+    "request": [
+        { "ope":"query", "group": "id", "code": "fqdn" },
+        { "ope":"query", "group": "rloc", "code": "eth" },
+        { "ope":"query", "group": "payload", "code": "eth" },
+        { "ope":"query", "group": "control", "code": "caep" }
+    ],
+    "available": [
+        { "ope":"response", "group": "id", "code": "fqdn" },
+        { "ope":"response", "group": "rloc", "code": "eth" },
+        { "ope":"response", "group": "payload", "code": "eth" },
+        { "ope":"response", "group": "control", "code": "caep" }
+    ]
+    }
+},
+{
+"type": "hostpolicy",
+"fqdn": "raimo2.aalto.lte",
+"direction": "inbound",
+"policy": {
+    "request": [
+        { "ope":"query", "group": "id", "code": "fqdn", "value":["son1.raimo.aalto.lte", "son2.raimo.aalto.lte"] },
+        { "ope":"query", "group": "rloc", "code": "eth" },
+        { "ope":"query", "group": "payload", "code": "eth" },
+        { "ope":"query", "group": "control", "code": "caep" }
+    ],
+    "available": [
+        { "ope":"response", "group": "id", "code": "fqdn", "value":"raimo2.aalto.lte" },
         { "ope":"response", "group": "rloc", "code": "eth" },
         { "ope":"response", "group": "payload", "code": "eth" },
         { "ope":"response", "group": "control", "code": "caep" }

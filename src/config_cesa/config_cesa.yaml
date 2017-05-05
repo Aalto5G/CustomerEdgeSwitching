@@ -14,7 +14,7 @@ CESParameters:
     caces: 127.0.0.1
     fw_version: 0.1
     ces_session_limit: 30
-    host_ratelimit: 2
+    host_sessions: 2
     pow_algo: hashcash
     max_ces_session_limit: 100
     max_dp_ttl: 7200

@@ -10,11 +10,11 @@ CESParameters:
     keepalive_timeout: 2
     keepalive_cycle: 30
     max_c2c_negotiation_duration: 5
-    connection_expiry: 150
+    state_timeout: 30
     caces: 127.0.0.1
     fw_version: 0.1
     ces_session_limit: 30
-    host_ratelimit: 2
+    host_sessions: 2
     pow_algo: hashcash
     max_ces_session_limit: 100
     max_dp_ttl: 7200
