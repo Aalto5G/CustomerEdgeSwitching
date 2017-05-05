@@ -84,12 +84,12 @@ class PolicyManager(object):
         policy = self._cespolicy[key]
         return copy.deepcopy(policy)
     
-    def get_host_policy(self, direction, hostid=""):
+    def get_host_policy(self, direction, host_id=""):
         """ The search key for host-policy number 0 is 'policy-0' """
         policy_type = "hostpolicy"
-        if hostid=="":
-            hostid="hosta1.demo.lte"
-        key = policy_type +":"+ direction +":"+ hostid
+        if host_id=="":
+            host_id="hosta1.demo.lte"
+        key = policy_type +":"+ direction +":"+ host_id
         policy = self._hostpolicy[key]
         return copy.deepcopy(policy)
 
@@ -149,48 +149,70 @@ class PolicyCETP(object):
             self.available = self.policy["available"]
         # setting value for CETP can be handled in CETP transaction module
 
+    def get_policy_to_respond(self, tlv):
+        group, code, cmp, ext, value = self.get_tlv_details(tlv)
+        for rtlv in self.available:
+            if (rtlv["group"] == tlv["group"]) and (rtlv["code"]==tlv["code"]):
+                group, code, cmp, ext, value = self.get_tlv_details(rtlv)
+                return group, code, cmp, ext, value
+
+    def get_policy_to_enforce(self, tlv):
+        group, code, cmp, ext, value = self.get_tlv_details(tlv)
+        for rtlv in self.required:
+            if (rtlv["group"] == tlv["group"]) and (rtlv["code"]==tlv["code"]):
+                group, code, cmp, ext, value = self.get_tlv_details(rtlv)
+                return group, code, cmp, ext, value
+    
     def get_tlv_details(self, tlv):
-        cmp, ext, group, code = None, None, None, None
-        if "group" in tlv:
-            group = tlv["group"]
-        if "code" in tlv:
-            code  = tlv["code"]
-        if "cmp" in tlv:
-            cmp   = tlv["cmp"]
-        return (cmp, ext, group, code)
+        group, code, cmp, ext, value = None, None, None, None, None
+        try:
+            if "group" in tlv:
+                group = tlv["group"]
+            if "code" in tlv:
+                code  = tlv["code"]
+            if "cmp" in tlv:
+                cmp   = tlv["cmp"]
+            if 'value' in tlv:
+                value = tlv['value']
+                
+            return (group, code, cmp, ext, value)
+        
+        except Exception as ex:
+            self._logger.info("Exception: {}".format(ex))
+            return (group, code, cmp, ext, value)
     
     def is_mandatory_required(self, tlv):
-        cmp, ext, group, code = self.get_tlv_details(tlv)
+        group, code, cmp, ext, value = self.get_tlv_details(tlv)
         for pol in self.required:
             if (group in pol["group"]) and (code in pol["code"]):
-                if 'cmp' in pol['cmp']:
+                if 'cmp' in pol:
                     if pol['cmp']=="optional":
                         return False
                 return True
         return True
     
     def has_required(self, tlv):
-        cmp, ext, group, code = self.get_tlv_details(tlv)
+        group, code, cmp, ext, value = self.get_tlv_details(tlv)
         for pol in self.required:
             if (group in pol["group"]) and (code in pol["code"]):
                 return True
         return False
     
     def del_required(self, tlv):
-        cmp, ext, group, code = self.get_tlv_details(tlv)
+        group, code, cmp, ext, value = self.get_tlv_details(tlv)
         for pol in self.required:
             if (group in pol["group"]) and (code in pol["code"]):
                 self.required.remove(pol)
     
     def has_available(self, tlv):
-        cmp, ext, group, code = self.get_tlv_details(tlv)
+        group, code, cmp, ext, value = self.get_tlv_details(tlv)
         for pol in self.available:
             if (group in pol["group"]) and (code in pol["code"]):
                 return True
         return False
 
     def del_available(self, tlv):
-        cmp, ext, group, code = self.get_tlv_details(tlv)
+        group, code, cmp, ext, value = self.get_tlv_details(tlv)
         for pol in self.available:
             if (group in pol["group"]) and (code in pol["code"]):
                 self.available.remove(pol)
@@ -203,7 +225,14 @@ class PolicyCETP(object):
     
     def get_available(self):
         return self.available                   # Store as CETPTLV field with additional possibility of value field
-
+    
+    def get_tlv_response(self, tlv):
+        for atlv in self.get_available():
+            if (atlv["group"]==tlv["group"]) and (atlv['code'] == tlv['code']):
+                if 'value' in atlv:
+                    policy_value = atlv["value"]
+                    return policy_value
+    
     def set_required(self, tlv):
         return tlv
 
@@ -216,12 +245,18 @@ class PolicyCETP(object):
     def get_group_code(self, pol_vector):
         s=""
         for pol in pol_vector:
+            pol_rep = ""
             if 'cmp' in pol:
                 gp, code, cmp = pol['group'], pol['code'], pol['cmp']
                 pol_rep = gp+"."+code+"."+cmp
+            elif 'value' in pol:
+                gp, code, value = pol['group'], pol['code'], pol['value']
+                if (type(value) != type(list())):
+                    pol_rep = gp+"."+code+"."+value
             else:
                 gp, code = pol['group'], pol['code']
                 pol_rep = gp+"."+code
+            
             s+= pol_rep + ", "
         return s
     
