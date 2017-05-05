@@ -111,34 +111,33 @@ class CETPClient:
     @asyncio.coroutine
     def h2h_transaction_start(self, cb_args, dst_id):
         dns_q, addr = cb_args
-        h2h = H2HTransaction.H2HTransactionOutbound(loop=self._loop, dns_q=dns_q, local_addr=addr, src_id="", dst_id=dst_id, l_cesid=self.l_cesid, r_cesid=self.r_cesid, \
-                                                        policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, dns_callback=self.cb_func, cetp_cleint=self)
+        ip_addr, port = addr
+        h2h = H2HTransaction.H2HTransactionOutbound(loop=self._loop, cb_args=cb_args, host_ip=ip_addr, src_id="", dst_id=dst_id, l_cesid=self.l_cesid, r_cesid=self.r_cesid, \
+                                                    ces_params=self.ces_params, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, dns_callback=self.cb_func, cetp_cleint=self)
         cetp_packet = yield from h2h.start_cetp_processing()
-        self._logger.debug(" Message from h2h_transaction_start() ")
-        self.send(cetp_packet)
+        if cetp_packet != None:
+            self._logger.debug(" H2H transaction started.")
+            self.send(cetp_packet)
+            
 
     @asyncio.coroutine
     def h2h_transaction_continue(self, cetp_packet, transport):
         o_transaction = None
-        yield from asyncio.sleep(0.001)
+        #yield from asyncio.sleep(0.001)
         
         cetp_msg = json.loads(cetp_packet)
         inbound_sstag, inbound_dstag = cetp_msg['SST'], cetp_msg['DST']
         sstag, dstag    = inbound_dstag, inbound_sstag
         
         if self.cetpstate_mgr.has_initiated_transaction( (sstag, 0) ):
-            self._logger.info(" Continue resolving H2H-transaction (SST={} -> DST={})".format(sstag, dstag))
+            self._logger.debug(" Continue resolving H2H-transaction (SST={} -> DST={})".format(sstag, 0))
             o_h2h = self.cetpstate_mgr.get_initiated_transaction( (sstag, 0) )
-            msg = o_h2h.continue_cetp_processing(cetp_msg)
-            if msg!=None:
-                transport.send_cetp(msg)
-
+            o_h2h.continue_cetp_processing(cetp_msg, transport)
+            
         elif self.cetpstate_mgr.has_established_transaction( (sstag, dstag) ):
             self._logger.info(" CETP message for a negotiated transaction (SST={} -> DST={})".format(sstag, dstag))
             o_h2h = self.cetpstate_mgr.get_established_transaction( (sstag, dstag) )
-            msg = o_h2h.post_c2c_negotiation(cetp_msg, transport)
-            if msg!=None:
-                transport.send_cetp(msg)
+            o_h2h.post_h2h_negotiation(cetp_msg, transport)
         
     def send(self, msg):
         """ Forwards the message to CETP c2c layer"""
@@ -186,7 +185,7 @@ class CETPClient:
                 self.dns_nxdomain_callback(cb_args)
             except Exception as msg:
                 self._logger.info(" Exception in resource cleanup towards {}".format(self.r_cesid))
-                print(msg)
+                self._logger.info(msg)
         
         self.set_closure_signal()
         self.close_pending_tasks()
@@ -509,9 +508,8 @@ class oCES2CESLayer:
                     yield from asyncio.ensure_future(coro)
                     self.initiated_transports.append(transport_instance)
                 except Exception as ex:
-                    self._logger.info("Exception in {} connection towards {}".format(proto, self.r_cesid))                  # ex.errno == 111 -- means connection RST received
+                    self._logger.info("Exception in {} transport towards {}: '{}'".format(proto, self.r_cesid, ex))                  # ex.errno == 111 -- means connection RST received
                     self.unregister_transport(transport_instance)
-                    #print(ex)
 
             elif proto == "tcp":
                 try:
@@ -520,9 +518,8 @@ class oCES2CESLayer:
                     yield from connect_task
                     self.initiated_transports.append(transport_instance)
                 except Exception as ex:
-                    self._logger.info("Exception in {} connection towards {}".format(proto, self.r_cesid))
+                    self._logger.info("Exception in {} transport towards {}: '{}'".format(proto, self.r_cesid, ex))
                     self.unregister_transport(transport_instance)
-                    #print(ex)
 
 
 """

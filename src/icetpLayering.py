@@ -34,7 +34,7 @@ class CETPServer:
         self._closure_signal    = False
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPServer)
-        self._logger.info("CETPServer created for cesid {}".format(l_cesid))
+        self._logger.info("CETPServer created for cesid {}".format(r_cesid))
 
     def send(self, msg):
         self.c2c.send_cetp(msg)
@@ -69,22 +69,17 @@ class CETPServer:
         cetp_msg = json.loads(msg)
         inbound_sst, inbound_dst = cetp_msg['SST'], cetp_msg['DST']
         sstag, dstag    = inbound_dst, inbound_sst                  # SST of the remote-CES is DST of the local-CES. 
-        yield from asyncio.sleep(0.001)                              # Simulating the delay upon interaction with the policy management system
+        #yield from asyncio.sleep(0.001)                            # Simulating the delay upon interaction with the policy management system
         
         if inbound_dst == 0:
             self._logger.info(" No prior Outbound H2H-transaction found -> Initiating Inbound H2HTransaction (SST={} -> DST={})".format(inbound_sst, inbound_dst))
-            i_h2h = H2HTransaction.H2HTransactionInbound(cetp_msg, sstag=sstag, dstag=sstag, l_cesid=self.l_cesid, r_cesid=self.r_cesid, \
-                                                             policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr)
-            cetp_resp = i_h2h.start_cetp_processing(cetp_msg)
-            if cetp_resp != None:    
-                transport.send_cetp(cetp_resp)
+            i_h2h = H2HTransaction.H2HTransactionInbound(sstag=sstag, dstag=sstag, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr)
+            i_h2h.start_cetp_processing(cetp_msg, transport)
             
         elif self.cetpstate_mgr.has_established_transaction((sstag, dstag)):
             oh2h = self.cetpstate_mgr.get_established_transaction((sstag, dstag))
             self._logger.info(" Outbound H2HTransaction found for (SST={}, DST={})".format(inbound_sst, inbound_dst))
-            cetp_resp = oh2h.post_cetp_negotiation(cetp_msg)
-            if cetp_resp != None:    
-                transport.send_cetp(cetp_resp)
+            oh2h.post_h2h_negotiation(cetp_msg, transport)
 
 
 
