@@ -44,7 +44,7 @@ class CETPServer:
         try:
             asyncio.ensure_future(self.process_h2h_transaction(cetp_msg, transport))
         except Exception as ex:
-            self._logger.info("Exception in task for consuming c2c message: {}".format(ex))
+            self._logger.info("Exception in consuming message: {}".format(ex))
                 
     def set_closure_signal(self):
         self._closure_signal = True
@@ -55,7 +55,6 @@ class CETPServer:
         #self._logger.debug("self.count: {}".format(self.count))
         inbound_sst, inbound_dst = cetp_msg['SST'], cetp_msg['DST']
         sstag, dstag    = inbound_dst, inbound_sst                  # SST of the remote-CES is DST of the local-CES. 
-        #yield from asyncio.sleep(0.001)                            # Simulating the delay upon interaction with the policy management system
         
         if inbound_dst == 0:
             self._logger.info(" No prior Outbound H2H-transaction found -> Initiating Inbound H2HTransaction (SST={} -> DST={})".format(inbound_sst, inbound_dst))
@@ -81,17 +80,12 @@ class iCETPC2CLayer:
         self._closure_signal        = False
         self._logger                = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_iCETPC2CLayer)
-        self._initiate_coroutines()
 
     def register_transport_c2cTransaction(self, transport, c2c_transaction):
         """ Registers the stateful-inbound c2c-transaction, connected transport, AND their relation """
         self.transport_c2c_binding[transport] = c2c_transaction
         self.add_c2c_transactions(c2c_transaction)
         self.add_connected_transport(transport)
-
-    def _initiate_coroutines(self):
-        t = asyncio.ensure_future(self.consume_transport_message())
-        self.pending_tasks.append(t)
 
     def add_c2c_transactions(self, c2c_cetp_transaction):
         self.c2c_transaction_list.append(c2c_cetp_transaction)
@@ -146,41 +140,26 @@ class iCETPC2CLayer:
         for transport in self.connected_transports:
             transport.send_cetp(msg)
 
-    def enqueue_transport_message_nowait(self, data):
-        self.q.put_nowait(data)                                 # Needs try except to handle case of full queue
-
-    @asyncio.coroutine
-    def enqueue_transport_message(self, msg):
-        yield from self.q.put(msg)
-
-    @asyncio.coroutine
-    def consume_transport_message(self):
-        while True:
-            try:
-                de_queue = yield from self.q.get()
-                msg, transport = de_queue
-                if not self._pre_process(msg):
-                    self.q.task_done()
-                    continue                                        # What to do for repeated failures?
-                    
-                #self._logger.debug("data: {!r}".format(msg))
-                #self._logger.debug("cetp_msg: {!r}".format(cetp_msg))
-                cetp_msg = json.loads(msg)
-                inbound_sst, inbound_dst = cetp_msg['SST'], cetp_msg['DST']
-                sst, dst = inbound_dst, inbound_sst
+    def consume_transport_message(self, msg, transport):
+        try:
+            if not self._pre_process(msg):
+                return
                 
-                if self.is_c2c_transaction(sst, dst):
-                    self._logger.debug(" Inbound packet belongs to an established C2C transaction.")
-                    self.process_c2c(cetp_msg, transport)
-                    self.q.task_done()
-                else:
-                    self._logger.debug(" Forward the packet to H2H-layer")
-                    self.forward_h2h(cetp_msg, transport)
-                    self.q.task_done()
+            #self._logger.debug("data: {!r}".format(msg))
+            #self._logger.debug("cetp_msg: {!r}".format(cetp_msg))
+            cetp_msg = json.loads(msg)
+            inbound_sst, inbound_dst = cetp_msg['SST'], cetp_msg['DST']
+            sst, dst = inbound_dst, inbound_sst
             
-            except Exception as msg:
-                if self._closure_signal: break
-                self._logger.info(" Exception in consuming Transport message")
+            if self.is_c2c_transaction(sst, dst):
+                self._logger.debug(" Inbound packet belongs to an established C2C transaction.")
+                self.process_c2c(cetp_msg, transport)
+            else:
+                self._logger.debug(" Forward the packet to H2H-layer")
+                self.forward_h2h(cetp_msg, transport)
+        
+        except Exception as ex:
+            self._logger.info(" Exception in consuming Transport message: {}".format(ex))
 
     def _pre_process(self, msg):
         """ Checks whether inbound message conforms to CETP packet format. """
@@ -309,7 +288,7 @@ class iCESServerTransportTCP(asyncio.Protocol):
                 if self.c2c_layer is None:
                     self.c2c_mgr.process_inbound_message(cetp_msg, self)                # Forwards the message to inbound-C2Cmanager for C2C negotiation.
                 else:
-                    self.c2c_layer.enqueue_transport_message_nowait((cetp_msg, self))   # Forwarding the message to C2C layer, along with the transport for sending reply.
+                    self.c2c_layer.consume_transport_message(cetp_msg, self)   # Forwarding the message to C2C layer, along with the transport for sending reply.
             else:
                 break
 
@@ -407,7 +386,7 @@ class iCESServerTransportTLS(asyncio.Protocol):
                 if self.c2c_layer is None:
                     self.c2c_mgr.process_inbound_message(cetp_msg, self)                # Forwards the message to inbound-C2Cmanager for C2C negotiation.
                 else:
-                    self.c2c_layer.enqueue_transport_message_nowait((cetp_msg, self))   # Forwarding the message to C2C layer, along with the transport for sending reply.
+                    self.c2c_layer.consume_transport_message(cetp_msg, self)   # Forwarding the message to C2C layer, along with the transport for sending reply.
             else:
                 break
 

@@ -140,8 +140,9 @@ class CETPClient:
         """ Consumes the message from C2CLayer for H2H processing """
         try:
             if self.c2c_succeeded:
+                self._logger.info("msg processing begins @ {}".format(time.time()))
                 asyncio.ensure_future(self.h2h_transaction_continue(cetp_msg, transport))        # Handling exception raised within task? Shall use the returned task object?
-                
+
         except Exception as msg:
             self._logger.info(" Exception in consuming message from c2c-layer")
 
@@ -206,28 +207,12 @@ class oCES2CESLayer:
         self.connected_transports       = []
         self.transport_c2c_binding      = {}
         self.c2c_transaction_list       = []
-        
-        self.q                          = asyncio.Queue()        # Enqueues the CETP message from CETP Transport
         self.c2c_negotiated             = False
         self._closure_signal            = False
         self._logger                    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_oCES2CESLayer)
         self._logger.info("Initiating outbound CES2CESLayer towards cesid '{}'".format(r_cesid) )
         self.initiate_cetp_transport(naptr_list)
-
-    def _initiate_task(self):
-        tsk = asyncio.ensure_future(self.consume_transport_message())
-        self.pending_tasks.append(tsk)
-
-    def enqueue_transport_message_nowait(self, msg):
-        self.q.put_nowait(msg)
-
-    @asyncio.coroutine
-    def enqueue_transport_message(self, msg):
-        yield from self.q.put(msg)
-
-    def forward_to_h2h_layer(self, cetp_msg, transport):
-        self.cetp_client.consume_message_from_c2c(cetp_msg, transport)
 
     def _pre_process(self, msg):
         """ Checks whether inbound message conforms to CETP packet format. """
@@ -250,36 +235,28 @@ class oCES2CESLayer:
             return False
         
     
-    @asyncio.coroutine
-    def consume_transport_message(self):
+    def consume_transport_message(self, msg, transport):
         """ Consumes CETP messages queued by the CETP Transport. """
-        while True:
-            try:
-                de_queue = yield from self.q.get()
-                msg, transport = de_queue
-                if not self._pre_process(msg):
-                    self.q.task_done()
-                    continue                        # For repeated non-CETP packets, shall we terminate the connection?
-                
-                cetp_msg = json.loads(msg)
-                inbound_sst, inbound_dst = cetp_msg['SST'], cetp_msg['DST']
-                sstag, dstag = inbound_dst, inbound_sst
-    
-                if not self.c2c_negotiated:
-                    self._logger.debug(" C2C-policy is not negotiated with remote-cesid '{}'".format(self.r_cesid))
+        try:
+            if not self._pre_process(msg):
+                return                        # For repeated non-CETP packets, shall we terminate the connection?
+            
+            cetp_msg = json.loads(msg)
+            inbound_sst, inbound_dst = cetp_msg['SST'], cetp_msg['DST']
+            sstag, dstag = inbound_dst, inbound_sst
+
+            if not self.c2c_negotiated:
+                self._logger.debug(" C2C-policy is not negotiated with remote-cesid '{}'".format(self.r_cesid))
+                asyncio.ensure_future(self.process_c2c(cetp_msg, transport))
+            else:
+                if self.is_c2c_transaction(sstag, dstag):
                     asyncio.ensure_future(self.process_c2c(cetp_msg, transport))
-                    self.q.task_done()
                 else:
-                    if self.is_c2c_transaction(sstag, dstag):
-                        asyncio.ensure_future(self.process_c2c(cetp_msg, transport))
-                        self.q.task_done()
-                    else:
-                        self._logger.debug(" Forwarding packet to H2H-layer")
-                        self.forward_to_h2h_layer(cetp_msg, transport)
-                        self.q.task_done()
-            except Exception as msg:
-                if self._closure_signal:    break
-                self._logger.info("Exception in task for consuming messages from CETP Transport ")
+                    self._logger.debug(" Forwarding packet to H2H-layer")
+                    self.cetp_client.consume_message_from_c2c(cetp_msg, transport)
+                    
+        except Exception as ex:
+            self._logger.info("Exception in consuming messages from CETP Transport: {}".format(ex))
             
 
     def is_c2c_transaction(self, sstag, dstag):
@@ -350,9 +327,9 @@ class oCES2CESLayer:
     """ Functions for managing transport-layer connectivity b/w CES nodes """ 
     def report_connectivity(self, transport_obj, status=True):
         if status == True:
-            if len(self.connected_transports)==0:
-                self._logger.debug("Initiating task to consume messages from CETPTransport, on first connected transport.")
-                self._initiate_task()
+            #if len(self.connected_transports)==0:
+            #    self._logger.debug("Initiating task to consume messages from CETPTransport, on first connected transport.")
+            #    self._initiate_task()
             self._logger.info(" CETP Transport is connected -> Exchange the CES-to-CES policies.")
             self.register_connected_transports(transport_obj)
             self.initiate_c2c_transaction(transport_obj)
@@ -450,10 +427,6 @@ class oCES2CESLayer:
         transport = self.connected_transports[index]
         return transport
     
-
-    def data_from_transport(self, msg, transport):
-        """ Forward data from CETPTransport to CETPC2C layer """
-        self.enqueue_transport_message_nowait((msg, transport))
 
     def initiate_cetp_transport(self, naptr_list):
         """ Intiates CETP Transports towards remote endpoints (for each 'naptr' record in the naptr_list) """
@@ -584,6 +557,7 @@ class oCESTransportTCP(asyncio.Protocol):
         3. invokes CETP process to handle message;     4. Removes processed data from the buffer.
         """
         self.data_buffer = self.data_buffer+data
+        self._logger.info("msg arrival {}".format(time.time()))
         while True:
             if len(self.data_buffer) < CETP_MSG_LEN_FIELD:
                 break
@@ -595,7 +569,7 @@ class oCESTransportTCP(asyncio.Protocol):
                 cetp_data = self.data_buffer[CETP_MSG_LEN_FIELD:CETP_MSG_LEN_FIELD+msg_length]
                 self.data_buffer = self.data_buffer[CETP_MSG_LEN_FIELD+msg_length:]                 # Moving ahead in the buffered data
                 cetp_msg = cetp_data.decode()
-                self.ces_layer.data_from_transport(cetp_msg, self)
+                self.ces_layer.consume_transport_message(cetp_msg, self)
             else:
                 break
     
