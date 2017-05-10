@@ -39,34 +39,20 @@ class CETPServer:
     def send(self, msg):
         self.c2c.send_cetp(msg)
  
-    def enqueue_c2c_message_nowait(self, data):
-        self.c2c_q.put_nowait(data)                     # Enqueues the CETP message from oCES, forwarded by CETPTransport & C2C layer
-
-    @asyncio.coroutine
-    def enqueue_c2c_message(self, msg):
-        yield from self.c2c_q.put(msg)                  # More safe enqueuing
-
-    @asyncio.coroutine
-    def consume_c2c_message(self):
+    def consume_c2c_message(self, cetp_msg, transport):
         """ Retrieves the enqueued CETP message for H2H CETP processing """
-        while True:
-            try:
-                de_queue = yield from self.c2c_q.get()
-                msg, transport = de_queue
-                asyncio.ensure_future(self.process_h2h_transaction(msg, transport))
-                self.c2c_q.task_done()
-            except Exception as msg:
-                if self._closure_signal: break
-                self._logger.info("Exception in task for consuming c2c message")
+        try:
+            asyncio.ensure_future(self.process_h2h_transaction(cetp_msg, transport))
+        except Exception as ex:
+            self._logger.info("Exception in task for consuming c2c message: {}".format(ex))
                 
     def set_closure_signal(self):
         self._closure_signal = True
     
     @asyncio.coroutine
-    def process_h2h_transaction(self, msg, transport):
+    def process_h2h_transaction(self, cetp_msg, transport):
         #self.count += 1
         #self._logger.debug("self.count: {}".format(self.count))
-        cetp_msg = json.loads(msg)
         inbound_sst, inbound_dst = cetp_msg['SST'], cetp_msg['DST']
         sstag, dstag    = inbound_dst, inbound_sst                  # SST of the remote-CES is DST of the local-CES. 
         #yield from asyncio.sleep(0.001)                            # Simulating the delay upon interaction with the policy management system
@@ -123,8 +109,6 @@ class iCETPC2CLayer:
     def create_cetp_server(self, r_cesid, loop, policy_mgr, cetpstate_mgr, l_cesid):
         """ Creating the upper layer to handle CETPTransport """
         self.cetp_server = CETPServer(c2c_layer=self, l_cesid=l_cesid, r_cesid=r_cesid, loop=loop, policy_mgr=policy_mgr, cetpstate_mgr=cetpstate_mgr)
-        t = asyncio.ensure_future(self.cetp_server.consume_c2c_message())
-        self.pending_tasks.append(t)
     
     def cancel_pending_tasks(self):
         self._logger.info("Terminating pending tasks for cesid '{}'".format(self.r_cesid))
@@ -191,7 +175,7 @@ class iCETPC2CLayer:
                     self.q.task_done()
                 else:
                     self._logger.debug(" Forward the packet to H2H-layer")
-                    self.forward_h2h(de_queue)
+                    self.forward_h2h(cetp_msg, transport)
                     self.q.task_done()
             
             except Exception as msg:
@@ -227,8 +211,8 @@ class iCETPC2CLayer:
                 return True
         return False
 
-    def forward_h2h(self, queued_item):
-        self.cetp_server.enqueue_c2c_message_nowait(queued_item)
+    def forward_h2h(self, cetp_msg, transport):
+        self.cetp_server.consume_c2c_message(cetp_msg, transport)
             
     def process_c2c(self, cetp_msg, transport):
         """ Processes C2C-CETP flow in post-c2c negotiation phase """
