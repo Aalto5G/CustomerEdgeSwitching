@@ -143,7 +143,7 @@
 },
 {
 "type": "hostpolicy",
-"fqdn": "hosta1.demo.lte",
+"fqdn": "hosta1.demo.lte.",
 "direction": "outbound",
 "policy": {
     "request": [
@@ -167,7 +167,7 @@
 },
 {
 "type": "hostpolicy",
-"fqdn": "hosta1.demo.lte",
+"fqdn": "hosta1.demo.lte.",
 "direction": "inbound",
 "policy": {
     "request": [
@@ -186,7 +186,7 @@
 },
 {
 "type": "hostpolicy",
-"fqdn": "hosta2.demo.lte",
+"fqdn": "hosta2.demo.lte.",
 "direction": "outbound",
 "policy": {
     "request": [
@@ -212,7 +212,7 @@
 },
 {
 "type": "hostpolicy",
-"fqdn": "hosta2.demo.lte",
+"fqdn": "hosta2.demo.lte.",
 "direction": "inbound",
 "policy": {
     "request": [
@@ -231,7 +231,7 @@
 },
 {
 "type": "hostpolicy",
-"fqdn": "hosta3.demo.lte",
+"fqdn": "hosta3.demo.lte.",
 "direction": "outbound",
 "policy": {
     "request": [
@@ -257,7 +257,7 @@
 },
 {
 "type": "hostpolicy",
-"fqdn": "hosta3.demo.lte",
+"fqdn": "hosta3.demo.lte.",
 "direction": "inbound",
 "policy": {
     "request": [
@@ -276,23 +276,23 @@
 },
 {
 "type": "hostpolicy",
-"fqdn": "son1.raimo.aalto.lte",
+"fqdn": "son1.raimo.aalto.lte.",
 "direction": "outbound",
 "policy": {
     "request": [
-        { "ope":"query", "group": "id", "code": "fqdn", "value":["raimo.aalto.lte"] },
+        { "ope":"query", "group": "id", "code": "fqdn", "value":["raimo.aalto.lte."] },
         { "ope":"query", "group": "rloc", "code": "eth" },
         { "ope":"query", "group": "payload", "code": "eth" },
         { "ope":"query", "group": "control", "code": "caep", "value":["195.148.124.145"] }
     ],
     "offer": [
-        { "ope":"info", "group": "id", "code": "fqdn", "value":"son1.raimo.aalto.lte" },
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"son1.raimo.aalto.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
         { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn", "value":"son1.raimo.aalto.lte" },
+        { "ope":"response", "group": "id", "code": "fqdn", "value":"son1.raimo.aalto.lte." },
         { "ope":"response", "group": "rloc", "code": "eth" },
         { "ope":"response", "group": "payload", "code": "eth" },
         { "ope":"response", "group": "control", "code": "ack" },
@@ -315,27 +315,38 @@
         { "ope":"response", "group": "id", "code": "fqdn" },
         { "ope":"response", "group": "rloc", "code": "eth" },
         { "ope":"response", "group": "payload", "code": "eth" },
-        { "ope":"response", "group": "control", "code": "caep" }
+        { "ope":"response", "group": "control", "code": "caep" },
+        { "ope":"response", "group": "control", "code": "ack" }
     ]
     }
 },
 {
 "type": "hostpolicy",
-"fqdn": "raimo2.aalto.lte",
-"direction": "inbound",
+"fqdn": "special.aalto.lte.",
+"direction": "outbound",
 "policy": {
     "request": [
-        { "ope":"query", "group": "id", "code": "fqdn", "value":["son1.raimo.aalto.lte", "son2.raimo.aalto.lte"] },
+        { "ope":"query", "group": "id", "code": "fqdn", "value":["special.aalto.lte."] },
         { "ope":"query", "group": "rloc", "code": "eth" },
         { "ope":"query", "group": "payload", "code": "eth" },
-        { "ope":"query", "group": "control", "code": "caep" }
+        { "ope":"query", "group": "control", "code": "caep", "value":["195.148.124.145"] }
+    ],
+    "offer": [
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"son1.raimo.aalto.lte" },
+        { "ope":"info", "group": "rloc", "code": "eth" },
+        { "ope":"info", "group": "payload", "code": "eth" },
+        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn", "value":"raimo2.aalto.lte" },
+        { "ope":"response", "group": "id", "code": "fqdn", "value":"special.aalto.lte." },
         { "ope":"response", "group": "rloc", "code": "eth" },
         { "ope":"response", "group": "payload", "code": "eth" },
-        { "ope":"response", "group": "control", "code": "caep" }
+        { "ope":"response", "group": "control", "code": "ack" },
+        { "ope":"response", "group": "control", "code": "caep", "value":"195.148.124.145" }
+
     ]
     }
 }
 ]
+
+
