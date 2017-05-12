@@ -517,6 +517,7 @@ def verify_id(**kwargs):
     inbound_id = value
     group, code, cmp, ext, allowed_value = policy.get_policy_to_enforce(tlv)
     #print(inbound_id in allowed_value)
+    
     if inbound_id in allowed_value:
         return True
     else:
@@ -540,7 +541,7 @@ def send_ctrl_fqdn(**kwargs):
 def send_ctrl_certificate(**kwargs):
     tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
     #policy_code = CETP.CES_CODE_TO_POLICY[code]
-    new_tlv = copy.deepcopy(tlv)
+    new_tlv = copy.copy(tlv)
     if query==True:
         if 'value' in new_tlv:
             del new_tlv["value"]
@@ -554,7 +555,7 @@ def send_ctrl_caep(**kwargs):
     tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
     #policy_code = CETP.CES_CODE_TO_POLICY[code]
     
-    new_tlv = copy.deepcopy(tlv)
+    new_tlv = copy.copy(tlv)
     if query==True:
         if 'value' in new_tlv:
             del new_tlv["value"]
@@ -615,7 +616,7 @@ def send_ctrl_qos(**kwargs):
 def send_ctrl_ack(**kwargs):
     tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
     #policy_code = CETP.CES_CODE_TO_POLICY[code]
-    new_tlv = copy.deepcopy(tlv)
+    new_tlv = copy.copy(tlv)
     if query==True:
         if 'value' in new_tlv:
             del new_tlv["value"]
@@ -735,7 +736,7 @@ def response_ctrl_caep(**kwargs):
     #policy_code = CETP.CONTROL_CODES[code]
     
     group, code, cmp, ext, response_value = policy.get_policy_to_respond(tlv)
-    print("response_value", response_value)
+    #print("response_value", response_value)
     tlv['ope'] = "response"
     tlv["value"] = response_value
     return tlv
