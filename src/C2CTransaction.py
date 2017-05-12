@@ -239,7 +239,7 @@ class oC2CTransaction(C2CTransaction):
             return True
         
         except Exception as msg:
-            self._logger.debug(" Failure in initializing the CES-to-CES session.")
+            self._logger.info(" Failure in initiating CES-to-CES session: {}".format(msg))
             return False
 
 
@@ -281,10 +281,10 @@ class oC2CTransaction(C2CTransaction):
         """ Initiates CES policy offers and requirments towards 'r_cesid' """
         try:
             if not self._initialize():
-                self._logger.info(" Failure in initiating the CES-to-CES session towards {}.".format(self.r_cesid))
+                self._logger.debug(" Failure in initiating the CES-to-CES session towards '{}'.".format(self.r_cesid))
                 return None
             
-            self._logger.info(" Starting CES-to-CES session towards {} (SST={} -> DST={})".format(self.sstag, self.dstag, self.r_cesid))
+            self._logger.info(" Starting CES-to-CES session towards '{}' (SST={} -> DST={})".format(self.sstag, self.dstag, self.r_cesid))
             req_tlvs, offer_tlvs = [], []
             #self._logger.debug("Outbound policy: ", self.ces_policy.show2())
             
@@ -344,7 +344,7 @@ class oC2CTransaction(C2CTransaction):
     def continue_c2c_negotiation(self, cetp_packet, transport):
         """ Continues CES policy negotiation towards remote CES """
         #try:
-        self._logger.info(" Continuing CES-to-CES session negotiation (SST={} -> DST={}) towards {}".format(self.sstag, 0, self.r_cesid))
+        self._logger.info(" Continuing CES-to-CES session negotiation (SST={} -> DST={}) towards '{}'".format(self.sstag, 0, self.r_cesid))
         #self._logger.info(" Outbound policy: ", self.ces_policy.show2())
         negotiation_status = None
         error = False
@@ -444,7 +444,7 @@ class oC2CTransaction(C2CTransaction):
                     self.ces_policy_tmp.del_required(tlv)
                 else:
                     # Absorbs failure in case of 'optional' required policy TLV
-                    if not self.ces_policy_tmp.is_mandatory_required():
+                    if not self.ces_policy_tmp.is_mandatory_required(tlv):
                         self.ces_policy_tmp.del_required(tlv)
                         continue
                     
@@ -546,7 +546,7 @@ class oC2CTransaction(C2CTransaction):
                 self._logger.warning(" Remote CES has not answered any keepalive within negotiated duration.")
                 self.terminate_transport()
             else:
-                self._logger.info(" Sending CES keepalive towards {} (SST={}, DST={})".format(self.r_cesid, self.sstag, self.dstag))
+                self._logger.info(" Sending CES keepalive towards '{}' (SST={}, DST={})".format(self.r_cesid, self.sstag, self.dstag))
                 tlv = self._create_request_tlv2(group="ces", code="keepalive")
                 req_tlvs = [tlv]
                 

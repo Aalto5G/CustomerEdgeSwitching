@@ -20,7 +20,24 @@ import copy
 
 LOGLEVEL_PolicyCETP         = logging.INFO
 LOGLEVEL_PolicyManager      = logging.INFO
+LOGLEVEL_HostRegister       = logging.INFO
 
+
+class HostRegister(object):
+    def __init__(self, name="HostRegister"):
+        self.load_ip_fqdn_mapping()
+        self.name       = name
+        self._logger    = logging.getLogger(name)
+        self._logger.setLevel(LOGLEVEL_HostRegister)
+        
+    def load_ip_fqdn_mapping(self):
+        """ Acting as a static Identity assignment server to IP addresses """
+        self.ip_fqdn_map = {"127.0.0.1":"son1.raimo.aalto.lte.", "10.0.2.15":"son1.raimo.aalto.lte.", "10.0.2.16":"son2.raimo.aalto.lte."}
+ 
+    def ip_to_fqdn_mapping(self, l_ip):
+        if l_ip in self.ip_fqdn_map:
+            l_fqdn = self.ip_fqdn_map[l_ip]
+            return l_fqdn
 
 
 class PolicyManager(object):
@@ -41,8 +58,8 @@ class PolicyManager(object):
             self._config = json.load(f)
             self.load_CES_policy()
             self.load_host_policy()
-        except Exception:
-            self._logger.info("Exception in loading CES/Host policies")
+        except Exception as ex:
+            self._logger.info("Exception in loading policies: {}".format(ex))
             return False
         
     def _get_ces_policy(self):
@@ -86,12 +103,17 @@ class PolicyManager(object):
     
     def get_host_policy(self, direction, host_id=""):
         """ The search key for host-policy number 0 is 'policy-0' """
-        policy_type = "hostpolicy"
-        if host_id=="":
-            host_id="hosta1.demo.lte"
-        key = policy_type +":"+ direction +":"+ host_id
-        policy = self._hostpolicy[key]
-        return copy.deepcopy(policy)
+        try:
+            policy_type = "hostpolicy"
+            if host_id=="":
+                host_id="hosta1.demo.lte."
+            
+            key = policy_type +":"+ direction +":"+ host_id
+            policy = self._hostpolicy[key]
+            return policy
+            #return copy.deepcopy(policy)
+        except:
+            raise Exception("Destination has no {} policy.".format(direction))
 
     def load_CES_policy(self):
         for policy in self._config:
@@ -99,6 +121,7 @@ class PolicyManager(object):
                 if policy['type'] == "cespolicy":
                     policy_type, proto, direction, l_cesid, ces_policy = policy['type'], policy['proto'], policy['direction'], policy['cesid'], policy['policy']
                     key = policy_type+":"+proto+":"+direction+":"+l_cesid
+                    #print(key)
                     p = PolicyCETP(ces_policy)
                     self._cespolicy[key] = p
 
@@ -109,6 +132,7 @@ class PolicyManager(object):
                 if policy['type'] == "hostpolicy":
                     policy_type, direction, hostid, host_policy = policy['type'], policy['direction'], policy['fqdn'], policy['policy']
                     key = policy_type +":"+ direction +":"+ hostid
+                    #print(key)
                     p = PolicyCETP(host_policy)
                     self._hostpolicy[key] = p
 
@@ -253,10 +277,11 @@ class PolicyCETP(object):
                 gp, code, value = pol['group'], pol['code'], pol['value']
                 if (type(value) != type(list())):
                     pol_rep = gp+"."+code+"."+value
+                else:
+                    pol_rep = gp+"."+code
             else:
                 gp, code = pol['group'], pol['code']
                 pol_rep = gp+"."+code
-            
             s+= pol_rep + ", "
         return s
     
@@ -266,8 +291,8 @@ class PolicyCETP(object):
             if it in self.policy:
                 pol_vector = self.policy[it]
                 s = self.get_group_code(pol_vector)
+                s = self.get_group_code(pol_vector)
                 str_policy += it+ ": " + s +"\n"
-                
         return str_policy
     
     def __str__(self):

@@ -27,7 +27,7 @@ CETP_MSG_LEN_FIELD              = 2         # in bytes
 
 class CETPClient:
     def __init__(self, loop=None, l_cesid= None, r_cesid=None, cb_func=None, cetpstate_mgr= None, policy_client=None, policy_mgr=None, ocetp_mgr=None, \
-                 ces_params=None, cetp_security=None, name="CETPClient"):
+                 ces_params=None, cetp_security=None, host_register= None, name="CETPClient"):
         self._loop                      = loop
         self.l_cesid                    = l_cesid
         self.r_cesid                    = r_cesid
@@ -38,11 +38,12 @@ class CETPClient:
         self.ces_params                 = ces_params
         self.cetp_mgr                   = ocetp_mgr
         self.cetp_security              = cetp_security
+        self.host_register              = host_register
         self._closure_signal            = False
         self.ongoing_h2h_transactions   = 0
         self.max_session_limit          = 20                        # Dummy value for now, In reality the value shall come from C2C negotiation with remote CES.
-        self.client_q                   = asyncio.Queue()           # Enqueues the naptr responses triggered by private hosts (served by CES)
-        self.DNS_Cleanup_Threshold      = 5                         # No. of DNS queries gracefully handled in case of C2C termination 
+        self.client_q                   = asyncio.Queue()           # Enqueues the NAPTR responses triggered by the private hosts.
+        self.DNS_Cleanup_Threshold      = 5                         # No. of pending DNS queries gracefully handled in case of C2C termination. 
         self.c2c_succeeded              = False
         self.pending_tasks              = []
         self._logger                    = logging.getLogger(name)
@@ -55,7 +56,6 @@ class CETPClient:
 
     def enqueue_h2h_requests_nowait(self, naptr_records, cb_args):
         """ This method enqueues the naptr responses triggered by private hosts. """
-        self._logger.debug("Enqueuing the naptr response in CETPClient")
         queue_msg = (naptr_records, cb_args)
         self.client_q.put_nowait(queue_msg)               # Possible exception: If the queue is full, [It will simply drop the message (without waiting for space to be available in the queue]
 
@@ -109,14 +109,14 @@ class CETPClient:
         dns_q, addr = cb_args
         ip_addr, port = addr
         h2h = H2HTransaction.H2HTransactionOutbound(loop=self._loop, cb_args=cb_args, host_ip=ip_addr, src_id="", dst_id=dst_id, l_cesid=self.l_cesid, r_cesid=self.r_cesid, \
-                                                    ces_params=self.ces_params, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, dns_callback=self.cb_func, cetp_cleint=self)
+                                                    ces_params=self.ces_params, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, host_register=self.host_register, \
+                                                    dns_callback=self.cb_func, cetp_cleint=self)
         cetp_packet = yield from h2h.start_cetp_processing()
         if cetp_packet != None:
             self._logger.debug(" H2H transaction started.")
             self.send(cetp_packet)
             
 
-    @asyncio.coroutine
     def h2h_transaction_continue(self, cetp_msg, transport):
         o_transaction = None
         inbound_sstag, inbound_dstag = cetp_msg['SST'], cetp_msg['DST']
@@ -140,8 +140,7 @@ class CETPClient:
         """ Consumes the message from C2CLayer for H2H processing """
         try:
             if self.c2c_succeeded:
-                self._logger.info("msg processing begins @ {}".format(time.time()))
-                asyncio.ensure_future(self.h2h_transaction_continue(cetp_msg, transport))        # Handling exception raised within task? Shall use the returned task object?
+                self.h2h_transaction_continue(cetp_msg, transport)        
 
         except Exception as msg:
             self._logger.info(" Exception in consuming message from c2c-layer")
@@ -557,7 +556,6 @@ class oCESTransportTCP(asyncio.Protocol):
         3. invokes CETP process to handle message;     4. Removes processed data from the buffer.
         """
         self.data_buffer = self.data_buffer+data
-        self._logger.info("msg arrival {}".format(time.time()))
         while True:
             if len(self.data_buffer) < CETP_MSG_LEN_FIELD:
                 break

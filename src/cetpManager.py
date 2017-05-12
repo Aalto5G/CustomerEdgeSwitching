@@ -42,10 +42,9 @@ class CETPManager:
         self.ces_privatekey_path    = self.ces_params['private_key']
         self.ca_certificate_path    = self.ces_params['ca_certificate']                                       # Path of X.509 certificate of trusted CA, for validating the remote node's certificate.
         self.cetp_security          = CETPSecurity.CETPSecurity(ces_params)
-
-
         self.cetpstate_mgr          = CETP.CETPConnectionObject()                                             # Records the established CETP transactions (both H2H & C2C). Required for preventing the re-allocation already in-use SST & DST (in CETP transaction).
         self.policy_mgr             = PolicyManager.PolicyManager(self.cesid, policy_file= cetp_policies)     # Shall ideally fetch the policies from Policy Management System (of Hassaan)    - And will be called, policy_sys_agent
+        self.host_register          = PolicyManager.HostRegister()
         self._loop                  = loop
         self.name                   = name
         self._logger                = logging.getLogger(name)
@@ -68,8 +67,8 @@ class CETPManager:
     
     def create_local_endpoint(self, l_cesid, r_cesid, naptr_list, dns_cb_func):
         """ Creates the local CETPClient for connecting to the remote CES-ID """
-        client_ep = ocetpLayering.CETPClient(l_cesid = l_cesid, r_cesid = r_cesid, cb_func=dns_cb_func, cetpstate_mgr= self.cetpstate_mgr, \
-                               policy_mgr=self.policy_mgr, policy_client=None, loop=self._loop, ocetp_mgr=self, ces_params=self.ces_params, cetp_security=self.cetp_security)
+        client_ep = ocetpLayering.CETPClient(l_cesid = l_cesid, r_cesid = r_cesid, cb_func=dns_cb_func, cetpstate_mgr= self.cetpstate_mgr, policy_mgr=self.policy_mgr, \
+                                             policy_client=None, loop=self._loop, ocetp_mgr=self, ces_params=self.ces_params, cetp_security=self.cetp_security, host_register=self.host_register)
         
         self.add_local_endpoint(r_cesid, client_ep)
         client_ep.create_cetp_c2c_layer(naptr_list)
