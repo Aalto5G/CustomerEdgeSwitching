@@ -251,9 +251,6 @@ def response_ces_ttl(**kwargs):
         else:
             negotiated_ttl = remote_default_dp_ttl
             
-        print()
-        print("negotiated_ttl: ", negotiated_ttl)
-        print()
         transaction.ttl = negotiated_ttl
         tlv["value"] = negotiated_ttl
 
