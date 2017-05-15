@@ -97,7 +97,7 @@ class PolicyManager(object):
     def get_ces_policy(self, proto="tcp", direction="outbound"):
         policy_type = "cespolicy"
         l_cesid = self.l_cesid
-        key = policy_type+":"+proto+":"+direction+":"+l_cesid
+        key = policy_type+":"+proto+":"+l_cesid
         policy = self._cespolicy[key]
         return copy.deepcopy(policy)
     
@@ -119,8 +119,8 @@ class PolicyManager(object):
         for policy in self._config:
             if 'type' in policy:
                 if policy['type'] == "cespolicy":
-                    policy_type, proto, direction, l_cesid, ces_policy = policy['type'], policy['proto'], policy['direction'], policy['cesid'], policy['policy']
-                    key = policy_type+":"+proto+":"+direction+":"+l_cesid
+                    policy_type, proto, l_cesid, ces_policy = policy['type'], policy['proto'], policy['cesid'], policy['policy']
+                    key = policy_type+":"+proto+":"+l_cesid
                     #print(key)
                     p = PolicyCETP(ces_policy)
                     self._cespolicy[key] = p

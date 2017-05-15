@@ -2,143 +2,80 @@
 {
 "type": "cespolicy",
 "proto":"tcp",
-"direction": "outbound",
 "cesid": "cesb.demo.lte.",
 "policy":
     {
     "request": [
-        { "ope":"query", "group": "ces", "code": "cesid"},
-        { "ope":"query", "group": "ces", "code": "caces"},
-        { "ope":"query", "group": "ces", "code": "fw_version"},
-        { "ope":"query", "group": "ces", "code": "ttl"},
+        { "ope":"query", "group": "ces", "code": "cesid", "value":["cesa.demo.lte.", "cesc.demo.lte."]},
+        { "ope":"query", "group": "ces", "code": "caces", "value":"195.148.124.145"},
+        { "ope":"query", "group": "ces", "code": "fw_version", "value":"0.1"},
+        { "ope":"query", "group": "ces", "code": "ttl", "value":{"min":"3600", "max":"7200"}},
         { "ope":"query", "group": "ces", "code": "keepalive"},
         { "ope":"query", "group": "ces", "code": "keepalive_cycle"},
-        { "ope":"query", "group": "ces", "code": "session_limit"},
-        { "ope":"query", "group": "ces", "code": "host_sessions"}
-    ],
-    "offer": [
-        { "ope":"info", "group": "ces", "code": "cesid"},
-        { "ope":"info", "group": "ces", "code": "caces"},
-        { "ope":"info", "group": "ces", "code": "fw_version"},
-        { "ope":"info", "group": "ces", "code": "ttl"},
-        { "ope":"info", "group": "ces", "code": "keepalive"},
-        { "ope":"info", "group": "ces", "code": "keepalive_cycle"},
-        { "ope":"info", "group": "ces", "code": "session_limit"},
-        { "ope":"info", "group": "ces", "code": "host_sessions"}
-    ],
-    "available": [
-        { "ope":"response", "group": "ces", "code": "cesid"},
-        { "ope":"response", "group": "ces", "code": "pow"},
-        { "ope":"response", "group": "ces", "code": "caces"},
-        { "ope":"response", "group": "ces", "code": "fw_version"},
-        { "ope":"response", "group": "ces", "code": "ttl"},
-        { "ope":"response", "group": "ces", "code": "keepalive"},
-        { "ope":"response", "group": "ces", "code": "keepalive_cycle"},
-        { "ope":"response", "group": "ces", "code": "session_limit"},
-        { "ope":"response", "group": "ces", "code": "host_sessions"}
-    ]                
-    }
-},
-{
-"type": "cespolicy",
-"proto":"tcp",
-"direction": "inbound",
-"cesid": "cesb.demo.lte.",
-"policy":
-    {
-    "request": [
-        { "ope":"query", "group": "ces", "code": "cesid"},
         { "ope":"query", "group": "ces", "code": "pow"},
-        { "ope":"query", "group": "ces", "code": "caces"},
-        { "ope":"query", "group": "ces", "code": "fw_version"},
-        { "ope":"query", "group": "ces", "code": "ttl"},
-        { "ope":"query", "group": "ces", "code": "keepalive"},
-        { "ope":"query", "group": "ces", "code": "keepalive_cycle"},
         { "ope":"query", "group": "ces", "code": "session_limit"},
-        { "ope":"query", "group": "ces", "code": "host_sessions"}
-    ],
-    "available": [
-        { "ope":"response", "group": "ces", "code": "cesid"},
-        { "ope":"response", "group": "ces", "code": "pow"},
-        { "ope":"response", "group": "ces", "code": "caces"},
-        { "ope":"response", "group": "ces", "code": "fw_version"},
-        { "ope":"response", "group": "ces", "code": "ttl"},
-        { "ope":"response", "group": "ces", "code": "keepalive"},
-        { "ope":"response", "group": "ces", "code": "keepalive_cycle"},
-        { "ope":"response", "group": "ces", "code": "session_limit"},
-        { "ope":"response", "group": "ces", "code": "host_sessions"}
-    ]    
-    }
-},
-{
-"type": "cespolicy",
-"proto":"tls",
-"direction": "outbound",
-"cesid": "cesb.demo.lte.",
-"policy":
-    {
-    "request": [
-        { "ope":"query", "group": "ces", "code": "cesid"},
-        { "ope":"query", "group": "ces", "code": "caces"},
-        { "ope":"query", "group": "ces", "code": "fw_version"},
-        { "ope":"query", "group": "ces", "code": "ttl"},
-        { "ope":"query", "group": "ces", "code": "keepalive"},
-        { "ope":"query", "group": "ces", "code": "keepalive_cycle"},
-        { "ope":"query", "group": "ces", "code": "session_limit"},
-        { "ope":"query", "group": "ces", "code": "host_sessions"}
+        { "ope":"query", "group": "ces", "code": "evidence_format", "value":["IETF-IOC1", "IETF-IOC2"]}
     ],
     "offer": [
-        { "ope":"info", "group": "ces", "code": "cesid"},
-        { "ope":"info", "group": "ces", "code": "caces"},
-        { "ope":"info", "group": "ces", "code": "fw_version"},
-        { "ope":"info", "group": "ces", "code": "ttl"},
+        { "ope":"info", "group": "ces", "code": "cesid", "value":"cesb.demo.lte."},
+        { "ope":"info", "group": "ces", "code": "caces", "value":"195.148.124.145"},
+        { "ope":"info", "group": "ces", "code": "fw_version", "value":"0.1"},
+        { "ope":"info", "group": "ces", "code": "ttl", "value":"3600"},
         { "ope":"info", "group": "ces", "code": "keepalive"},
-        { "ope":"info", "group": "ces", "code": "keepalive_cycle"},
-        { "ope":"info", "group": "ces", "code": "session_limit"},
-        { "ope":"info", "group": "ces", "code": "host_sessions"}
+        { "ope":"info", "group": "ces", "code": "keepalive_cycle", "value":"60"},
+        { "ope":"info", "group": "ces", "code": "session_limit", "value":"200"},
+        { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"}
     ],
     "available": [
-        { "ope":"response", "group": "ces", "code": "cesid"},
+        { "ope":"response", "group": "ces", "code": "cesid", "value":"cesb.demo.lte."},
         { "ope":"response", "group": "ces", "code": "pow"},
-        { "ope":"response", "group": "ces", "code": "caces"},
-        { "ope":"response", "group": "ces", "code": "fw_version"},
-        { "ope":"response", "group": "ces", "code": "ttl"},
+        { "ope":"response", "group": "ces", "code": "caces", "value":"195.148.124.145"},
+        { "ope":"response", "group": "ces", "code": "fw_version", "value":"0.1"},
+        { "ope":"response", "group": "ces", "code": "ttl", "value":"3600"},
         { "ope":"response", "group": "ces", "code": "keepalive"},
-        { "ope":"response", "group": "ces", "code": "keepalive_cycle"},
-        { "ope":"response", "group": "ces", "code": "session_limit"},
-        { "ope":"response", "group": "ces", "code": "host_sessions"}
+        { "ope":"response", "group": "ces", "code": "keepalive_cycle", "value":"60"},
+        { "ope":"response", "group": "ces", "code": "session_limit", "value":"200"},
+        { "ope":"response", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"}
     ]                
     }
 },
 {
 "type": "cespolicy",
 "proto":"tls",
-"direction": "inbound",
 "cesid": "cesb.demo.lte.",
 "policy":
     {
     "request": [
-        { "ope":"query", "group": "ces", "code": "cesid"},
-        { "ope":"query", "group": "ces", "code": "pow"},
-        { "ope":"query", "group": "ces", "code": "caces"},
-        { "ope":"query", "group": "ces", "code": "fw_version"},
-        { "ope":"query", "group": "ces", "code": "ttl"},
+        { "ope":"query", "group": "ces", "code": "cesid", "value":["cesa.demo.lte.", "cesc.demo.lte."]},
+        { "ope":"query", "group": "ces", "code": "caces", "value":"195.148.124.145"},
+        { "ope":"query", "group": "ces", "code": "fw_version", "value":"0.1"},
+        { "ope":"query", "group": "ces", "code": "ttl", "value":{"min":"3600", "max":"7200"}},
         { "ope":"query", "group": "ces", "code": "keepalive"},
         { "ope":"query", "group": "ces", "code": "keepalive_cycle"},
         { "ope":"query", "group": "ces", "code": "session_limit"},
-        { "ope":"query", "group": "ces", "code": "host_sessions"}
+        { "ope":"query", "group": "ces", "code": "evidence_format", "value":["IETF-IOC1", "IETF-IOC2"]}
+    ],
+    "offer": [
+        { "ope":"info", "group": "ces", "code": "cesid", "value":"cesb.demo.lte."},
+        { "ope":"info", "group": "ces", "code": "caces", "value":"195.148.124.145"},
+        { "ope":"info", "group": "ces", "code": "fw_version", "value":"0.1"},
+        { "ope":"info", "group": "ces", "code": "ttl", "value":"3600"},
+        { "ope":"info", "group": "ces", "code": "keepalive"},
+        { "ope":"info", "group": "ces", "code": "keepalive_cycle", "value":"60"},
+        { "ope":"info", "group": "ces", "code": "session_limit", "value":"200"},
+        { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"}
     ],
     "available": [
-        { "ope":"response", "group": "ces", "code": "cesid"},
+        { "ope":"response", "group": "ces", "code": "cesid", "value":"cesb.demo.lte."},
         { "ope":"response", "group": "ces", "code": "pow"},
-        { "ope":"response", "group": "ces", "code": "caces"},
-        { "ope":"response", "group": "ces", "code": "fw_version"},
-        { "ope":"response", "group": "ces", "code": "ttl"},
+        { "ope":"response", "group": "ces", "code": "caces", "value":"195.148.124.145"},
+        { "ope":"response", "group": "ces", "code": "fw_version", "value":"0.1"},
+        { "ope":"response", "group": "ces", "code": "ttl", "value":"3600"},
         { "ope":"response", "group": "ces", "code": "keepalive"},
-        { "ope":"response", "group": "ces", "code": "keepalive_cycle"},
-        { "ope":"response", "group": "ces", "code": "session_limit"},
-        { "ope":"response", "group": "ces", "code": "host_sessions"}
-    ]    
+        { "ope":"response", "group": "ces", "code": "keepalive_cycle", "value":"60"},
+        { "ope":"response", "group": "ces", "code": "session_limit", "value":"200"},
+        { "ope":"response", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"}
+    ]                
     }
 },
 {

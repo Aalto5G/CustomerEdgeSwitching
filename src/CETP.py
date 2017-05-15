@@ -121,7 +121,7 @@ CES_CODE_TO_POLICY= {
                     'caces':'caces',                        'caces':'caces',                        #Contains the CA address for validating a CES
                     'pow_algo':'pow_algo',                  'pow_algo':'pow_algo',                  #Proof-of-work mechanism to push the burden of communication to the sender
                     'pow':'pow',                            'pow':'pow',
-                    'evidence_share':'evidence_share',      'evidence_share':'evidence_share',
+                    'evidence_format':'evidence_format',    'evidence_format':'evidence_format',
                     'evidence':'evidence',                  'evidence':'evidence',
                     'host_filtering':'host_filtering',      'host_filtering':'host_filtering'
                     }
@@ -248,7 +248,7 @@ SEND_TLV_CES_CODE =  {"cesid":cetpOperations.send_ces_cesid,
                       "certificate":cetpOperations.send_ces_certificate,
                       "keepalive":cetpOperations.send_ces_keepalive,
                       "keepalive_cycle":cetpOperations.send_ces_keepalive_cycle,
-                      "fw_version":cetpOperations.send_fw_version,
+                      "fw_version":cetpOperations.send_ces_fw_version,
                       "session_limit":cetpOperations.send_ces_session_limit,
                       "host_sessions":cetpOperations.send_ces_host_sessions,
                       "caces":cetpOperations.send_ces_caces,
@@ -258,7 +258,7 @@ SEND_TLV_CES_CODE =  {"cesid":cetpOperations.send_ces_cesid,
                       "host_filtering":cetpOperations.send_ces_host_filtering,                      
                       "terminate":cetpOperations.send_ces_terminate,
                       "warning":cetpOperations.send_ctrl_warning,
-                      "evidence_share":cetpOperations.send_ces_evidence_share,
+                      "evidence_format":cetpOperations.send_ces_evidence_format,
                       "evidence":cetpOperations.send_ces_evidence
                       }
 
@@ -300,7 +300,7 @@ RESPONSE_TLV_CES_CODE     = { "cesid":cetpOperations.response_ces_cesid,
                               "caces":cetpOperations.response_ces_caces,
                               "headersignature":cetpOperations.response_ces_headersignature,
                               "pow":cetpOperations.response_ces_pow,
-                              "evidence_share":cetpOperations.response_ces_evidence_share,
+                              "evidence_format":cetpOperations.response_ces_evidence_format,
                               "evidence":cetpOperations.response_ces_evidence
                               }
 
@@ -341,7 +341,7 @@ VERIFY_TLV_CES_CODE     = { "cesid":cetpOperations.verify_ces_cesid,
                               "caces":cetpOperations.verify_ces_caces,
                               "headersignature":cetpOperations.verify_ces_headersignature,
                               "pow":cetpOperations.verify_ces_pow,
-                              "evidence_share":cetpOperations.verify_ces_evidence_share,
+                              "evidence_format":cetpOperations.verify_ces_evidence_format,
                               "evidence":cetpOperations.verify_ces_evidence
                               }
 
