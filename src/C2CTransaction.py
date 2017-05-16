@@ -563,13 +563,22 @@ class oC2CTransaction(C2CTransaction):
                 self.keepalive_trigger_time = time.time()
                 self.keepalive_response = None
                 #self.pprint(cetp_packet)
-                self._loop.call_later(self.keepalive_cycle, self.initiate_keepalive)            # Calling itself 
-                self._loop.call_later(self.keepalive_timeout, self.report_connection_health)    # Called to check timely arrival of keepalive response.
+                self.keepalive_reporter = self._loop.call_later(self.keepalive_timeout, self.report_connection_health)    # Called to check timely arrival of keepalive response.
+                self.keepalive_handler  = self._loop.call_later(self.keepalive_cycle, self.initiate_keepalive)            # Calling itself 
     
     
     def report_connection_health(self):
         if self.keepalive_response==None:
             self.health_report = False
+            
+    def update_last_seen(self):
+        now = time.time()
+        if (now-self.last_seen) > 5:
+            # Upon noticing the traffic from sender, the last seen is updated & the scheduled keepalive is postponed.
+            self.keepalive_handler.cancel()                                         # Since a traffic is observed 
+            self.keepalive_handler = self._loop.call_later(self.keepalive_cycle, self.initiate_keepalive)
+            
+        self.last_seen = now 
 
     def post_c2c_negotiation(self, packet, transport):
         """ 

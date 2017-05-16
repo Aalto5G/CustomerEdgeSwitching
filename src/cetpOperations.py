@@ -213,6 +213,9 @@ def send_ces_host_filtering(**kwargs):
     return tlv
 
 
+def response_to_wrong_query(tlv):
+    tlv["code"] = "terminate"
+    return tlv
 
 def response_ces_cesid(**kwargs):
     tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
@@ -257,11 +260,15 @@ def response_ces_ttl(**kwargs):
     return tlv
 
 def response_ces_keepalive(**kwargs):
-    tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
-    group, code, cmp, ext, response_value = policy.get_response_policy(tlv)
-    tlv['ope'] = 'response'
-    tlv["value"] = response_value
-    return tlv
+    tlv, code, ces_params, policy, transaction = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"], kwargs["transaction"]
+    try:
+        transaction.last_seen = time.time()
+        tlv['ope'] = 'response'
+        tlv['value'] = ""
+        return tlv
+    except Exception as ex:
+        print(ex)
+        return response_to_wrong_query(tlv)
 
 def response_ces_keepalive_cycle(**kwargs):
     tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
@@ -456,7 +463,8 @@ def verify_ces_keepalive(**kwargs):
         
         if cmp =="NotAvailable":
             return False
-    
+        
+        print(tlv)
         value = tlv["value"]
         if value == "":
             transaction.last_seen = time.time()
