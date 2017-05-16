@@ -151,6 +151,10 @@ class iCETPC2CLayer:
             inbound_sst, inbound_dst = cetp_msg['SST'], cetp_msg['DST']
             sst, dst = inbound_dst, inbound_sst
             
+            c2c_transaction = self.transport_c2c_binding[transport]
+            c2c_transaction.update_last_seen()
+
+
             if self.is_c2c_transaction(sst, dst):
                 self._logger.debug(" Inbound packet belongs to an established C2C transaction.")
                 self.process_c2c(cetp_msg, transport)

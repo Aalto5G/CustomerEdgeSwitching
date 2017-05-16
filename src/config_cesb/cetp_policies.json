@@ -10,8 +10,8 @@
         { "ope":"query", "group": "ces", "code": "caces", "value":"195.148.124.145"},
         { "ope":"query", "group": "ces", "code": "fw_version", "value":"0.1"},
         { "ope":"query", "group": "ces", "code": "ttl", "value":{"min":"3600", "max":"7200"}},
-        { "ope":"query", "group": "ces", "code": "keepalive"},
         { "ope":"query", "group": "ces", "code": "keepalive_cycle"},
+        { "ope":"query", "group": "ces", "code": "keepalive"},
         { "ope":"query", "group": "ces", "code": "pow"},
         { "ope":"query", "group": "ces", "code": "session_limit", "value": "500"},
         { "ope":"query", "group": "ces", "code": "evidence_format", "value":["IETF-IOC1", "IETF-IOC2"]}
@@ -21,8 +21,8 @@
         { "ope":"info", "group": "ces", "code": "caces", "value":"195.148.124.145"},
         { "ope":"info", "group": "ces", "code": "fw_version", "value":"0.1"},
         { "ope":"info", "group": "ces", "code": "ttl", "value":"3600"},
-        { "ope":"info", "group": "ces", "code": "keepalive"},
         { "ope":"info", "group": "ces", "code": "keepalive_cycle", "value":"60"},
+        { "ope":"info", "group": "ces", "code": "keepalive", "value":""},
         { "ope":"info", "group": "ces", "code": "session_limit", "value":"200"},
         { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"}
     ],
@@ -32,8 +32,8 @@
         { "ope":"response", "group": "ces", "code": "caces", "value":"195.148.124.145"},
         { "ope":"response", "group": "ces", "code": "fw_version", "value":"0.1"},
         { "ope":"response", "group": "ces", "code": "ttl", "value":"3600"},
-        { "ope":"response", "group": "ces", "code": "keepalive"},
         { "ope":"response", "group": "ces", "code": "keepalive_cycle", "value":"60"},
+        { "ope":"response", "group": "ces", "code": "keepalive", "value":""},
         { "ope":"response", "group": "ces", "code": "session_limit", "value":"200"},
         { "ope":"response", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"}
     ]                
@@ -50,8 +50,8 @@
         { "ope":"query", "group": "ces", "code": "caces", "value":"195.148.124.145"},
         { "ope":"query", "group": "ces", "code": "fw_version", "value":"0.1"},
         { "ope":"query", "group": "ces", "code": "ttl", "value":{"min":"3600", "max":"7200"}},
-        { "ope":"query", "group": "ces", "code": "keepalive"},
         { "ope":"query", "group": "ces", "code": "keepalive_cycle"},
+        { "ope":"query", "group": "ces", "code": "keepalive"},
         { "ope":"query", "group": "ces", "code": "session_limit", "value": "500"},
         { "ope":"query", "group": "ces", "code": "evidence_format", "value":["IETF-IOC1", "IETF-IOC2"]}
     ],
@@ -60,8 +60,8 @@
         { "ope":"info", "group": "ces", "code": "caces", "value":"195.148.124.145"},
         { "ope":"info", "group": "ces", "code": "fw_version", "value":"0.1"},
         { "ope":"info", "group": "ces", "code": "ttl", "value":"3600"},
-        { "ope":"info", "group": "ces", "code": "keepalive"},
         { "ope":"info", "group": "ces", "code": "keepalive_cycle", "value":"60"},
+        { "ope":"info", "group": "ces", "code": "keepalive", "value":""},
         { "ope":"info", "group": "ces", "code": "session_limit", "value":"200"},
         { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"}
     ],
@@ -71,8 +71,8 @@
         { "ope":"response", "group": "ces", "code": "caces", "value":"195.148.124.145"},
         { "ope":"response", "group": "ces", "code": "fw_version", "value":"0.1"},
         { "ope":"response", "group": "ces", "code": "ttl", "value":"3600"},
-        { "ope":"response", "group": "ces", "code": "keepalive"},
         { "ope":"response", "group": "ces", "code": "keepalive_cycle", "value":"60"},
+        { "ope":"response", "group": "ces", "code": "keepalive", "value":""},
         { "ope":"response", "group": "ces", "code": "session_limit", "value":"200"},
         { "ope":"response", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"}
     ]                

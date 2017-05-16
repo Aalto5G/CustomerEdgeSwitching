@@ -464,7 +464,6 @@ def verify_ces_keepalive(**kwargs):
         if cmp =="NotAvailable":
             return False
         
-        print(tlv)
         value = tlv["value"]
         if value == "":
             transaction.last_seen = time.time()

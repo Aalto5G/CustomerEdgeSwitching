@@ -200,8 +200,11 @@ class oC2CTransaction(C2CTransaction):
         self.cetp_security          = cetp_security
         self.rtt                    = 0
         self.packet_count           = 0
+        self.missed_keepalives      = 0
         self.last_seen              = time.time()
         self.last_packet_received   = None
+        self.keepalive_handler      = None
+        self.keepalive_scheduled    = False
         self.c2c_negotiation_status = False
         self.terminated             = False
         self.health_report          = True                                  # Indicates if the CES-to-CES keepalive is responded in 'timeout' duration.
@@ -264,23 +267,10 @@ class oC2CTransaction(C2CTransaction):
             for pol in self.ces_policy.get_required():
                 if (pol['group'] == "ces") and (pol['code']=="keepalive"):
                     self._logger.info(" iCES is triggering function to track the C2C keepalives from the client")
-                    self._loop.call_later(self.keepalive_cycle, self.track_keepalive)
-        except Exception as msg:
-            self._logger.info(" Exception in trigger negotiated functions.")
+                    self._loop.call_later(2, self.initiate_keepalive_functionality)
+        except Exception as ex:
+            self._logger.info(" Exception in trigger negotiated functions {}".format(ex))
     
-    def track_keepalive(self):
-        """ Periodically executed by iCES to track keepalive signals of client  """
-        now = time.time()
-        if (now - self.last_seen) > self.state_timeout+1:
-            self._logger.warning(" Remote CES did not send request for keepalive.")
-            self.terminate_transport()
-        elif self.terminated:
-            self._logger.debug(" C2C transaction is terminated -> Delete periodic tracking of keepalive.")
-            # I am simply stating, and not doing anything why?
-        else:
-            self._loop.call_later(self.keepalive_cycle, self.track_keepalive)
-            
-
     def initiate_c2c_negotiation(self):
         """ Initiates CES policy offers and requirments towards 'r_cesid' """
         try:
@@ -528,7 +518,7 @@ class oC2CTransaction(C2CTransaction):
                 for rtlv in i_req:
                     if (rtlv['group']=='ces') and (rtlv['code']=="keepalive") and (self.ces_policy.has_available(rtlv)):
                         self._logger.info(" Remote end requires keepalive")     # Can trigger functions based on 'code' value from here.
-                        self._loop.call_later(self.keepalive_cycle, self.initiate_keepalive)                        
+                        self._loop.call_later(2, self.initiate_keepalive_functionality)
                     elif (rtlv["group"] == "ces") and (rtlv['code'] == "ttl"):
                         self._verify_tlv(rtlv)
                     
@@ -543,49 +533,61 @@ class oC2CTransaction(C2CTransaction):
                 elif (otlv["group"] == "ces") and (otlv['code'] == "ttl"):
                     self._verify_tlv(otlv)
                     
-            
-                        
+    def initiate_keepalive_functionality(self):
+        """ Schedules keepalive upon inactivity of time 'To' on a link """
+        now = time.time()
+        if not self.terminated:
+            self._loop.call_later(2, self.initiate_keepalive_functionality)
+            monitoring_period = 5
+            if ((now - self.last_seen) > monitoring_period):
+                if not self.keepalive_scheduled:
+                    self.keepalive_handler  = self._loop.call_later(self.keepalive_cycle-monitoring_period, self.initiate_keepalive)
+                    self.keepalive_scheduled = True
+            else:
+                if self.keepalive_scheduled:
+                    self.keepalive_handler.cancel()
+                    self.keepalive_scheduled = False
+
     def initiate_keepalive(self):
         """ Initiates CES keepalive message towards remote CES """
         now = time.time()
         if not self.terminated:
-            if (now - self.last_seen) >= self.state_timeout:
-                self._logger.warning(" Remote CES has not answered any keepalive within negotiated duration.")
+            self._logger.info(" Sending CES keepalive towards '{}' (SST={}, DST={})".format(self.r_cesid, self.sstag, self.dstag))
+            tlv = self._create_request_tlv2(group="ces", code="keepalive")
+            req_tlvs = [tlv]
+            cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, req_tlvs=req_tlvs)
+            self.keepalive_trigger_time = time.time()
+            self.keepalive_response = None
+            self.keepalive_reporter = self._loop.call_later(self.keepalive_timeout, self.report_connection_health)      # Checks for timely arrival of the keepalive response.
+            cetp_packet = json.dumps(cetp_message)
+            self.transport.send_cetp(cetp_packet)
+            #self.pprint(cetp_packet)
+    
+    def update_last_seen(self):
+        self.last_seen = time.time()
+
+    def report_connection_health(self):
+        """ Evaluates whether remote CES is: active; inactive; or dead """
+        now = time.time()
+        if self.keepalive_response==None:
+            # No keep-alive response
+            self.health_report = False
+            self.missed_keepalives += 1
+            if self.missed_keepalives >= 3:
+                self._logger.warning(" Remote CES has not answered any keepalive within 'To'.")
+                self.set_terminated()
                 self.terminate_transport()
             else:
-                self._logger.info(" Sending CES keepalive towards '{}' (SST={}, DST={})".format(self.r_cesid, self.sstag, self.dstag))
-                tlv = self._create_request_tlv2(group="ces", code="keepalive")
-                req_tlvs = [tlv]
-                
-                cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, req_tlvs=req_tlvs)
-                cetp_packet = json.dumps(cetp_message)
-                self.transport.send_cetp(cetp_packet)
-                self.keepalive_trigger_time = time.time()
-                self.keepalive_response = None
-                #self.pprint(cetp_packet)
-                self.keepalive_reporter = self._loop.call_later(self.keepalive_timeout, self.report_connection_health)    # Called to check timely arrival of keepalive response.
-                self.keepalive_handler  = self._loop.call_later(self.keepalive_cycle, self.initiate_keepalive)            # Calling itself 
+                self.keepalive_handler  = self._loop.call_later(2.0, self.initiate_keepalive)          # Sending next keepalive-request
+        
+        elif self.keepalive_response == True:
+            self.missed_keepalives = 0
     
-    
-    def report_connection_health(self):
-        if self.keepalive_response==None:
-            self.health_report = False
-            
-    def update_last_seen(self):
-        now = time.time()
-        if (now-self.last_seen) > 5:
-            # Upon noticing the traffic from sender, the last seen is updated & the scheduled keepalive is postponed.
-            self.keepalive_handler.cancel()                                         # Since a traffic is observed 
-            self.keepalive_handler = self._loop.call_later(self.keepalive_cycle, self.initiate_keepalive)
-            
-        self.last_seen = now 
-
     def post_c2c_negotiation(self, packet, transport):
         """ 
         Processes a CETP packet received on the negotiated CES-to-CES session.
         The CETP packet could contain: feedback on host, keepalive, ratelimit on host, session limit on CES, terminate instruction for an established H2H session & so on.
         """
-        
         self._logger.info(" Post-C2C negotiation packet from {} (SST={}, DST={})".format(self.r_cesid, self.sstag, self.dstag))
         self.packet = packet
         self.transport = transport

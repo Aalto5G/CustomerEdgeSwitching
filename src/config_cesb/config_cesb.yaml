@@ -8,9 +8,9 @@ CESParameters:
     ca_certificate: config_cesb/ca.crt
     dp_ttl: 3600
     keepalive_timeout: 2
-    keepalive_cycle: 150
+    keepalive_cycle: 15
     max_c2c_negotiation_duration: 5
-    state_timeout: 200
+    state_timeout: 31
     caces: 127.0.0.1
     fw_version: 0.1
     ces_session_limit: 30

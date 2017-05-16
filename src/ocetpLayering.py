@@ -243,6 +243,9 @@ class oCES2CESLayer:
             cetp_msg = json.loads(msg)
             inbound_sst, inbound_dst = cetp_msg['SST'], cetp_msg['DST']
             sstag, dstag = inbound_dst, inbound_sst
+            
+            c2c_transaction = self.transport_c2c_binding[transport]
+            c2c_transaction.update_last_seen()
 
             if not self.c2c_negotiated:
                 self._logger.debug(" C2C-policy is not negotiated with remote-cesid '{}'".format(self.r_cesid))

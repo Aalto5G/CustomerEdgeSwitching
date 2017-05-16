@@ -173,7 +173,7 @@ class PolicyCETP(object):
             self.available = self.policy["available"]
         # setting value for CETP can be handled in CETP transaction module
 
-    def get_policy_to_respond(self, tlv):
+    def get_response_policy(self, tlv):
         group, code, cmp, ext, value = self.get_tlv_details(tlv)
         for rtlv in self.available:
             if (rtlv["group"] == tlv["group"]) and (rtlv["code"]==tlv["code"]):
@@ -275,10 +275,10 @@ class PolicyCETP(object):
                 pol_rep = gp+"."+code+"."+cmp
             elif 'value' in pol:
                 gp, code, value = pol['group'], pol['code'], pol['value']
-                if (type(value) != type(list())):
-                    pol_rep = gp+"."+code+"."+value
-                else:
+                if (type(value) == type(list())) or (type(value) == type(dict())):
                     pol_rep = gp+"."+code
+                else:
+                    pol_rep = gp+"."+code+": "+value
             else:
                 gp, code = pol['group'], pol['code']
                 pol_rep = gp+"."+code
