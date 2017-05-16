@@ -239,7 +239,6 @@ def response_ces_ttl(**kwargs):
                 remote_default_dp_ttl = int(rtlv["value"])
                 break
         
-    print("RT")
     group, code, cmp, ext, l_value = policy.get_response_policy(tlv)
     local_ttl = int(l_value)
     tlv['value'] = local_ttl
@@ -506,13 +505,15 @@ def verify_ces_session_limit(**kwargs):
         if cmp =="NotAvailable":
             return False
         
-        remote_ces_session_limit = int(value)
-        if remote_ces_session_limit < 1:
+        remote_ces_session_count = int(value)
+        l_group, l_code, l_cmp, l_ext, l_value = policy.get_policy_to_enforce(tlv)
+        local_session_limit = int(l_value)
+        
+        if remote_ces_session_count > local_session_limit:
             print("Invalid # of {} simultaneous H2H transactions.".format(ces_session_limit))
             return False
 
-        if session_established:
-            transaction.session_limit = remote_ces_session_limit                # CES shall forward no more than these simultaneous sessions towards remote CES
+        transaction.remote_session_limit = remote_ces_session_count                # Remote CES shall not forward more than these simultaneous sessions towards this CES
         return True
     
     except Exception as ex:
@@ -569,7 +570,7 @@ def verify_ces_evidence(**kwargs):
 
 def verify_ces_evidence_format(**kwargs):
     try:
-        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+        tlv, code, ces_params, policy, transaction = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"], kwargs["transaction"]
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         group, code, cmp, ext, value = policy.get_tlv_details(tlv)
         if cmp =="NotAvailable":
@@ -580,6 +581,7 @@ def verify_ces_evidence_format(**kwargs):
         local_evidence_format = l_value
         
         if remote_evidence_format in local_evidence_format:
+            transaction.evidence_format = remote_evidence_format
             return True
         else:
             return False

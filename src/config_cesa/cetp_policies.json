@@ -51,7 +51,7 @@
         { "ope":"query", "group": "ces", "code": "ttl", "value":{"min":"3600", "max":"7200"}},
         { "ope":"query", "group": "ces", "code": "keepalive", "value":""},
         { "ope":"query", "group": "ces", "code": "keepalive_cycle", "value":"60"},
-        { "ope":"query", "group": "ces", "code": "session_limit"},
+        { "ope":"query", "group": "ces", "code": "session_limit", "value": "300"},
         { "ope":"query", "group": "ces", "code": "evidence_format", "value":["IETF-IOC1", "IETF-IOC2"]}
     ],
     "offer": [

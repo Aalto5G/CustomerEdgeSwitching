@@ -157,6 +157,10 @@ class C2CTransaction(object):
                 if not self.cetpstate_mgr.has_established_transaction((sstag, dstag)):                   # Checks connected transactions
                     return sstag
                 
+    def negotiated_parameters(self):
+        s = [self.l_cesid, self.r_cesid, self.ttl, self.evidence_format, self.remote_session_limit]
+        return s
+                
     def pprint(self, packet):
         self._logger.info("CETP Packet")
         for k, v in packet.items():
@@ -508,6 +512,8 @@ class oC2CTransaction(C2CTransaction):
         self.c2c_handler.cancel()
         keepalive_required = False
         self._logger.info("In post-C2C established session.")
+        self._logger.info("Negotiated params: {}".format(self.negotiated_parameters()))
+
         
         if self.last_packet_received != None:
             # Processing the queries received in the last packet from remote (iCES) to meet the requirements.
@@ -847,6 +853,7 @@ class iC2CTransaction(C2CTransaction):
         cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, avail_tlvs=ava_tlvs)
         self.pprint(cetp_message)
         self._logger.info("{}".format(30*'*') )
+        self._logger.info("Negotiated params: {}".format(self.negotiated_parameters()))
         cetp_packet = json.dumps(cetp_message)
         self.last_packet_sent = cetp_packet
         return (negotiation_status, cetp_packet)
