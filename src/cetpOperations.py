@@ -220,52 +220,58 @@ def response_to_wrong_query(tlv):
 def response_ces_cesid(**kwargs):
     tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
-    group, code, cmp, ext, response_value = policy.get_response_policy(tlv)
-    tlv['ope'] = 'response'
-    tlv["value"] = response_value
-    return tlv
+    new_tlv = copy.copy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
+    new_tlv['ope'] = "info"
+    new_tlv["value"] = response_value
+    return new_tlv
 
 def response_ces_ttl(**kwargs):
     tlv, code, ces_params, policy, transaction, cetp_packet = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"], kwargs["transaction"], kwargs["packet"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
     remote_default_dp_ttl = None
-    
-    if 'info' in cetp_packet: 
-        for rtlv in cetp_packet['info']:
-            if rtlv['group']=="ces" and rtlv["code"]=="ttl":
-                remote_default_dp_ttl = int(rtlv["value"])
-                break
-        
-    if 'response' in cetp_packet:
-        for rtlv in cetp_packet['response']:
-            if rtlv['group']=="ces" and rtlv["code"]=="ttl":
-                remote_default_dp_ttl = int(rtlv["value"])
-                break
-        
-    group, code, cmp, ext, l_value = policy.get_response_policy(tlv)
-    local_ttl = int(l_value)
-    tlv['value'] = local_ttl
-    
-    # Get value of the sender's TTL and agree to a compromise, 
-    if remote_default_dp_ttl != None:
-        if local_ttl < remote_default_dp_ttl:
-            negotiated_ttl = local_ttl
-        else:
-            negotiated_ttl = remote_default_dp_ttl
-            
-        transaction.ttl = negotiated_ttl
-        tlv["value"] = negotiated_ttl
+    try:
+        new_tlv = copy.copy(tlv)
+        group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
 
-    tlv['ope'] = 'response'
-    return tlv
+        # Retrieves the ttl value of remote CES
+        if 'TLV' in cetp_packet:
+            for rtlv in cetp_packet['TLV']:
+                if (rtlv['ope']=="info") and (rtlv['group']=="ces") and (rtlv['code']=="ttl"):
+                    remote_default_dp_ttl = int(rtlv["value"])
+                    break
+        
+        # Retrieves the TTL of local CES
+        group, code, cmp, ext, l_value = policy.get_available_policy(new_tlv)
+        local_ttl = int(l_value)
+        new_tlv['value'] = local_ttl
+        
+        # Selects most restrictive of both values as default TTL for H2H sessions between both CES nodes.
+        if remote_default_dp_ttl != None:
+            if local_ttl < remote_default_dp_ttl:
+                negotiated_ttl = local_ttl
+            else:
+                negotiated_ttl = remote_default_dp_ttl
+                
+            transaction.ttl = negotiated_ttl
+            tlv["value"] = negotiated_ttl
+    
+        new_tlv['ope'] = "info"
+        return new_tlv
+    except:
+        print("Exception in response_ces_ttl()")
+        return None
+
 
 def response_ces_keepalive(**kwargs):
     tlv, code, ces_params, policy, transaction = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"], kwargs["transaction"]
     try:
+        new_tlv = copy.copy(tlv)
+        group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
         transaction.last_seen = time.time()
-        tlv['ope'] = 'response'
-        tlv['value'] = ""
-        return tlv
+        new_tlv['ope'] = "info"
+        new_tlv['value'] = ""
+        return new_tlv
     except Exception as ex:
         print(ex)
         return response_to_wrong_query(tlv)
@@ -273,95 +279,106 @@ def response_ces_keepalive(**kwargs):
 def response_ces_keepalive_cycle(**kwargs):
     tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
-    group, code, cmp, ext, response_value = policy.get_response_policy(tlv)
-    tlv['ope'] = 'response'
-    tlv["value"] = response_value
-    return tlv
+    new_tlv = copy.copy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
+    new_tlv['ope'] = "info"
+    new_tlv["value"] = response_value
+    return new_tlv
 
 def response_ces_certificate(**kwargs):
     tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
-    
     try:
+        new_tlv = copy.copy(tlv)
+        group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
         policy_code = CETP.CES_CODE_TO_POLICY[code]
-        group, code, cmp, ext, response_value = policy.get_response_policy(tlv)
-        tlv['ope'] = 'response'
+        new_tlv['ope'] = "info"
         # tlv["value"] = response_value
     
         certificate_path = ces_params[policy_code]
         f = open(certificate_path, 'r')
         crt = f.read()
-        tlv["value"] = crt
+        new_tlv["value"] = crt
+        return new_tlv
     except Exception as ex:
         print(ex)
-    return tlv
+        return tlv
  
 def response_ces_fw_version(**kwargs):
     tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
-    group, code, cmp, ext, response_value = policy.get_response_policy(tlv)
-    tlv['ope'] = 'response'
-    tlv["value"] = response_value
-    return tlv
+    new_tlv = copy.copy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
+    new_tlv['ope'] = "info"
+    new_tlv["value"] = response_value
+    return new_tlv
 
 def response_ces_session_limit(**kwargs):
     tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
-    group, code, cmp, ext, response_value = policy.get_response_policy(tlv)
-    tlv['ope'] = 'response'
-    tlv["value"] = response_value
-    return tlv
+    new_tlv = copy.copy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
+    new_tlv['ope'] = "info"
+    new_tlv["value"] = response_value
+    return new_tlv
 
 def response_ces_host_sessions(**kwargs):
     tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
-    group, code, cmp, ext, response_value = policy.get_response_policy(tlv)
-    tlv['ope'] = 'response'
-    tlv["value"] = response_value
-    return tlv
+    new_tlv = copy.copy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
+    new_tlv['ope'] = "info"
+    new_tlv["value"] = response_value
+    return new_tlv
 
 def response_ces_caces(**kwargs):
     tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
-    group, code, cmp, ext, response_value = policy.get_response_policy(tlv)
-    tlv['ope'] = 'response'
-    tlv["value"] = response_value
-    return tlv
+    new_tlv = copy.copy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
+    new_tlv['ope'] = "info"
+    new_tlv["value"] = response_value
+    return new_tlv
 
 def response_ces_evidence_format(**kwargs):
     tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
-    group, code, cmp, ext, response_value = policy.get_response_policy(tlv)
-    tlv['ope'] = 'response'
-    tlv["value"] = response_value
-    return tlv
+    new_tlv = copy.copy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
+    new_tlv['ope'] = "info"
+    new_tlv["value"] = response_value
+    return new_tlv
 
 def response_ces_evidence(**kwargs):
     tlv, code, ces_params, cetp_security, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["cetp_security"], kwargs["ces_policy"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
     evidence = tlv["value"]
+    new_tlv = copy.copy(tlv)
     resp = cetp_security.process_evidence(r_cesid, evidence)
-    tlv['ope'] = 'response'
-    tlv["value"] = resp             # Could be an ACKnowledgment/Error to provided evidence
-    return tlv
+    new_tlv['ope'] = "info"
+    new_tlv["value"] = response_value                   # Could be an ACKnowledgment/Error to provided evidence
+    return new_tlv
 
 def response_ces_headersignature(**kwargs):
     tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
-    tlv['ope'] = 'response'
-    tlv["value"] = "Not defined yet"
-    return tlv
+    new_tlv = copy.copy(tlv)
+    new_tlv['ope'] = "info"
+    new_tlv["value"] = "Not defined yet"
+    return new_tlv
 
 def response_ces_pow(**kwargs):
     tlv, code, ces_params, cetp_security, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["cetp_security"], kwargs["ces_policy"]
-    tlv['ope'] = "response"
     try:
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         sender_challenge = tlv["value"]
         pow_resp = cetp_security.respond_pow(challenge = sender_challenge)
-        tlv["value"] = pow_resp
+        new_tlv = copy.copy(tlv)
+        new_tlv['ope'] = "info"
+        new_tlv["value"] = pow_resp
+        return new_tlv
     except Exception as msg:
         print(" Exception in responding to POW challenge.")
-    return tlv
+        return tlv
 
 def verify_ces_cesid(**kwargs):
     try:
@@ -390,52 +407,26 @@ def verify_ces_ttl(**kwargs):
         tlv, code, ces_params, transaction, session_established, policy, cetp_packet = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["transaction"], kwargs["session_established"], kwargs['ces_policy'], kwargs['packet']
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         group, code, cmp, ext, value = policy.get_tlv_details(tlv)
-        remote_default_dp_ttl = None
         if cmp =="NotAvailable":
             return False
         
-        remote_default_dp_ttl = int(value)
-        l_group, l_code, l_cmp, l_ext, allowed_value = policy.get_policy_to_enforce(tlv)
+        remote_default_dp_ttl = int(value)                                                      # Gets remote-CES ttl
+        l_group, l_code, l_cmp, l_ext, allowed_value = policy.get_policy_to_enforce(tlv)        # Gets acceptable limits of ttl value for local-CES  
         min, max = int(allowed_value['min']), int(allowed_value['max'])
 
         if (remote_default_dp_ttl  < min) or (remote_default_dp_ttl > max):
             print(" Default dp-ttl value is not acceptable")
             return False
-        
-        if 'info' in cetp_packet: 
-            for rtlv in cetp_packet['info']:
-                if rtlv['group']=="ces" and rtlv["code"]=="ttl":
-                    remote_default_dp_ttl = int(rtlv["value"])
-                    break
-            
-        if 'response' in cetp_packet:
-            for rtlv in cetp_packet['response']:
-                if rtlv['group']=="ces" and rtlv["code"]=="ttl":
-                    remote_default_dp_ttl = int(rtlv["value"])
-                    break
 
-        if remote_default_dp_ttl != None:
-            # Gets the Default DP-TTL value of the remote sender         
-            group, code, cmp, ext, l_value = policy.get_response_policy(tlv)
-            local_ttl = int(l_value)
-            
-            if local_ttl < remote_default_dp_ttl:
-                transaction.ttl = local_ttl
-            else:
-                transaction.ttl = remote_default_dp_ttl
+        #Compares the DP-TTL value offered by local CES, with remote CES offer, and selects the most restrictive value
+        group, code, cmp, ext, l_value = policy.get_available_policy(tlv)
+        local_ttl = int(l_value)
         
+        if local_ttl < remote_default_dp_ttl:
+            transaction.ttl = local_ttl
+        else:
+            transaction.ttl = remote_default_dp_ttl
         
-        if session_established:
-            pass
-            """
-            l_ces_default_dp_ttl = ces_params["dp_ttl"]
-                    
-            if l_ces_default_dp_ttl > r_ces_default_dp_ttl:
-                transaction.default_dp_ttl = r_ces_default_dp_ttl
-            else:
-                transaction.default_dp_ttl = l_ces_default_dp_ttl
-            """
-    
         return True
         
     except Exception as ex:
@@ -466,7 +457,7 @@ def verify_ces_keepalive(**kwargs):
         
         value = tlv["value"]
         if value == "":
-            transaction.last_seen = time.time()
+            transaction.keepalive_response_time = time.time()
             transaction.health_report = True
             transaction.keepalive_response = True
         
@@ -687,8 +678,8 @@ def send_id(**kwargs):
 
 def response_id(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    group, code, cmp, ext, response_value = policy.get_response_policy(tlv)
-    tlv['ope'] = "response"
+    group, code, cmp, ext, response_value = policy.get_available_policy(tlv)
+    tlv['ope'] = "info"
     tlv["value"] = response_value
     return tlv
 
@@ -898,21 +889,21 @@ def send_ctrl_warning(**kwargs):
 def response_ctrl_dstep(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
     policy_code = CETP.CONTROL_CODES[code]
-    tlv['ope'] = 'response'
+    tlv['ope'] = 'info'
     #tlv["value"] = "some-value"
     return tlv
 
 def response_ctrl_fqdn(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
     policy_code = CETP.CONTROL_CODES[code]
-    tlv['ope'] = 'response'
+    tlv['ope'] = 'info'
     #tlv["value"] = "some-value"
     return tlv
 
 def response_ctrl_certificate(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
     policy_code = CETP.CONTROL_CODES[code]
-    tlv['ope'] = 'response'
+    tlv['ope'] = 'info'
     #tlv["value"] = "some-value"
     return tlv
 
@@ -920,83 +911,83 @@ def response_ctrl_caep(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
     #policy_code = CETP.CONTROL_CODES[code]
     
-    group, code, cmp, ext, response_value = policy.get_response_policy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(tlv)
     #print("response_value", response_value)
-    tlv['ope'] = "response"
+    tlv['ope'] = "info"
     tlv["value"] = response_value
     return tlv
 
 def response_ctrl_dp_rlocs(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
     policy_code = CETP.CONTROL_CODES[code]
-    tlv['ope'] = 'response'
+    tlv['ope'] = 'info'
     #tlv["value"] = "some-value"
     return tlv
 
 def response_ctrl_dp_ttl(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
     policy_code = CETP.CONTROL_CODES[code]
-    tlv['ope'] = 'response'
+    tlv['ope'] = 'info'
     #tlv["value"] = "some-value"
     return tlv
 
 def response_ctrl_dp_keepalive_cycle(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
     policy_code = CETP.CONTROL_CODES[code]
-    tlv['ope'] = 'response'
+    tlv['ope'] = 'info'
     #tlv["value"] = "some-value"
     return tlv
 
 def response_ctrl_qos(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    tlv['ope'] = 'response'
+    tlv['ope'] = 'info'
     #tlv["value"] = "some-value"
     return tlv
 
 def response_ctrl_ack(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    tlv['ope'] = 'response'
+    tlv['ope'] = 'info'
     #tlv["value"] = "some-value"
     return tlv
 
 def response_ctrl_os_version(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    tlv['ope'] = 'response'
+    tlv['ope'] = 'info'
     #tlv["value"] = "some-value"
     return tlv
 
 def response_ctrl_policy_caching(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    tlv['ope'] = 'response'
+    tlv['ope'] = 'info'
     #tlv["value"] = "some-value"
     return tlv
 
 def response_ctrl_dp_proto(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    tlv['ope'] = 'response'
+    tlv['ope'] = 'info'
     #tlv["value"] = "some-value"
     return tlv
 
 def response_ctrl_dp_port(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    tlv['ope'] = 'response'
+    tlv['ope'] = 'info'
     #tlv["value"] = "some-value"
     return tlv
 
 def response_ctrl_dp_ratelimit(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    tlv['ope'] = 'response'
+    tlv['ope'] = 'info'
     #tlv["value"] = "some-value"
     return tlv
 
 def response_ctrl_terminate(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    tlv['ope'] = 'response'
+    tlv['ope'] = 'info'
     return tlv
 
 def response_ctrl_warning(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    tlv['ope'] = 'response'
+    tlv['ope'] = 'info'
     #tlv["value"] = "some-value"
     return tlv
 
