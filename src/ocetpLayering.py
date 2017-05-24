@@ -206,6 +206,8 @@ class oCES2CESLayer:
         self.connected_transports       = []
         self.transport_c2c_binding      = {}
         self.c2c_transaction_list       = []
+        self.transport_rtt              = {}
+        self.transport_lastseen         = {}
         self.c2c_negotiated             = False
         self._closure_signal            = False
         self._logger                    = logging.getLogger(name)
@@ -316,7 +318,7 @@ class oCES2CESLayer:
         """ Initiates/Continues CES-to-CES negotiation """
         c2c_transaction  = C2CTransaction.oC2CTransaction(self._loop, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetpstate_mgr=self.cetpstate_mgr, \
                                                            transport=transport_obj, policy_mgr=self.policy_mgr, proto=transport_obj.proto, ces_params=self.ces_params, \
-                                                           cetp_security=self.cetp_security)
+                                                           cetp_security=self.cetp_security, c2c_layer=self)
         
         self.register_c2c_to_transport(c2c_transaction, transport_obj)
         self.c2c_transaction_list.append(c2c_transaction)
@@ -366,7 +368,52 @@ class oCES2CESLayer:
             self._logger.info(" No ongoing or in-progress CETP transport towards {}".format(self.r_cesid))
             self._logger.info(" Close CETP-C2C and CETPClient layer")
             self.resource_cleanup()
-    
+
+    def report_rtt(self, transport, rtt=None, last_seen=None):
+        if rtt != None:
+            self.transport_rtt[transport] = rtt
+            rtt_list = []
+            for trans, rtt_value in self.transport_rtt.items():
+                rtt_list.append(rtt_value)
+            
+            rtt_list.sort()
+            smallest_rtt = rtt_list[0]
+            #self.last_rtt_evaluation = time.time()
+            #self.smallest_rtt = smallest_rtt
+            if smallest_rtt == 2**32:
+                self._logger.info("All the links have bad health ")
+                return
+            
+            for trans, rtt_value in self.transport_rtt.items():
+                if rtt_value==smallest_rtt:
+                    self.active_transport = trans
+                    return
+        else:
+            self.transport_lastseen[transport] = last_seen
+        
+
+    def select_transport(self):
+        """ Selects the outgoing CETP-transport based on: 
+            (A) good health indicator - measured by timely arrival of C2C-keepalive response. (B) Lowest-RTT (measured by timing the C2C-keepalive)              
+            Other possibilities: Selection based on: 1) load balancing b/w transports; OR 2) priority field in the inbound NAPTR
+        """
+        if len(self.transport_rtt) < len(self.connected_transports):
+            # Packet sending before first keepalive & when local CES doesn't have to send keepalive
+            selected = None
+            for transport in self.connected_transports:
+                oc2c = self.get_c2c_transaction(transport)
+                if oc2c.health_report:
+                    selected = transport
+                    return selected
+                
+            if selected == None:
+                self._logger.info("All the links have bad health ")
+                # TBD:  Case where all transports have bad health           # What to do?
+
+        elif len(self.transport_rtt) == len(self.connected_transports):
+            return self.active_transport
+
+        
     def cancel_pending_tasks(self):
         for tsk in self.pending_tasks:
             if not tsk.cancelled():
@@ -402,33 +449,6 @@ class oCES2CESLayer:
     def send_cetp(self, msg):
         transport = self.select_transport()
         transport.send_cetp(msg)
-
-    def select_transport(self):
-        """ Selects the outgoing CETP-transport based on: 1) load_balancing (due to random selection of transports) AND:
-             a) good health indicator;                             (measured by timely response to C2C-keepalives)
-             b) Lowest-RTT (best health);                          (based on smallest-rtt, observed by sending/receiving the C2C-keepalive) 
-             c) OR based on priority field in the inbound NAPTR    (Not implemented: ___ )
-        """ 
-        total_transports = len(self.connected_transports)
-        index = random.randint(0, total_transports-1)
-        transport = self.connected_transports[index]
-        if total_transports==1:
-            return transport
-        else:
-            oc2c = self.get_c2c_transaction(transport)
-            if oc2c.health_report:
-                return transport
-        
-        for transport in self.connected_transports:
-            oc2c = self.get_c2c_transaction(transport)
-            if oc2c.health_report:
-                self._logger.debug(" Selecting a 'healthy' transport, connected to {}".format(transport.peername))
-                return transport
-
-        # If all transports have bad health, Then return any connected transport.        
-        transport = self.connected_transports[index]
-        return transport
-    
 
     def initiate_cetp_transport(self, naptr_list):
         """ Intiates CETP Transports towards remote endpoints (for each 'naptr' record in the naptr_list) """
@@ -477,21 +497,7 @@ class oCES2CESLayer:
                     self.unregister_transport(transport_instance)
 
 
-"""
-Asyncio-related learning:
-# You can't simply initiate a task and expect that exception will be handled automatically. Instead you need to wait on the task.
 
-async def main(loop):
-    coro = loop.create_connection(lambda: EchoClientProtocol(message, loop),'127.0.0.1', 49001)
-    try:
-        t = asyncio.ensure_future(coro)
-        await t
-    except Exception as ex:
-        #print(ex.errno == 111)
-        print(ex)
-
-asyncio.ensure_future(main(loop))
-"""
 
 class oCESTransportTCP(asyncio.Protocol):
     def __init__(self, c2c_layer, proto, r_cesid, ces_params, loop=None, name="oCESTransport"):

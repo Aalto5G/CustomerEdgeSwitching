@@ -77,6 +77,7 @@ class iCETPC2CLayer:
         self.r_cesid                = r_cesid
         self.icetp_mgr              = icetp_mgr
         self.transport_c2c_binding  = {}
+        self.transport_rtt          = {}        
         self._closure_signal        = False
         self._logger                = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_iCETPC2CLayer)
@@ -134,7 +135,44 @@ class iCETPC2CLayer:
             del(self.cetp_server)                                               # CETPServer's task is already deleted
             del(self)
                 
-                
+    def report_rtt(self, transport, rtt=None, last_seen=None):
+        if rtt != None:
+            self.transport_rtt[transport] = rtt
+            rtt_list = []
+            for trans, rtt_value in self.transport_rtt.items():
+                rtt_list.append(rtt_value)
+            
+            rtt_list.sort()
+            smallest_rtt = rtt_list[0]
+            #self.last_rtt_evaluation = time.time()
+            #self.smallest_rtt = smallest_rtt
+            if smallest_rtt == 2**32:
+                return
+            
+            for trans, rtt_value in self.transport_rtt.items():
+                if rtt_value==smallest_rtt:
+                    self.active_transport = trans
+                    return
+        else:
+            self.transport_lastseen[transport] = last_seen
+        
+
+    def select_transport(self):
+        """ Selects the outgoing CETP-transport based on: 
+            (A) good health indicator - measured by timely arrival of C2C-keepalive response. (B) Lowest-RTT (measured by timing the C2C-keepalive)              
+            Other possibilities: Selection based on: 1) load balancing b/w transports; OR 2) priority field in the inbound NAPTR
+        """
+        if len(self.transport_rtt) < len(self.connected_transports):
+            # Packet sending before first keepalive & when local CES doesn't have to send keepalive
+            for transport in self.connected_transports:
+                oc2c = self.get_c2c_transaction(transport)
+                if oc2c.health_report:
+                    return transport
+                # TBD:  Case where all transports have bad health           # How to detect? and What to do?
+
+        elif len(self.transport_rtt) == len(self.connected_transports):
+            return self.active_transport
+    
     def send_cetp(self, msg):
         """ Useful when initiating a (feedback/evidence/keepalive) message towards oCES """
         for transport in self.connected_transports:

@@ -1022,6 +1022,7 @@ def verify_ctrl_caep(**kwargs):
     if 'cmp' in tlv:
         if tlv['cmp'] == "NotAvailable":
             return False
+    
     return True
 
 def verify_ctrl_dp_rlocs(**kwargs):

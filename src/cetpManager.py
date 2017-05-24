@@ -273,6 +273,7 @@ class iCETPManager:
             else:
                 c2c_layer = self.get_c2c_layer(r_cesid)                 # Gets existing c2c-layer for remote ’cesid’
             
+            stateful_transaction._assign_c2c_layer(c2c_layer)
             c2c_layer.register_transport_c2cTransaction(transport, stateful_transaction)
             transport.set_c2c_details(r_cesid, c2c_layer)
             transport.send_cetp(cetp_resp)

@@ -173,7 +173,7 @@ class PolicyCETP(object):
             self.available = self.policy["available"]
         # setting value for CETP can be handled in CETP transaction module
 
-    def get_response_policy(self, tlv):
+    def get_available_policy(self, tlv):
         group, code, cmp, ext, value = self.get_tlv_details(tlv)
         for rtlv in self.available:
             if (rtlv["group"] == tlv["group"]) and (rtlv["code"]==tlv["code"]):
