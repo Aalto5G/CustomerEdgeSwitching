@@ -63,8 +63,9 @@ class DNSServer(asyncio.DatagramProtocol):
         #print("\nReceived DNS query for '%s'" % str(name))
         naptr_response_list = self.resolve_naptr(name)
         for naptr_resp in naptr_response_list:
-            dest_id, r_cesid, r_ip, r_port, r_transport = naptr_resp                # TBD: A domain is reachable through 2 (inbound) CES nodes. List of DNS NAPTR response records will point to different remote cesids?
-        
+            dest_id, r_cesid, r_ip, r_port, r_transport = naptr_resp                # Expected format of NAPTR_response: (remote_ip, remote_port, remote_transport, dst_hostid)
+                                                                                    # Assumption: Detsination domain is reachable via one CES only. All list of DNS NAPTR response records point to one remote cesids?
+                                                                                    # TBD: Destination reachable via multiple CES nodes.
         cb_args = (query, addr)
         self._cetpManager.process_outbound_cetp(r_cesid, naptr_response_list, self.process_dns_query_callback, cb_args)
         

@@ -167,7 +167,7 @@ class CETPClient:
         
         self.set_closure_signal()
         self.close_pending_tasks()
-        self.cetp_mgr.remove_local_endpoint(self.r_cesid)               # This ordering is important 
+        self.cetp_mgr.remove_client_endpoint(self.r_cesid)               # This ordering is important 
         del(self)
 
 
@@ -217,7 +217,7 @@ class oCES2CESLayer:
     def add_naptr_records(self, naptr_rrs):
         try:
             for naptr_rr in naptr_rrs:
-                dst_id, r_cesid, r_ip, r_port, r_transport = naptr_rr
+                dst_id, r_cesid, r_ip, r_port, r_transport = naptr_rr                   # Assumption: All NAPTRs point towards one 'r_cesid'.    (Destination domain is reachable via one CES only)
                 if (r_ip, r_port, r_transport) not in self.remote_ces_eps:
                     self._logger.info(" Initiating a new CETPTransport")
                     if not self.remote_endpoint_malicious_history(r_cesid, r_ip):

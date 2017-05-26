@@ -66,7 +66,8 @@ class CETPServer:
             self._logger.info(" Outbound H2HTransaction found for (SST={}, DST={})".format(inbound_sst, inbound_dst))
             oh2h.post_h2h_negotiation(cetp_msg, transport)
 
-
+    def handle_interrupt(self):
+        pass
 
 class iCETPC2CLayer:
     def __init__(self, r_cesid, icetp_mgr, name="iCETPC2CLayer"):
@@ -104,6 +105,7 @@ class iCETPC2CLayer:
     def create_cetp_server(self, r_cesid, loop, policy_mgr, cetpstate_mgr, l_cesid):
         """ Creating the upper layer to handle CETPTransport """
         self.cetp_server = CETPServer(c2c_layer=self, l_cesid=l_cesid, r_cesid=r_cesid, loop=loop, policy_mgr=policy_mgr, cetpstate_mgr=cetpstate_mgr)
+        return self.cetp_server
     
     def cancel_pending_tasks(self):
         self._logger.info("Terminating pending tasks for cesid '{}'".format(self.r_cesid))
