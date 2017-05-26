@@ -63,8 +63,8 @@ class DNSServer(asyncio.DatagramProtocol):
         #print("\nReceived DNS query for '%s'" % str(name))
         naptr_response_list = self.resolve_naptr(name)
         for naptr_resp in naptr_response_list:
-            dest_id, r_cesid, r_ip, r_port, r_transport = naptr_resp                # This shall be improved for case, where a domain can be reached through 2 (inbound) CES nodes. 
-                                                                                    # In this case, we can expect a list of NAPTR records in DNS response pointing to different remote 'cesids'?
+            dest_id, r_cesid, r_ip, r_port, r_transport = naptr_resp                # TBD: A domain is reachable through 2 (inbound) CES nodes. List of DNS NAPTR response records will point to different remote cesids?
+        
         cb_args = (query, addr)
         self._cetpManager.process_outbound_cetp(r_cesid, naptr_response_list, self.process_dns_query_callback, cb_args)
         
@@ -127,7 +127,7 @@ class DNSServer(asyncio.DatagramProtocol):
         self.naptr_records['www.aalto.fi.']      = ('www.aalto.fi.',        'cese.demo.lte.', '127.0.0.5', '49001', 'tcp')
         self.naptr_records['test.']              = ('test.',                'cesb.demo.lte.', '127.0.0.1', '49001', 'tcp')        
         self.naptr_records['raimo.aalto.lte.']   = ('raimo.aalto.lte.',     'cesb.demo.lte.', '127.0.0.1', '49001', 'tcp')
-        self.naptr_records['raimo2.aalto.lte.']  = ('raimo2.aalto.lte.',    'cesb.demo.lte.', '127.0.0.1', '49001', 'tcp')
+        self.naptr_records['raimo2.aalto.lte.']  = ('raimo2.aalto.lte.',    'cesb.demo.lte.', '127.0.0.1', '49002', 'tcp')
     
     def resolve_naptr(self, domain):
         """ Resolves a domain name, and returns a list of NAPTR record parsed in format: ('host-id', 'ces-id', 'ip', 'port', 'protocol') """

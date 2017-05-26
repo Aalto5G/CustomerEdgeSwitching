@@ -61,7 +61,7 @@ class CETPClient:
 
     @asyncio.coroutine
     def enqueue_h2h_requests(self, msg):
-        yield from self.client_q.put(msg)                 # If the queue is full, the call doesn't return until the queue has space to store this message  -can be triggered via asyncio.ensure_future(enqueue) 
+        yield from self.client_q.put(msg)                 # More safe enqueuing, if the queue is full, the call doesn't return until the queue has space to store this message - can be triggered via asyncio.ensure_future(enqueue) 
 
     @asyncio.coroutine
     def consume_h2h_requests(self):
@@ -69,13 +69,11 @@ class CETPClient:
         while True:
             try:
                 queued_data = yield from self.client_q.get()
-                (naptr_rr, cb_args) = queued_data                                       # Whether the list of naptr records is handled well?    
-                                                                                        # Can they be used to reconnect to a terminated endpoint.
-                for naptr in naptr_rr:                                                  # I am not using this information for anything as of now - Plan their use.
-                    dest_id, r_cesid, r_ip, r_port, r_transport = naptr
-                
+                (naptr_rr, cb_args) = queued_data
+                dst_id = self.c2c.add_naptr_records(naptr_rr)                      # TBD: Use NAPTR records as trigger for re-connecting to a terminated endpoint, or a new transport-endpoint. 
+                                                                                    # If already connected, discard naptr records.
                 if self.ongoing_h2h_transactions < self.max_session_limit:
-                    asyncio.ensure_future(self.h2h_transaction_start(cb_args, dest_id))     # Exception within task shall be consumed locally
+                    asyncio.ensure_future(self.h2h_transaction_start(cb_args, dst_id))     # Enable "try, except" within task to locally consume a task-raised exception
                 else:
                     self._logger.info(" Number of Ongoing transactions have exceeded the C2C limit.")
                 
@@ -204,6 +202,7 @@ class oCES2CESLayer:
         self.pending_tasks              = []                     # oCESC2CLayer specific
         self.initiated_transports       = []
         self.connected_transports       = []
+        self.remote_ces_eps             = []                     # Registers ip, port, and protocol info of remote ep.
         self.transport_c2c_binding      = {}
         self.c2c_transaction_list       = []
         self.transport_rtt              = {}
@@ -215,6 +214,21 @@ class oCES2CESLayer:
         self._logger.info("Initiating outbound CES2CESLayer towards cesid '{}'".format(r_cesid) )
         self.initiate_cetp_transport(naptr_list)
 
+    def add_naptr_records(self, naptr_rrs):
+        try:
+            for naptr_rr in naptr_rrs:
+                dst_id, r_cesid, r_ip, r_port, r_transport = naptr_rr
+                if (r_ip, r_port, r_transport) not in self.remote_ces_eps:
+                    self._logger.info(" Initiating a new CETPTransport")
+                    if not self.remote_endpoint_malicious_history(r_cesid, r_ip):
+                        asyncio.ensure_future(self.initiate_transport(r_transport, r_ip, r_port))
+
+            return dst_id
+        except Exception as ex:
+            self._logger.warning("Exception in parsing the NAPTR records: '{}'".format(ex))
+            return None
+        
+        
     def _pre_process(self, msg):
         """ Checks whether inbound message conforms to CETP packet format. """
         try:
@@ -340,6 +354,9 @@ class oCES2CESLayer:
         else:
             self._logger.info(" CETP Transport is disconnected.")
             self.unregister_transport(transport_obj)
+            ip_addr, port = transport_obj.remotepeer
+            proto = transport_obj.proto
+            self.remote_ces_eps.remove((ip_addr, port, proto))
 
             if transport_obj in self.transport_c2c_binding:
                 c2c_transaction = self.get_c2c_transaction(transport_obj)
@@ -464,8 +481,8 @@ class oCES2CESLayer:
     def initiate_transport(self, proto, ip_addr, port):
         """ Description """
         if proto == 'tcp' or proto=="tls":
-            self._logger.debug(" Initiating CETPTransport towards cesid '{}' @({}, {})".format(self.r_cesid, ip_addr, port))
-            transport_instance = oCESTransportTCP(self, proto, self.r_cesid, self.ces_params, loop=self._loop)
+            self._logger.info(" Initiating CETPTransport towards cesid '{}' @({}, {})".format(self.r_cesid, ip_addr, port))
+            transport_instance = oCESTransportTCP(self, proto, self.r_cesid, self.ces_params, remote_addr=(ip_addr, port), loop=self._loop)
             
             if proto == "tls":
                 self.ces_certificate_path   = self.ces_params['certificate']
@@ -479,20 +496,24 @@ class oCES2CESLayer:
                 #sc.check_hostname = True
             
                 try:
+                    self.remote_ces_eps.append( (ip, port, proto) )
                     coro = self._loop.create_connection(lambda: transport_instance, ip_addr, port, ssl=sc)
-                    yield from asyncio.ensure_future(coro)
                     self.initiated_transports.append(transport_instance)
+                    yield from asyncio.ensure_future(coro)
                 except Exception as ex:
+                    self.remote_ces_eps.remove( (ip, port, proto) )
                     self._logger.info("Exception in {} transport towards {}: '{}'".format(proto, self.r_cesid, ex))                  # ex.errno == 111 -- means connection RST received
                     self.unregister_transport(transport_instance)
 
             elif proto == "tcp":
                 try:
+                    self.remote_ces_eps.append( (ip_addr, port, proto) )
                     coro = self._loop.create_connection(lambda: transport_instance, ip_addr, port)
+                    self.initiated_transports.append(transport_instance)
                     connect_task = asyncio.ensure_future(coro)
                     yield from connect_task
-                    self.initiated_transports.append(transport_instance)
                 except Exception as ex:
+                    self.remote_ces_eps.remove( (ip_addr, port, proto) )
                     self._logger.info("Exception in {} transport towards {}: '{}'".format(proto, self.r_cesid, ex))
                     self.unregister_transport(transport_instance)
 
@@ -500,7 +521,7 @@ class oCES2CESLayer:
 
 
 class oCESTransportTCP(asyncio.Protocol):
-    def __init__(self, c2c_layer, proto, r_cesid, ces_params, loop=None, name="oCESTransport"):
+    def __init__(self, c2c_layer, proto, r_cesid, ces_params, remote_addr=None, loop=None, name="oCESTransport"):
         self.ces_layer                  = c2c_layer
         self.proto                      = proto
         self.r_cesid                    = r_cesid
@@ -512,11 +533,11 @@ class oCESTransportTCP(asyncio.Protocol):
         self.transport                  = None
         self.is_connected               = False
         self.c2c_negotiation            = False
+        self.remotepeer                 = remote_addr
         self.data_buffer                = b''
         self.c2c_negotiation_threshold  = ces_params['max_c2c_negotiation_duration']           # In seconds
         self._logger.setLevel(LOGLEVEL_oCESTransportTCP)
         self._loop.call_later(self.c2c_negotiation_threshold, self.is_c2c_negotiated)
-        
 
     def connection_made(self, transport):
         current_time = self._loop.time()
@@ -531,7 +552,7 @@ class oCESTransportTCP(asyncio.Protocol):
             self._logger.info('Connected to {}'.format(self.peername))
             self.is_connected = True
             self.ces_layer.report_connectivity(self)                 # Reporting the connectivity to upper layer.
-
+            
     def report_c2c_negotiation(self, status):
         """ Used by the C2C layer to notify if the c2c-negotiation succeeded """
         self.c2c_negotiation = status
