@@ -166,10 +166,10 @@ class H2HTransaction(object):
 
 
 class H2HTransactionOutbound(H2HTransaction):
-    def __init__(self, loop=None, sstag=0, dstag=0, cb_args=None, host_ip="", src_id="", dst_id="", l_cesid="", r_cesid="", policy_mgr= None, host_register=None, \
-                 cetpstate_mgr=None, dns_callback=None, cetp_cleint=None, ces_params=None, direction="outbound", name="H2HTransactionOutbound", rtt_time=[]):
+    def __init__(self, loop=None, sstag=0, dstag=0, cb=None, host_ip="", src_id="", dst_id="", l_cesid="", r_cesid="", policy_mgr= None, host_register=None, \
+                 cetpstate_mgr=None, cetp_cleint=None, ces_params=None, direction="outbound", name="H2HTransactionOutbound", rtt_time=[]):
         self.sstag, self.dstag  = sstag, dstag
-        self.cb_args            = cb_args
+        self.cb                 = cb
         self.host_ip            = host_ip                   # IP of the sender host
         self.src_id             = src_id                    # FQDN
         self.dst_id             = dst_id
@@ -177,7 +177,6 @@ class H2HTransactionOutbound(H2HTransaction):
         self.r_cesid            = r_cesid
         self.policy_mgr         = policy_mgr
         self.cetpstate_mgr      = cetpstate_mgr
-        self.dns_cb             = dns_callback              # Function to execute DNS response
         self._loop              = loop
         self.cetp_client        = cetp_cleint
         self.ces_params         = ces_params
@@ -212,15 +211,18 @@ class H2HTransactionOutbound(H2HTransaction):
             self.sstag = self.generate_session_tags()
             self.load_policies(src_id = self.src_id)
             self.state_timeout = DEFAULT_STATE_TIMEOUT
+            print("4")
+            print(self.ces_params)
             if 'state_timeout' in self.ces_params:
                 self.state_timeout   = self.ces_params['state_timeout']
         
+            print("5")
             # Handler to unregister the incomplete CETP-C2C transaction
             self.h2h_handler = self._loop.call_later(self.state_timeout, self.handle_h2h)
             return True
         
-        except Exception as msg:
-            self._logger.info(" Exception in initiating the H2H session: {}".format(msg))
+        except Exception as ex:
+            self._logger.info(" Exception in initiating the H2H session: {}".format(ex))
             return False
 
     def send_cetp(self, cetp_packet):
@@ -439,8 +441,9 @@ class H2HTransactionOutbound(H2HTransaction):
     
     def _execute_dns_callback(self, resolution=True):
         """ Executes DNS callback towards host """
-        dns_q, addr = self.cb_args
-        self.dns_cb(dns_q, addr, success=resolution)
+        (cb_args, cb_func) = self.cb
+        dns_q, addr = cb_args
+        cb_func(dns_q, addr, success=resolution)
 
     def terminate_transaction(self):
         """ Sends a terminate TLV and closes the connected transport """
@@ -540,6 +543,7 @@ class H2HTransactionInbound(H2HTransaction):
                 return tlv
         return None
 
+    @asyncio.coroutine
     def start_cetp_processing(self, cetp_packet, transport):
         """ Processes the inbound CETP-packet for negotiating the H2H policies """
         #try:

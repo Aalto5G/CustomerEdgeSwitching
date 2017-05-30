@@ -53,16 +53,17 @@ class CETPManager:
     def process_outbound_cetp(self, r_cesid, naptr_list, dns_cb_func, cb_args):
         """ Gets/Creates the CETPH2H instance AND enqueues the NAPTR response for handling the H2H transactions """
         if self.has_client_endpoint(r_cesid):
+            print("Yes .. CETPH2H already exists")
             ep = self.get_client_endpoint(r_cesid)
         else:
             self._logger.info("Initiating a CETP-Endpoint towards cesid='{}': ".format(r_cesid))
             ep = self.create_client_endpoint(self.cesid, r_cesid, naptr_list, dns_cb_func)
-        ep.enqueue_h2h_requests_nowait(naptr_list, cb_args)                                # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
+        ep.enqueue_h2h_requests_nowait(naptr_list, (dns_cb_func, cb_args))                                # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
 
     def create_client_endpoint(self, l_cesid, r_cesid, naptr_list, dns_cb_func):
         """ Creates the local CETPClient for connecting to the remote CES-ID """
-        client_ep = ocetpLayering.CETPClient(l_cesid = l_cesid, r_cesid = r_cesid, cb_func=dns_cb_func, cetpstate_mgr= self.cetpstate_mgr, policy_mgr=self.policy_mgr, \
-                                             policy_client=None, loop=self._loop, ocetp_mgr=self, ces_params=self.ces_params, cetp_security=self.cetp_security, host_register=self.host_register)
+        client_ep = ocetpLayering.CETPH2H(l_cesid = l_cesid, r_cesid = r_cesid, cetpstate_mgr= self.cetpstate_mgr, policy_mgr=self.policy_mgr, \
+                                             policy_client=None, loop=self._loop, cetp_mgr=self, ces_params=self.ces_params, cetp_security=self.cetp_security, host_register=self.host_register)
         
         self.add_client_endpoint(r_cesid, client_ep)
         client_ep.create_cetp_c2c_layer(naptr_list)
@@ -74,6 +75,7 @@ class CETPManager:
 
     def add_client_endpoint(self, r_cesid, ep):
         self._cetp_endpoints[r_cesid] = ep
+        print(self._cetp_endpoints)
         
     def get_client_endpoint(self, r_cesid):
         """ Retrieves the CETPClient instance towards r_cesid """
@@ -114,7 +116,7 @@ class CETPManager:
         try:
             self._logger.info("Initiating CETPServer on {} protocol @ {}.{}".format(proto, server_ip, server_port))
             if proto == "tcp":
-                coro = self._loop.create_server(lambda: icetpLayering.iCESServerTransportTCP(self._loop, self.ces_params, c2c_mgr=self),\
+                coro = self._loop.create_server(lambda: icetpLayering.iCESServerTransportTCP(self._loop, self.ces_params, cetp_mgr=self),\
                                                  host=server_ip, port=server_port)             # Not utilizing any pre-created objects.
                 
             elif proto == "tls":
@@ -124,7 +126,7 @@ class CETPManager:
                 #sc.check_hostname = True
                 sc.load_verify_locations(self.ca_certificate_path)
                 coro = self._loop.create_server(lambda: icetpLayering.iCESServerTransportTLS(self._loop, self.ces_params, self.ces_certificate_path, self.ca_certificate_path, \
-                                                                                             c2c_mgr=self), host=server_ip, port=server_port, ssl=sc)
+                                                                                             cetp_mgr=self), host=server_ip, port=server_port, ssl=sc)
                 
             server = self._loop.run_until_complete(coro)            # Returns the server
             self.register_server_endpoint(server)
@@ -148,7 +150,7 @@ class CETPManager:
     
     def close_connected_remote_endpoint(self, r_cesid):
         """ Closes the connection from remote CETPClient """
-        self.ic2c_mgr.delete_c2c_layer(r_cesid)
+        self.delete_c2c_layer(r_cesid)
     
     def close_all_connected_remote_endpoints(self):
         """ Closes the connection from remote CETPClients """
@@ -156,8 +158,8 @@ class CETPManager:
             c2c_layer.handle_interrupt()
         
     # Asyncio.Task has a method to get list of all ongoing or pending tasks.
-    # C2C-Layer could be instantiated by the CETPManager, upon request from CETPClient.
-
+    # Functions from inbound CETPManager 
+    
     def remote_endpoint_malicious_history(self, ip_addr):
         return False
 
@@ -182,7 +184,7 @@ class CETPManager:
 
     def create_c2c_layer(self, r_cesid):
         """ Creates a new c2cLayer for cesid AND passes the negotiated ces-to-ces transaction """
-        ic2c_layer = icetpLayering.iCETPC2CLayer(r_cesid, self)
+        ic2c_layer = icetpLayering.iCETPC2CLayer(self._loop, r_cesid=r_cesid, cetp_mgr=self)
         self.register_c2c_layer(r_cesid, ic2c_layer)
         return ic2c_layer
 
@@ -235,17 +237,16 @@ class CETPManager:
             transport.send_cetp(cetp_resp)
         
         elif status==True:
-            self._logger.debug(" CES-to-CES policies negotiated -> Create CETPServer and C2CLayer")
+            self._logger.debug(" CES-to-CES policies negotiated")
             tmp_cetp = json.loads(cetp_resp)
             sstag, dstag = tmp_cetp['SST'], tmp_cetp['DST']
             stateful_transaction = self.cetpstate_mgr.get_established_transaction((sstag, dstag))
             r_cesid = stateful_transaction.r_cesid
             
             if not self.has_c2c_layer(r_cesid): 
+                self._logger.info("Create CETP-H2H and CETP-C2C layer")
                 c2c_layer = self.create_c2c_layer(r_cesid)
-                cetp_server = c2c_layer.create_cetp_server(r_cesid, self._loop, self.policy_mgr, self.cetpstate_mgr, self.cesid)    # Top layer to handle inbound H2H
-                self.add_client_endpoint(r_cesid, cetp_server)
-                
+                c2c_layer.create_cetp_server(r_cesid, self.policy_mgr, self.cetpstate_mgr, self.cesid, self.ces_params, self.cetp_security, self.host_register)    # Top layer to handle inbound H2H
             else:
                 c2c_layer = self.get_c2c_layer(r_cesid)                 # Gets existing c2c-layer for remote ’cesid’
             

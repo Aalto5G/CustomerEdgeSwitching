@@ -242,9 +242,7 @@ class oC2CTransaction(C2CTransaction):
 
     def load_policies(self, l_ceisd, proto, direction):
         """ Retrieves the policies stored in the Policy file"""
-        self.ces_policy, self.ces_policy_tmp  = None, None
-        self.ces_policy         = self.policy_mgr.get_ces_policy(proto=self.proto, direction=direction)
-        self.ces_policy_tmp     = self.policy_mgr.get_ces_policy(proto=self.proto, direction=direction)
+        self.ces_policy  = self.policy_mgr.get_ces_policy(proto=self.proto, direction=direction)
 
     def load_parameters(self):
         # Default values
@@ -416,7 +414,7 @@ class oC2CTransaction(C2CTransaction):
             if self.query_message:
                 if self._check_tlv(received_tlv, ope="query"):
                     self.r_ces_requirements.append(received_tlv)
-                    if self.ces_policy_tmp.has_available(received_tlv):
+                    if self.ces_policy.has_available(received_tlv):
                         ret_tlv = self._create_response_tlv(received_tlv)
                         if ret_tlv != None:
                             tlvs_to_send.append(ret_tlv)
@@ -759,7 +757,6 @@ class iC2CTransaction(C2CTransaction):
             self._logger.error(" Loading of CETP-C2C policies failed.")
             return False
         return True
-
 
     def process_c2c_transaction(self, cetp_packet):
         """ Processes the inbound CETP-packet for negotiating the CES-to-CES (CETP) policies """
