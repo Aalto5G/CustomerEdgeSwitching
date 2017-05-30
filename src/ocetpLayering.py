@@ -107,11 +107,6 @@ class CETPH2H:
                 self._logger.debug("Cleaning the pending tasks")
                 tsk.cancel()
         
-    def dns_nxdomain_callback(self, cb_args):
-        """ Executes callback upon H2H-Policy negotiation success or failure """
-        (query, addr) = cb_args
-        self.cb_func(query, addr, success=False)
-
     @asyncio.coroutine
     def h2h_transaction_start(self, cb, dst_id):
         (cb_args, cb_func) = cb
