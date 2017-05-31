@@ -90,16 +90,15 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "offer": [
-        { "ope":"info", "group": "id", "code": "fqdn" },
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"hostb1.demo.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
         { "ope":"info", "group": "control", "code": "caep" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn" },
+        { "ope":"response", "group": "id", "code": "fqdn", "value":"hostb1.demo.lte." },
         { "ope":"response", "group": "rloc", "code": "eth" },
         { "ope":"response", "group": "payload", "code": "eth" },
-        { "ope":"response", "group": "control", "code": "ack" },
         { "ope":"response", "group": "control", "code": "caep" }
     ]
     }
@@ -116,7 +115,47 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn" },
+        { "ope":"response", "group": "id", "code": "fqdn", "value":"hostb1.demo.lte." },
+        { "ope":"response", "group": "rloc", "code": "eth" },
+        { "ope":"response", "group": "payload", "code": "eth" },
+        { "ope":"response", "group": "control", "code": "caep" }
+    ]
+    }
+},
+{
+"type": "hostpolicy",
+"fqdn": "srv1.hostb1.demo.lte.",
+"direction": "inbound",
+"policy": {
+    "request": [
+        { "ope":"query", "group": "id", "code": "fqdn" },
+        { "ope":"query", "group": "rloc", "code": "eth" },
+        { "ope":"query", "group": "payload", "code": "eth" },
+        { "ope":"query", "group": "control", "code": "caep" }
+    ],
+    "available": [
+        { "ope":"response", "group": "id", "code": "fqdn", "value":"srv1.hostb1.demo.lte." },
+        { "ope":"response", "group": "rloc", "code": "eth" },
+        { "ope":"response", "group": "payload", "code": "eth" },
+        { "ope":"response", "group": "control", "code": "caep" },
+        { "ope":"response", "group": "control", "code": "ack" }
+    ]
+    }
+},
+{
+"type": "hostpolicy",
+"fqdn": "srv2.hostb1.demo.lte.",
+"direction": "inbound",
+"policy": {
+    "request": [
+        { "ope":"query", "group": "id", "code": "fqdn" },
+        { "ope":"query", "group": "rloc", "code": "eth" },
+        { "ope":"query", "group": "payload", "code": "eth" },
+        { "ope":"query", "group": "control", "code": "caep" },
+        { "ope":"query", "group": "control", "code": "ack" }
+    ],
+    "available": [
+        { "ope":"response", "group": "id", "code": "fqdn", "value":"srv2.hostb1.demo.lte." },
         { "ope":"response", "group": "rloc", "code": "eth" },
         { "ope":"response", "group": "payload", "code": "eth" },
         { "ope":"response", "group": "control", "code": "caep" }
@@ -135,13 +174,13 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "offer": [
-        { "ope":"info", "group": "id", "code": "fqdn" },
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"hostb2.demo.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
         { "ope":"info", "group": "control", "code": "caep" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn" },
+        { "ope":"response", "group": "id", "code": "fqdn", "value":"hostb2.demo.lte." },
         { "ope":"response", "group": "rloc", "code": "eth" },
         { "ope":"response", "group": "payload", "code": "eth" },
         { "ope":"response", "group": "control", "code": "ack" },
@@ -161,7 +200,7 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn" },
+        { "ope":"response", "group": "id", "code": "fqdn", "value":"hostb2.demo.lte." },
         { "ope":"response", "group": "rloc", "code": "eth" },
         { "ope":"response", "group": "payload", "code": "eth" },
         { "ope":"response", "group": "control", "code": "caep" }
@@ -180,13 +219,13 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "offer": [
-        { "ope":"info", "group": "id", "code": "fqdn" },
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"hostb3.demo.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
         { "ope":"info", "group": "control", "code": "caep" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn" },
+        { "ope":"response", "group": "id", "code": "fqdn", "value":"hostb3.demo.lte." },
         { "ope":"response", "group": "rloc", "code": "eth" },
         { "ope":"response", "group": "payload", "code": "eth" },
         { "ope":"response", "group": "control", "code": "ack" },
@@ -206,7 +245,7 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn" },
+        { "ope":"response", "group": "id", "code": "fqdn", "value":"hostb3.demo.lte." },
         { "ope":"response", "group": "rloc", "code": "eth" },
         { "ope":"response", "group": "payload", "code": "eth" },
         { "ope":"response", "group": "control", "code": "caep" }
@@ -281,7 +320,8 @@
         { "ope":"response", "group": "id", "code": "fqdn", "value":"raimo.aalto.lte." },
         { "ope":"response", "group": "rloc", "code": "eth" },
         { "ope":"response", "group": "payload", "code": "eth" },
-        { "ope":"response", "group": "control", "code": "caep", "value":"195.148.124.145" }
+        { "ope":"response", "group": "control", "code": "ack" },
+        { "ope":"response", "group": "control", "code": "caep", "value":"195.148.124.146" }
     ]
     }
 },

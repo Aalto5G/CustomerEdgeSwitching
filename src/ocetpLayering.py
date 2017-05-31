@@ -64,9 +64,9 @@ class CETPH2H:
         self.c2c = oCES2CESLayer(self._loop, naptr_list=naptr_list, cetp_client=self, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetpstate_mgr= self.cetpstate_mgr, \
                                  policy_mgr=self.policy_mgr, policy_client=self.policy_client, ces_params=self.ces_params, cetp_security=self.cetp_security)      # Shall c2clayer be obtained from CETPManager for 'r_cesid'? 
 
-    def enqueue_h2h_requests_nowait(self, naptr_records, cb_args):
+    def enqueue_h2h_requests_nowait(self, naptr_records, cb):
         """ This method enqueues the naptr responses triggered by private hosts. """
-        queue_msg = (naptr_records, cb_args)
+        queue_msg = (naptr_records, cb)
         self.client_q.put_nowait(queue_msg)               # Possible exception: If the queue is full, [It will simply drop the message (without waiting for space to be available in the queue]
 
     @asyncio.coroutine
@@ -81,11 +81,13 @@ class CETPH2H:
                 queued_data = yield from self.client_q.get()
                 (naptr_rr, cb) = queued_data
                 dst_id = self.c2c.add_naptr_records(naptr_rr)                      # TBD: Use NAPTR records as trigger for re-connecting to a terminated endpoint, or a new transport-endpoint. 
-                                                                                    # If already connected, discard naptr records.
-                if self.ongoing_h2h_transactions < self.max_session_limit:
-                    asyncio.ensure_future(self.h2h_transaction_start(cb, dst_id))     # Enable "try, except" within task to locally consume a task-raised exception
-                else:
-                    self._logger.info(" Number of Ongoing transactions have exceeded the C2C limit.")
+                                                                                   # If already connected, discard naptr records.
+                if dst_id !=None:
+                    print("dst_id: ", dst_id)
+                    if self.ongoing_h2h_transactions < self.max_session_limit:
+                        asyncio.ensure_future(self.h2h_transaction_start(cb, dst_id))     # Enable "try, except" within task to locally consume a task-raised exception
+                    else:
+                        self._logger.info(" Number of Ongoing transactions have exceeded the C2C limit.")
                 
                 self.client_q.task_done()
 
@@ -100,7 +102,7 @@ class CETPH2H:
             self.c2c_negotiated  = status
             t1=asyncio.ensure_future(self.consume_h2h_requests())                       # Task for consuming naptr-response records triggered by private hosts
             self.pending_tasks.append(t1)
-    
+            
     def close_pending_tasks(self):
         for tsk in self.pending_tasks:
             if not tsk.cancelled():
@@ -109,7 +111,7 @@ class CETPH2H:
         
     @asyncio.coroutine
     def h2h_transaction_start(self, cb, dst_id):
-        (cb_args, cb_func) = cb
+        (cb_func, cb_args) = cb
         dns_q, addr = cb_args
         ip_addr, port = addr
         h2h = H2HTransaction.H2HTransactionOutbound(loop=self._loop, cb=cb, host_ip=ip_addr, src_id="", dst_id=dst_id, l_cesid=self.l_cesid, r_cesid=self.r_cesid, \
@@ -236,13 +238,11 @@ class oCES2CESLayer:
                 if (r_ip, r_port, r_transport) not in self.remote_ces_eps:
                     self._logger.info(" Initiating a new CETPTransport")
                     if not self.remote_endpoint_malicious_history(r_cesid, r_ip):
-                        asyncio.ensure_future(self.initiate_transport(r_transport, r_ip, r_port))
-
+                        asyncio.ensure_future(self.initiate_transport(r_transport, r_ip, r_port, delay=0.1))        # Delay parameter prevents H2H negotiation from suffering delay due to triggering of transport/C2C-negotiation
             return dst_id
         except Exception as ex:
             self._logger.warning("Exception in parsing the NAPTR records: '{}'".format(ex))
             return None
-        
         
     def _pre_process(self, msg):
         """ Checks whether inbound message conforms to CETP packet format. """
@@ -493,11 +493,12 @@ class oCES2CESLayer:
                 asyncio.ensure_future(self.initiate_transport(proto, ip_addr, port))
 
     @asyncio.coroutine
-    def initiate_transport(self, proto, ip_addr, port):
+    def initiate_transport(self, proto, ip_addr, port, delay=0):
         """ Description """
         if proto == 'tcp' or proto=="tls":
             self._logger.info(" Initiating CETPTransport towards cesid '{}' @({}, {})".format(self.r_cesid, ip_addr, port))
             transport_instance = oCESTransportTCP(self, proto, self.r_cesid, self.ces_params, remote_addr=(ip_addr, port), loop=self._loop)
+            yield from asyncio.sleep(delay)
             
             if proto == "tls":
                 self.ces_certificate_path   = self.ces_params['certificate']
@@ -509,6 +510,7 @@ class oCES2CESLayer:
                 sc.load_cert_chain(self.ces_certificate_path, self.ces_privatekey_path)
                 sc.load_verify_locations(self.ca_certificate_path)
                 #sc.check_hostname = True
+                
             
                 try:
                     self.remote_ces_eps.append( (ip, port, proto) )

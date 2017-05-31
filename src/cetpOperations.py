@@ -684,19 +684,30 @@ def response_id(**kwargs):
     return tlv
 
 def verify_id(**kwargs):
-    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    group, code, cmp, ext, value = policy.get_tlv_details(tlv)
-    
-    if cmp =="NotAvailable":
+    try:
+        print("In verification")
+        tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+        group, code, cmp, ext, value = policy.get_tlv_details(tlv)
+        
+        if cmp =="NotAvailable":    return False
+        inbound_id = value
+        group, code, cmp, ext, allowed_value = policy.get_policy_to_enforce(tlv)
+        print(allowed_value)
+        print(inbound_id)
+        
+        if allowed_value==None:
+            return True
+        
+        if len(allowed_value)==0:
+            return True
+        else:
+            if inbound_id in allowed_value:
+                return True
+        
         return False
-    
-    inbound_id = value
-    group, code, cmp, ext, allowed_value = policy.get_policy_to_enforce(tlv)
-    #print(inbound_id in allowed_value)
-    
-    if inbound_id in allowed_value:
-        return True
-    else:
+        
+    except Exception as ex:
+        print(ex)
         return False
 
 def send_ctrl_dstep(**kwargs):

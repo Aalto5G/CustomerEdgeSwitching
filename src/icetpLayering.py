@@ -59,9 +59,8 @@ class iCETPC2CLayer:
             
     def create_cetp_server(self, r_cesid, policy_mgr, cetpstate_mgr, l_cesid, ces_params, cetp_security, host_reg):
         """ Creating the upper layer to handle CETPTransport """
-        self.cetp_server = ocetpLayering.CETPH2H(c2c_layer=self, l_cesid=l_cesid, r_cesid=r_cesid, policy_mgr=policy_mgr, \
-                                                 cetpstate_mgr=cetpstate_mgr, c2c_negotiated=True, host_register=host_reg, \
-                                                 loop=self._loop, cetp_mgr=self.cetp_mgr, ces_params=ces_params, cetp_security=cetp_security)
+        self.cetp_server = ocetpLayering.CETPH2H(c2c_layer=self, l_cesid=l_cesid, r_cesid=r_cesid, policy_mgr=policy_mgr, cetpstate_mgr=cetpstate_mgr, c2c_negotiated=True, \
+                                                 host_register=host_reg, loop=self._loop, cetp_mgr=self.cetp_mgr, ces_params=ces_params, cetp_security=cetp_security)
         
         self.cetp_mgr.add_client_endpoint(r_cesid, self.cetp_server)
         t1=asyncio.ensure_future(self.cetp_server.consume_h2h_requests())                       # Task for consuming DNS NAPTR-responses triggered by private hosts
@@ -81,21 +80,19 @@ class iCETPC2CLayer:
         self.cancel_pending_tasks()
         
     def add_naptr_records(self, naptr_rrs):
-        return
-        """
         try:
             for naptr_rr in naptr_rrs:
                 dst_id, r_cesid, r_ip, r_port, r_transport = naptr_rr                   # Assumption: All NAPTRs point towards one 'r_cesid'.    (Destination domain is reachable via one CES only)
+                """
                 if (r_ip, r_port, r_transport) not in self.remote_ces_eps:
                     self._logger.info(" Initiating a new CETPTransport")
                     if not self.remote_endpoint_malicious_history(r_cesid, r_ip):
                         asyncio.ensure_future(self.initiate_transport(r_transport, r_ip, r_port))
-
+                """
             return dst_id
         except Exception as ex:
             self._logger.warning("Exception in parsing the NAPTR records: '{}'".format(ex))
             return None
-        """
 
     
     def report_connection_closure(self, transport):
@@ -191,7 +188,7 @@ class iCETPC2CLayer:
             inbound_sstag, inbound_dstag, ver = cetp_msg['SST'], cetp_msg['DST'], cetp_msg['VER']
             sstag, dstag    = inbound_dstag, inbound_sstag
             
-            if ( (sstag==0) and (dstag ==0)) or (sstag < 0) or (dstag < 0) or (inbound_sstag == 0):
+            if ( (sstag==0) and (dstag ==0)) or (sstag < 0) or (dstag < 0):
                 self._logger.info(" Session tag values are not acceptable")
                 return False
             

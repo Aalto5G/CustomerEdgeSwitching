@@ -211,18 +211,16 @@ class H2HTransactionOutbound(H2HTransaction):
             self.sstag = self.generate_session_tags()
             self.load_policies(src_id = self.src_id)
             self.state_timeout = DEFAULT_STATE_TIMEOUT
-            print("4")
-            print(self.ces_params)
+            
             if 'state_timeout' in self.ces_params:
                 self.state_timeout   = self.ces_params['state_timeout']
         
-            print("5")
             # Handler to unregister the incomplete CETP-C2C transaction
             self.h2h_handler = self._loop.call_later(self.state_timeout, self.handle_h2h)
             return True
         
         except Exception as ex:
-            self._logger.info(" Exception in initiating the H2H session: {}".format(ex))
+            self._logger.info(" Exception in initiating the H2H session: '{}'".format(ex))
             return False
 
     def send_cetp(self, cetp_packet):
@@ -232,6 +230,7 @@ class H2HTransactionOutbound(H2HTransaction):
     def start_cetp_processing(self):
         """ Returns CETP message containing Policy Offers & Request towards remote-host """
         #try:
+        print("start_cetp_processing")
         if not self._initialize():
             self._logger.debug(" Failure in initiating the CES-to-CES session.")
             return None
@@ -441,7 +440,7 @@ class H2HTransactionOutbound(H2HTransaction):
     
     def _execute_dns_callback(self, resolution=True):
         """ Executes DNS callback towards host """
-        (cb_args, cb_func) = self.cb
+        (cb_func, cb_args) = self.cb
         dns_q, addr = cb_args
         cb_func(dns_q, addr, success=resolution)
 
@@ -598,6 +597,7 @@ class H2HTransactionInbound(H2HTransaction):
                             break
                 else:
                     self._logger.debug("Non-requested TLV {} is received: ".format(received_tlv))
+                    pass
 
     
         if error:

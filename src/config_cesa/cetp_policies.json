@@ -90,15 +90,17 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "offer": [
-        { "ope":"info", "group": "id", "code": "fqdn" },
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"hosta1.demo.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
         { "ope":"info", "group": "control", "code": "caep" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn" },
+        { "ope":"response", "group": "id", "code": "fqdn", "value":"hosta1.demo.lte." },
         { "ope":"response", "group": "rloc", "code": "eth" },
-        { "ope":"response", "group": "payload", "code": "eth" }
+        { "ope":"response", "group": "payload", "code": "eth" },
+        { "ope":"response", "group": "control", "code": "caep" },
+        { "ope":"response", "group": "control", "code": "ack" }
     ]
     }
 },
@@ -114,7 +116,47 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn" },
+        { "ope":"response", "group": "id", "code": "fqdn", "value":"hosta1.demo.lte." },
+        { "ope":"response", "group": "rloc", "code": "eth" },
+        { "ope":"response", "group": "payload", "code": "eth" },
+        { "ope":"response", "group": "control", "code": "caep" }
+    ]
+    }
+},
+{
+"type": "hostpolicy",
+"fqdn": "srv1.hosta1.demo.lte.",
+"direction": "inbound",
+"policy": {
+    "request": [
+        { "ope":"query", "group": "id", "code": "fqdn"},
+        { "ope":"query", "group": "rloc", "code": "eth" },
+        { "ope":"query", "group": "payload", "code": "eth" },
+        { "ope":"query", "group": "control", "code": "caep" }
+    ],
+    "available": [
+        { "ope":"response", "group": "id", "code": "fqdn", "value":"srv1.hosta1.demo.lte." },
+        { "ope":"response", "group": "rloc", "code": "eth" },
+        { "ope":"response", "group": "payload", "code": "eth" },
+        { "ope":"response", "group": "control", "code": "caep" },
+        { "ope":"response", "group": "control", "code": "ack" }
+    ]
+    }
+},
+{
+"type": "hostpolicy",
+"fqdn": "srv2.hosta1.demo.lte.",
+"direction": "inbound",
+"policy": {
+    "request": [
+        { "ope":"query", "group": "id", "code": "fqdn"},
+        { "ope":"query", "group": "rloc", "code": "eth" },
+        { "ope":"query", "group": "payload", "code": "eth" },
+        { "ope":"query", "group": "control", "code": "caep" },
+        { "ope":"query", "group": "control", "code": "ack" }
+    ],
+    "available": [
+        { "ope":"response", "group": "id", "code": "fqdn", "value":"srv2.hosta1.demo.lte."  },
         { "ope":"response", "group": "rloc", "code": "eth" },
         { "ope":"response", "group": "payload", "code": "eth" },
         { "ope":"response", "group": "control", "code": "caep" }
@@ -133,13 +175,13 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "offer": [
-        { "ope":"info", "group": "id", "code": "fqdn" },
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"hosta2.demo.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
         { "ope":"info", "group": "control", "code": "caep" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn" },
+        { "ope":"response", "group": "id", "code": "fqdn", "value":"hosta2.demo.lte." },
         { "ope":"response", "group": "rloc", "code": "eth" },
         { "ope":"response", "group": "payload", "code": "eth" },
         { "ope":"response", "group": "control", "code": "ack" },
@@ -159,7 +201,7 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn" },
+        { "ope":"response", "group": "id", "code": "fqdn", "value":"hosta2.demo.lte." },
         { "ope":"response", "group": "rloc", "code": "eth" },
         { "ope":"response", "group": "payload", "code": "eth" },
         { "ope":"response", "group": "control", "code": "caep" }
@@ -178,13 +220,13 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "offer": [
-        { "ope":"info", "group": "id", "code": "fqdn" },
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"hosta3.demo.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
         { "ope":"info", "group": "control", "code": "caep" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn" },
+        { "ope":"response", "group": "id", "code": "fqdn", "value":"hosta3.demo.lte." },
         { "ope":"response", "group": "rloc", "code": "eth" },
         { "ope":"response", "group": "payload", "code": "eth" },
         { "ope":"response", "group": "control", "code": "ack" },
@@ -204,7 +246,7 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn" },
+        { "ope":"response", "group": "id", "code": "fqdn", "value":"hosta3.demo.lte." },
         { "ope":"response", "group": "rloc", "code": "eth" },
         { "ope":"response", "group": "payload", "code": "eth" },
         { "ope":"response", "group": "control", "code": "caep" }
@@ -220,6 +262,7 @@
         { "ope":"query", "group": "id", "code": "fqdn", "value":["raimo.aalto.lte."] },
         { "ope":"query", "group": "rloc", "code": "eth" },
         { "ope":"query", "group": "payload", "code": "eth" },
+	{ "ope":"query", "cmp": "optional", "group": "control", "code": "ack" },
         { "ope":"query", "group": "control", "code": "caep", "value":["195.148.124.145"] }
     ],
     "offer": [
@@ -232,7 +275,7 @@
         { "ope":"response", "group": "id", "code": "fqdn", "value":"son1.raimo.aalto.lte." },
         { "ope":"response", "group": "rloc", "code": "eth" },
         { "ope":"response", "group": "payload", "code": "eth" },
-        { "ope":"response", "group": "control", "code": "ack" },
+	{ "ope":"response", "group": "control", "code": "ack" },
         { "ope":"response", "group": "control", "code": "caep", "value":"195.148.124.145" }
     ]
     }

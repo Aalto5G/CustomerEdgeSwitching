@@ -53,7 +53,6 @@ class CETPManager:
     def process_outbound_cetp(self, r_cesid, naptr_list, dns_cb_func, cb_args):
         """ Gets/Creates the CETPH2H instance AND enqueues the NAPTR response for handling the H2H transactions """
         if self.has_client_endpoint(r_cesid):
-            print("Yes .. CETPH2H already exists")
             ep = self.get_client_endpoint(r_cesid)
         else:
             self._logger.info("Initiating a CETP-Endpoint towards cesid='{}': ".format(r_cesid))
@@ -75,7 +74,6 @@ class CETPManager:
 
     def add_client_endpoint(self, r_cesid, ep):
         self._cetp_endpoints[r_cesid] = ep
-        print(self._cetp_endpoints)
         
     def get_client_endpoint(self, r_cesid):
         """ Retrieves the CETPClient instance towards r_cesid """
@@ -148,15 +146,6 @@ class CETPManager:
         for cesid, client_ep in self._cetp_endpoints.items():
             client_ep.handle_interrupt()
     
-    def close_connected_remote_endpoint(self, r_cesid):
-        """ Closes the connection from remote CETPClient """
-        self.delete_c2c_layer(r_cesid)
-    
-    def close_all_connected_remote_endpoints(self):
-        """ Closes the connection from remote CETPClients """
-        for c2c_layer in self.get_all_c2c_layers():
-            c2c_layer.handle_interrupt()
-        
     # Asyncio.Task has a method to get list of all ongoing or pending tasks.
     # Functions from inbound CETPManager 
     

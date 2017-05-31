@@ -32,7 +32,8 @@ class HostRegister(object):
         
     def load_ip_fqdn_mapping(self):
         """ Acting as a static Identity assignment server to IP addresses """
-        self.ip_fqdn_map = {"127.0.0.1":"son1.raimo.aalto.lte.", "10.0.2.15":"son1.raimo.aalto.lte.", "10.0.2.16":"son2.raimo.aalto.lte."}
+        #self.ip_fqdn_map = {"127.0.0.1":"son1.raimo.aalto.lte.", "10.0.3.118":"son1.raimo.aalto.lte.", "10.0.3.219":"raimo.aalto.lte.", "10.0.2.15":"son1.raimo.aalto.lte.", "10.0.2.16":"son2.raimo.aalto.lte."}
+        self.ip_fqdn_map = {"127.0.0.1":"son1.raimo.aalto.lte.", "10.0.3.118":"hosta1.demo.lte.", "10.0.3.219":"hostb1.demo.lte.", "10.0.3.189":"son1.raimo.aalto.lte.", "10.0.3.53":"raimo.aalto.lte."}
  
     def ip_to_fqdn_mapping(self, l_ip):
         if l_ip in self.ip_fqdn_map:
@@ -113,7 +114,7 @@ class PolicyManager(object):
             return policy
             #return copy.deepcopy(policy)
         except:
-            raise Exception("Destination has no {} policy.".format(direction))
+            raise Exception("Host '{}' has no '{}' policy.".format(host_id, direction))
 
     def load_CES_policy(self):
         for policy in self._config:
