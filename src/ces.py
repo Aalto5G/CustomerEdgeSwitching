@@ -12,8 +12,8 @@ import yaml
 import json
 import cesdns
 import cetpManager
-import ocetpLayering
-import icetpLayering
+import CETPH2H
+import CETPC2C
 import functools
 import PolicyManager
 

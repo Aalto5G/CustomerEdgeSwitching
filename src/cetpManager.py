@@ -14,8 +14,9 @@ import cetpManager
 import CETP
 import C2CTransaction
 import H2HTransaction
-import ocetpLayering
-import icetpLayering
+import CETPH2H
+import CETPC2C
+import CETPTransports
 import PolicyManager
 import CETPSecurity
 
@@ -61,8 +62,8 @@ class CETPManager:
 
     def create_client_endpoint(self, l_cesid, r_cesid, naptr_list, dns_cb_func):
         """ Creates the local CETPClient for connecting to the remote CES-ID """
-        client_ep = ocetpLayering.CETPH2H(l_cesid = l_cesid, r_cesid = r_cesid, cetpstate_mgr= self.cetpstate_mgr, policy_mgr=self.policy_mgr, \
-                                             policy_client=None, loop=self._loop, cetp_mgr=self, ces_params=self.ces_params, cetp_security=self.cetp_security, host_register=self.host_register)
+        client_ep = CETPH2H.CETPH2H(l_cesid = l_cesid, r_cesid = r_cesid, cetpstate_mgr= self.cetpstate_mgr, policy_mgr=self.policy_mgr, policy_client=None, \
+                                    loop=self._loop, cetp_mgr=self, ces_params=self.ces_params, cetp_security=self.cetp_security, host_register=self.host_register)
         
         self.add_client_endpoint(r_cesid, client_ep)
         client_ep.create_cetp_c2c_layer(naptr_list)
@@ -114,7 +115,7 @@ class CETPManager:
         try:
             self._logger.info("Initiating CETPServer on {} protocol @ {}.{}".format(proto, server_ip, server_port))
             if proto == "tcp":
-                coro = self._loop.create_server(lambda: icetpLayering.iCESServerTransportTCP(self._loop, self.ces_params, cetp_mgr=self),\
+                coro = self._loop.create_server(lambda: CETPTransports.iCESServerTCPTransport(self._loop, self.ces_params, cetp_mgr=self),\
                                                  host=server_ip, port=server_port)             # Not utilizing any pre-created objects.
                 
             elif proto == "tls":
@@ -123,7 +124,7 @@ class CETPManager:
                 sc.load_cert_chain(self.ces_certificate_path, self.ces_privatekey_path)
                 #sc.check_hostname = True
                 sc.load_verify_locations(self.ca_certificate_path)
-                coro = self._loop.create_server(lambda: icetpLayering.iCESServerTransportTLS(self._loop, self.ces_params, self.ces_certificate_path, self.ca_certificate_path, \
+                coro = self._loop.create_server(lambda: CETPTransports.iCESServerTLSTransport(self._loop, self.ces_params, self.ces_certificate_path, self.ca_certificate_path, \
                                                                                              cetp_mgr=self), host=server_ip, port=server_port, ssl=sc)
                 
             server = self._loop.run_until_complete(coro)            # Returns the server
@@ -173,7 +174,7 @@ class CETPManager:
 
     def create_c2c_layer(self, r_cesid):
         """ Creates a new c2cLayer for cesid AND passes the negotiated ces-to-ces transaction """
-        ic2c_layer = icetpLayering.iCETPC2CLayer(self._loop, r_cesid=r_cesid, cetp_mgr=self)
+        ic2c_layer = CETPC2C.iCETPC2CLayer(self._loop, r_cesid=r_cesid, cetp_mgr=self)
         self.register_c2c_layer(r_cesid, ic2c_layer)
         return ic2c_layer
 

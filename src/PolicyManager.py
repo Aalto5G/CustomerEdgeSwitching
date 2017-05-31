@@ -13,8 +13,8 @@ import ssl
 import cetpManager
 import C2CTransaction
 import H2HTransaction
-import ocetpLayering
-import icetpLayering
+import CETPH2H
+import CETPC2C
 import copy
 
 

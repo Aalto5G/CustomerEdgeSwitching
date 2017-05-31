@@ -6,8 +6,8 @@ import sys
 import time
 import traceback
 import cetpManager
-import ocetpLayering
-import icetpLayering
+import CETPH2H
+import CETPC2C
 
 import dns
 import dns.message

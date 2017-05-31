@@ -13,8 +13,8 @@ import ssl
 import cetpManager
 import C2CTransaction
 import H2HTransaction
-import icetpLayering
-import ocetpLayering
+import CETPH2H
+import CETPC2C
 import string
 import sys, os
 sys.path.append(os.path.join(os.path.dirname('hashcash.py'), 'lib'))
