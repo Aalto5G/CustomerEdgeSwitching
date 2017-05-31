@@ -88,7 +88,7 @@ class CustomerEdgeSwitchv2(object):
             self.cetp_mgr.close_server_endpoints()
             
             self._logger.info(" Closing the CETPEndpoints with remote CES nodes.")
-            self.cetp_mgr.close_all_local_client_endpoints()
+            self.cetp_mgr.close_all_cetp_endpoints()
             yield from asyncio.sleep(0.2)                             # For graceful execution of Asyncio task.cancel() operations  # Could be repalced with asyncio.wait_for(*tasks)?
             
         except:

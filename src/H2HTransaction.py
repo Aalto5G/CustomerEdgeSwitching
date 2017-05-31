@@ -20,14 +20,9 @@ import copy
 LOGLEVEL_H2HTransaction         = logging.INFO
 LOGLEVEL_H2HTransactionOutbound = logging.INFO
 LOGLEVEL_H2HTransactionInbound  = logging.INFO
-LOGLEVEL_oC2CTransaction        = logging.INFO
-LOGLEVEL_iC2CTransaction        = logging.INFO
 
-KEY_ONGOING                     = 1
-KEY_ESTABLISHED                 = 2
 NEGOTIATION_RTT_THRESHOLD       = 3
 DEFAULT_STATE_TIMEOUT           = 31
-
 
 
 class H2HTransaction(object):
@@ -230,7 +225,6 @@ class H2HTransactionOutbound(H2HTransaction):
     def start_cetp_processing(self):
         """ Returns CETP message containing Policy Offers & Request towards remote-host """
         #try:
-        print("start_cetp_processing")
         if not self._initialize():
             self._logger.debug(" Failure in initiating the CES-to-CES session.")
             return None

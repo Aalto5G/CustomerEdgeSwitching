@@ -27,15 +27,15 @@
         { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"}
     ],
     "available": [
-        { "ope":"response", "group": "ces", "code": "cesid", "value":"cesa.demo.lte."},
-        { "ope":"response", "group": "ces", "code": "pow"},
-        { "ope":"response", "group": "ces", "code": "caces", "value":"195.148.124.145"},
-        { "ope":"response", "group": "ces", "code": "fw_version", "value":"0.1"},
-        { "ope":"response", "group": "ces", "code": "ttl", "value":"7200"},
-        { "ope":"response", "group": "ces", "code": "keepalive_cycle", "value":"60"},
-        { "ope":"response", "group": "ces", "code": "keepalive", "value":""},
-        { "ope":"response", "group": "ces", "code": "session_limit", "value": "200"},
-        { "ope":"response", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"}
+        { "ope":"info", "group": "ces", "code": "cesid", "value":"cesa.demo.lte."},
+        { "ope":"info", "group": "ces", "code": "pow"},
+        { "ope":"info", "group": "ces", "code": "caces", "value":"195.148.124.145"},
+        { "ope":"info", "group": "ces", "code": "fw_version", "value":"0.1"},
+        { "ope":"info", "group": "ces", "code": "ttl", "value":"7200"},
+        { "ope":"info", "group": "ces", "code": "keepalive_cycle", "value":"60"},
+        { "ope":"info", "group": "ces", "code": "keepalive", "value":""},
+        { "ope":"info", "group": "ces", "code": "session_limit", "value": "200"},
+        { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"}
     ]                
     }
 },
@@ -66,15 +66,15 @@
         { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"}
     ],
     "available": [
-        { "ope":"response", "group": "ces", "code": "cesid", "value":"cesa.demo.lte."},
-        { "ope":"response", "group": "ces", "code": "pow"},
-        { "ope":"response", "group": "ces", "code": "caces", "value":"195.148.124.145"},
-        { "ope":"response", "group": "ces", "code": "fw_version", "value":"0.1"},
-        { "ope":"response", "group": "ces", "code": "ttl", "value":"7200"},
-        { "ope":"response", "group": "ces", "code": "keepalive_cycle", "value":"60"},
-        { "ope":"response", "group": "ces", "code": "keepalive", "value":""},
-        { "ope":"response", "group": "ces", "code": "session_limit", "value": "200"},
-        { "ope":"response", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"}
+        { "ope":"info", "group": "ces", "code": "cesid", "value":"cesa.demo.lte."},
+        { "ope":"info", "group": "ces", "code": "pow"},
+        { "ope":"info", "group": "ces", "code": "caces", "value":"195.148.124.145"},
+        { "ope":"info", "group": "ces", "code": "fw_version", "value":"0.1"},
+        { "ope":"info", "group": "ces", "code": "ttl", "value":"7200"},
+        { "ope":"info", "group": "ces", "code": "keepalive_cycle", "value":"60"},
+        { "ope":"info", "group": "ces", "code": "keepalive", "value":""},
+        { "ope":"info", "group": "ces", "code": "session_limit", "value": "200"},
+        { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"}
     ]                
     }
 },
@@ -96,11 +96,11 @@
         { "ope":"info", "group": "control", "code": "caep" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn", "value":"hosta1.demo.lte." },
-        { "ope":"response", "group": "rloc", "code": "eth" },
-        { "ope":"response", "group": "payload", "code": "eth" },
-        { "ope":"response", "group": "control", "code": "caep" },
-        { "ope":"response", "group": "control", "code": "ack" }
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"hosta1.demo.lte." },
+        { "ope":"info", "group": "rloc", "code": "eth" },
+        { "ope":"info", "group": "payload", "code": "eth" },
+        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145"  },
+        { "ope":"info", "group": "control", "code": "ack" }
     ]
     }
 },
@@ -116,10 +116,10 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn", "value":"hosta1.demo.lte." },
-        { "ope":"response", "group": "rloc", "code": "eth" },
-        { "ope":"response", "group": "payload", "code": "eth" },
-        { "ope":"response", "group": "control", "code": "caep" }
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"hosta1.demo.lte." },
+        { "ope":"info", "group": "rloc", "code": "eth" },
+        { "ope":"info", "group": "payload", "code": "eth" },
+        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" }
     ]
     }
 },
@@ -135,11 +135,11 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn", "value":"srv1.hosta1.demo.lte." },
-        { "ope":"response", "group": "rloc", "code": "eth" },
-        { "ope":"response", "group": "payload", "code": "eth" },
-        { "ope":"response", "group": "control", "code": "caep" },
-        { "ope":"response", "group": "control", "code": "ack" }
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"srv1.hosta1.demo.lte." },
+        { "ope":"info", "group": "rloc", "code": "eth" },
+        { "ope":"info", "group": "payload", "code": "eth" },
+        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" },
+        { "ope":"info", "group": "control", "code": "ack" }
     ]
     }
 },
@@ -156,10 +156,10 @@
         { "ope":"query", "group": "control", "code": "ack" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn", "value":"srv2.hosta1.demo.lte."  },
-        { "ope":"response", "group": "rloc", "code": "eth" },
-        { "ope":"response", "group": "payload", "code": "eth" },
-        { "ope":"response", "group": "control", "code": "caep" }
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"srv2.hosta1.demo.lte."  },
+        { "ope":"info", "group": "rloc", "code": "eth" },
+        { "ope":"info", "group": "payload", "code": "eth" },
+        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" }
     ]
     }
 },
@@ -178,14 +178,14 @@
         { "ope":"info", "group": "id", "code": "fqdn", "value":"hosta2.demo.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
-        { "ope":"info", "group": "control", "code": "caep" }
+        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn", "value":"hosta2.demo.lte." },
-        { "ope":"response", "group": "rloc", "code": "eth" },
-        { "ope":"response", "group": "payload", "code": "eth" },
-        { "ope":"response", "group": "control", "code": "ack" },
-        { "ope":"response", "group": "control", "code": "caep" }
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"hosta2.demo.lte." },
+        { "ope":"info", "group": "rloc", "code": "eth" },
+        { "ope":"info", "group": "payload", "code": "eth" },
+        { "ope":"info", "group": "control", "code": "ack" },
+        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" }
     ]
     }
 },
@@ -201,10 +201,10 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn", "value":"hosta2.demo.lte." },
-        { "ope":"response", "group": "rloc", "code": "eth" },
-        { "ope":"response", "group": "payload", "code": "eth" },
-        { "ope":"response", "group": "control", "code": "caep" }
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"hosta2.demo.lte." },
+        { "ope":"info", "group": "rloc", "code": "eth" },
+        { "ope":"info", "group": "payload", "code": "eth" },
+        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" }
     ]
     }
 },
@@ -223,14 +223,14 @@
         { "ope":"info", "group": "id", "code": "fqdn", "value":"hosta3.demo.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
-        { "ope":"info", "group": "control", "code": "caep" }
+        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn", "value":"hosta3.demo.lte." },
-        { "ope":"response", "group": "rloc", "code": "eth" },
-        { "ope":"response", "group": "payload", "code": "eth" },
-        { "ope":"response", "group": "control", "code": "ack" },
-        { "ope":"response", "group": "control", "code": "caep" }
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"hosta3.demo.lte." },
+        { "ope":"info", "group": "rloc", "code": "eth" },
+        { "ope":"info", "group": "payload", "code": "eth" },
+        { "ope":"info", "group": "control", "code": "ack" },
+        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" }
     ]
     }
 },
@@ -246,10 +246,10 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn", "value":"hosta3.demo.lte." },
-        { "ope":"response", "group": "rloc", "code": "eth" },
-        { "ope":"response", "group": "payload", "code": "eth" },
-        { "ope":"response", "group": "control", "code": "caep" }
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"hosta3.demo.lte." },
+        { "ope":"info", "group": "rloc", "code": "eth" },
+        { "ope":"info", "group": "payload", "code": "eth" },
+        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" }
     ]
     }
 },
@@ -272,11 +272,11 @@
         { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn", "value":"son1.raimo.aalto.lte." },
-        { "ope":"response", "group": "rloc", "code": "eth" },
-        { "ope":"response", "group": "payload", "code": "eth" },
-	{ "ope":"response", "group": "control", "code": "ack" },
-        { "ope":"response", "group": "control", "code": "caep", "value":"195.148.124.145" }
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"son1.raimo.aalto.lte." },
+        { "ope":"info", "group": "rloc", "code": "eth" },
+        { "ope":"info", "group": "payload", "code": "eth" },
+	{ "ope":"info", "group": "control", "code": "ack" },
+        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" }
     ]
     }
 },
@@ -292,11 +292,11 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn" },
-        { "ope":"response", "group": "rloc", "code": "eth" },
-        { "ope":"response", "group": "payload", "code": "eth" },
-        { "ope":"response", "group": "control", "code": "caep" },
-        { "ope":"response", "group": "control", "code": "ack" }
+        { "ope":"info", "group": "id", "code": "fqdn" },
+        { "ope":"info", "group": "rloc", "code": "eth" },
+        { "ope":"info", "group": "payload", "code": "eth" },
+        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" },
+        { "ope":"info", "group": "control", "code": "ack" }
     ]
     }
 },
@@ -318,11 +318,11 @@
         { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" }
     ],
     "available": [
-        { "ope":"response", "group": "id", "code": "fqdn", "value":"special.aalto.lte." },
-        { "ope":"response", "group": "rloc", "code": "eth" },
-        { "ope":"response", "group": "payload", "code": "eth" },
-        { "ope":"response", "group": "control", "code": "ack" },
-        { "ope":"response", "group": "control", "code": "caep", "value":"195.148.124.145" }
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"special.aalto.lte." },
+        { "ope":"info", "group": "rloc", "code": "eth" },
+        { "ope":"info", "group": "payload", "code": "eth" },
+        { "ope":"info", "group": "control", "code": "ack" },
+        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" }
 
     ]
     }

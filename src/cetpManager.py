@@ -136,16 +136,16 @@ class CETPManager:
             self._logger.warning(ex)
 
 
-    def close_local_client_endpoint(self, r_cesid):
+    def close_cetp_endpoint(self, r_cesid):
         """ Closes CETPClient towards a remote cesid """
-        for cesid, client_ep in self._cetp_endpoints.items():
+        for cesid, cetp_ep in self._cetp_endpoints.items():
             if cesid == r_cesid:
-                client_ep.handle_interrupt()
+                cetp_ep.handle_interrupt()
         
-    def close_all_local_client_endpoints(self):
+    def close_all_cetp_endpoints(self):
         """ Closes CETPClient instances towards remote CES """
-        for cesid, client_ep in self._cetp_endpoints.items():
-            client_ep.handle_interrupt()
+        for cesid, cetp_ep in self._cetp_endpoints.items():
+            cetp_ep.handle_interrupt()
     
     # Asyncio.Task has a method to get list of all ongoing or pending tasks.
     # Functions from inbound CETPManager 
@@ -236,7 +236,7 @@ class CETPManager:
             if not self.has_c2c_layer(r_cesid): 
                 self._logger.info("Create CETP-H2H and CETP-C2C layer")
                 c2c_layer = self.create_c2c_layer(r_cesid)
-                c2c_layer.create_cetp_server(r_cesid, self.policy_mgr, self.cetpstate_mgr, self.cesid, self.ces_params, self.cetp_security, self.host_register)    # Top layer to handle inbound H2H
+                c2c_layer.create_cetp_h2h(r_cesid, self.policy_mgr, self.cetpstate_mgr, self.cesid, self.ces_params, self.cetp_security, self.host_register)    # Top layer to handle inbound H2H
             else:
                 c2c_layer = self.get_c2c_layer(r_cesid)                 # Gets existing c2c-layer for remote ’cesid’
             

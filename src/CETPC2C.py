@@ -395,26 +395,25 @@ class iCETPC2CLayer:
         if transport in self.connected_transports:
             self.connected_transports.remove(transport)
             
-    def create_cetp_server(self, r_cesid, policy_mgr, cetpstate_mgr, l_cesid, ces_params, cetp_security, host_reg):
+    def create_cetp_h2h(self, r_cesid, policy_mgr, cetpstate_mgr, l_cesid, ces_params, cetp_security, host_reg):
         """ Creating the upper layer to handle CETPTransport """
-        self.cetp_server = CETPH2H.CETPH2H(c2c_layer=self, l_cesid=l_cesid, r_cesid=r_cesid, policy_mgr=policy_mgr, cetpstate_mgr=cetpstate_mgr, c2c_negotiated=True, \
-                                                 host_register=host_reg, loop=self._loop, cetp_mgr=self.cetp_mgr, ces_params=ces_params, cetp_security=cetp_security)
+        self.h2h = CETPH2H.CETPH2H(c2c_layer=self, l_cesid=l_cesid, r_cesid=r_cesid, policy_mgr=policy_mgr, cetpstate_mgr=cetpstate_mgr, c2c_negotiated=True, \
+                                   host_register=host_reg, loop=self._loop, cetp_mgr=self.cetp_mgr, ces_params=ces_params, cetp_security=cetp_security)
         
-        self.cetp_mgr.add_client_endpoint(r_cesid, self.cetp_server)
-        t1=asyncio.ensure_future(self.cetp_server.consume_h2h_requests())                       # Task for consuming DNS NAPTR-responses triggered by private hosts
+        self.cetp_mgr.add_client_endpoint(r_cesid, self.h2h)
+        t1=asyncio.ensure_future(self.h2h.consume_h2h_requests())                       # For consuming DNS NAPTR-responses triggered by private hosts
         self.pending_tasks.append(t1)
-        return self.cetp_server
+        return self.h2h
     
     def cancel_pending_tasks(self):
         self._logger.info("Terminating pending tasks for cesid '{}'".format(self.r_cesid))
         for tsk in self.pending_tasks:
-            self._logger.debug("Cancelling the pending tasks")
             if not tsk.cancelled():
                 tsk.cancel()
 
     def handle_interrupt(self):
         self._closure_signal = True
-        self.cetp_server.set_closure_signal()
+        self.h2h.set_closure_signal()
         self.cancel_pending_tasks()
         
     def add_naptr_records(self, naptr_rrs):
@@ -436,19 +435,19 @@ class iCETPC2CLayer:
     def report_connection_closure(self, transport):
         """ Removes connected client & checks for C2C-level connectivity """
         ic2c_transaction = self.transport_c2c_binding[transport]
-        ic2c_transaction.set_terminated()                              # Leads to termination of tasks scheduled within c2c-transaction.
+        ic2c_transaction.set_terminated()                              # To terminate the tasks scheduled within c2c-transaction.
         self.remove_c2c_transactions(ic2c_transaction)
         self.remove_connected_transport(transport)
         del self.transport_c2c_binding[transport]
-        self.handle_interrupt()
         
         if len(self.connected_transports) ==0:
             self._logger.info("No connected transport with remote CES '{}'".format(self.r_cesid))
             self.cetp_mgr.delete_c2c_layer(self.r_cesid)                   # Remove the c2c-layer registered to 'r_cesid'
-            self.cancel_pending_tasks()
-                
+            self.cetp_mgr.remove_client_endpoint(self.r_cesid)
+            self.handle_interrupt()
+            
             self._logger.info("Terminating inbound C2C-Layer and CETPServer for cesid '{}'".format(self.r_cesid))
-            del(self.cetp_server)                                               # CETPServer's task is already deleted
+            del(self.h2h)                                               # CETPServer's task is already deleted
             del(self)
                 
     def report_rtt(self, transport, rtt=None, last_seen=None):
@@ -549,7 +548,7 @@ class iCETPC2CLayer:
         return False
 
     def forward_h2h(self, cetp_msg, transport):
-        self.cetp_server.consume_message_from_c2c(cetp_msg, transport)
+        self.h2h.consume_message_from_c2c(cetp_msg, transport)
             
     def process_c2c(self, cetp_msg, transport):
         """ Processes C2C-CETP flow in post-c2c negotiation phase """
@@ -567,5 +566,4 @@ class iCETPC2CLayer:
     def feedback(self):
         """ Dummy method: simulating the methods used for reporting a host, or enforcing ratelimits to remote CES """
         pass
-
 

@@ -18,8 +18,6 @@ import CETP
 import copy
 
 LOGLEVELCETP                    = logging.DEBUG
-LOGLEVEL_H2HTransactionOutbound = logging.INFO
-LOGLEVEL_H2HTransactionInbound  = logging.INFO
 LOGLEVEL_C2CTransaction         = logging.INFO
 LOGLEVEL_oC2CTransaction        = logging.INFO
 LOGLEVEL_iC2CTransaction        = logging.INFO
@@ -27,11 +25,7 @@ LOGLEVEL_iC2CTransaction        = logging.INFO
 DEFAULT_KEEPALIVE_TIMEOUT       = 2
 DEFAULT_KEEPALIVE_CYCLE         = 10
 DEFAULT_STATE_TIMEOUT           = 31
-
-KEY_ONGOING                     = 1
-KEY_ESTABLISHED                 = 2
 NEGOTIATION_RTT_THRESHOLD       = 3
-
 
 
 """

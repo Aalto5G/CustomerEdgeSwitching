@@ -75,7 +75,6 @@ class CETPH2H:
                 dst_id = self.c2c.add_naptr_records(naptr_rr)                      # TBD: Use NAPTR records as trigger for re-connecting to a terminated endpoint, or a new transport-endpoint. 
                                                                                    # If already connected, discard naptr records.
                 if dst_id !=None:
-                    print("dst_id: ", dst_id)
                     if self.ongoing_h2h_transactions < self.max_session_limit:
                         asyncio.ensure_future(self.h2h_transaction_start(cb, dst_id))     # Enable "try, except" within task to locally consume a task-raised exception
                     else:
@@ -185,8 +184,4 @@ class CETPH2H:
         self.set_closure_signal()
         self.c2c.handle_interrupt()
         self.close_pending_tasks()
-        
-
-
-
 

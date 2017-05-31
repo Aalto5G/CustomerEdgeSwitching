@@ -650,12 +650,29 @@ def send_payload(**kwargs):
     return tlv
 
 def response_rloc(**kwargs):
-    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    return tlv
+    tlv, policy = kwargs["tlv"], kwargs["policy"]
+    new_tlv = copy.deepcopy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
+    new_tlv['ope'] = 'info'
+    
+    if response_value==None:
+        new_tlv["value"] = ""
+    else:
+        new_tlv["value"] = response_value
+    return new_tlv
 
 def response_payload(**kwargs):
-    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    return tlv
+    tlv, policy = kwargs["tlv"], kwargs["policy"]
+    new_tlv = copy.deepcopy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
+    new_tlv['ope'] = 'info'
+    
+    if response_value==None:
+        new_tlv["value"] = ""
+    else:
+        new_tlv["value"] = response_value
+    return new_tlv
+
 
 def verify_rloc(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
@@ -678,22 +695,27 @@ def send_id(**kwargs):
 
 def response_id(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    group, code, cmp, ext, response_value = policy.get_available_policy(tlv)
-    tlv['ope'] = "info"
-    tlv["value"] = response_value
-    return tlv
+    new_tlv = copy.deepcopy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
+    new_tlv['ope'] = 'info'
+    
+    if response_value==None:
+        new_tlv["value"] = ""
+    else:
+        new_tlv["value"] = response_value
+    return new_tlv
 
+    
 def verify_id(**kwargs):
     try:
-        print("In verification")
         tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
         group, code, cmp, ext, value = policy.get_tlv_details(tlv)
         
         if cmp =="NotAvailable":    return False
         inbound_id = value
         group, code, cmp, ext, allowed_value = policy.get_policy_to_enforce(tlv)
-        print(allowed_value)
-        print(inbound_id)
+        #print(allowed_value)
+        #print(inbound_id)
         
         if allowed_value==None:
             return True
@@ -896,51 +918,72 @@ def send_ctrl_warning(**kwargs):
             new_tlv["value"] = ""
     return new_tlv
 
-
 def response_ctrl_dstep(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    policy_code = CETP.CONTROL_CODES[code]
-    tlv['ope'] = 'info'
-    #tlv["value"] = "some-value"
-    return tlv
+    new_tlv = copy.deepcopy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
+    new_tlv['ope'] = 'info'
+    if response_value==None:
+        new_tlv["value"] = ""
+    else:
+        new_tlv["value"] = response_value
+    return new_tlv
 
 def response_ctrl_fqdn(**kwargs):
-    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    policy_code = CETP.CONTROL_CODES[code]
-    tlv['ope'] = 'info'
-    #tlv["value"] = "some-value"
-    return tlv
+    tlv, policy = kwargs["tlv"], kwargs["policy"]
+    new_tlv = copy.deepcopy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
+    new_tlv['ope'] = 'info'
+    if response_value==None:
+        new_tlv["value"] = ""
+    else:
+        new_tlv["value"] = response_value
+    return new_tlv
 
 def response_ctrl_certificate(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    policy_code = CETP.CONTROL_CODES[code]
-    tlv['ope'] = 'info'
-    #tlv["value"] = "some-value"
-    return tlv
+    new_tlv = copy.deepcopy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
+    new_tlv['ope'] = 'info'
+    if response_value==None:
+        new_tlv["value"] = ""
+    else:
+        new_tlv["value"] = response_value
+    return new_tlv
 
 def response_ctrl_caep(**kwargs):
-    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    #policy_code = CETP.CONTROL_CODES[code]
-    
-    group, code, cmp, ext, response_value = policy.get_available_policy(tlv)
+    tlv, policy = kwargs["tlv"], kwargs["policy"]
+    new_tlv = copy.deepcopy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
     #print("response_value", response_value)
-    tlv['ope'] = "info"
-    tlv["value"] = response_value
-    return tlv
+    new_tlv['ope'] = "info"
+    if response_value==None:
+        new_tlv["value"] = ""
+    else:
+        new_tlv["value"] = response_value
+    return new_tlv
 
 def response_ctrl_dp_rlocs(**kwargs):
-    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    policy_code = CETP.CONTROL_CODES[code]
-    tlv['ope'] = 'info'
-    #tlv["value"] = "some-value"
-    return tlv
+    tlv, policy = kwargs["tlv"], kwargs["policy"]
+    new_tlv = copy.deepcopy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
+    new_tlv['ope'] = 'info'
+    if response_value==None:
+        new_tlv["value"] = ""
+    else:
+        new_tlv["value"] = response_value
+    return new_tlv
 
 def response_ctrl_dp_ttl(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    policy_code = CETP.CONTROL_CODES[code]
-    tlv['ope'] = 'info'
-    #tlv["value"] = "some-value"
-    return tlv
+    new_tlv = copy.deepcopy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
+    new_tlv['ope'] = 'info'
+    if response_value==None:
+        new_tlv["value"] = ""
+    else:
+        new_tlv["value"] = response_value
+    return new_tlv
 
 def response_ctrl_dp_keepalive_cycle(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
@@ -951,57 +994,100 @@ def response_ctrl_dp_keepalive_cycle(**kwargs):
 
 def response_ctrl_qos(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    tlv['ope'] = 'info'
-    #tlv["value"] = "some-value"
-    return tlv
+    new_tlv = copy.deepcopy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
+    new_tlv['ope'] = 'info'
+    if response_value==None:
+        new_tlv["value"] = ""
+    else:
+        new_tlv["value"] = response_value
+    
+    return new_tlv
+
 
 def response_ctrl_ack(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    tlv['ope'] = 'info'
-    #tlv["value"] = "some-value"
-    return tlv
+    new_tlv = copy.deepcopy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
+    new_tlv['ope'] = 'info'
+    if response_value==None:
+        new_tlv["value"] = ""
+    else:
+        new_tlv["value"] = response_value
+    return new_tlv
 
+    
 def response_ctrl_os_version(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    tlv['ope'] = 'info'
-    #tlv["value"] = "some-value"
-    return tlv
+    new_tlv = copy.deepcopy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
+    new_tlv['ope'] = 'info'
+    if response_value==None:
+        new_tlv["value"] = ""
+    else:
+        new_tlv["value"] = response_value
+    return new_tlv
 
 def response_ctrl_policy_caching(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    tlv['ope'] = 'info'
-    #tlv["value"] = "some-value"
-    return tlv
+    new_tlv = copy.deepcopy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
+    new_tlv['ope'] = 'info'
+    if response_value==None:
+        new_tlv["value"] = ""
+    else:
+        new_tlv["value"] = response_value
+    
+    return new_tlv
+
 
 def response_ctrl_dp_proto(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    tlv['ope'] = 'info'
-    #tlv["value"] = "some-value"
-    return tlv
+    new_tlv = copy.deepcopy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
+    new_tlv['ope'] = 'info'
+    if response_value==None:
+        new_tlv["value"] = ""
+    else:
+        new_tlv["value"] = response_value
+    
+    return new_tlv
 
 def response_ctrl_dp_port(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    tlv['ope'] = 'info'
-    #tlv["value"] = "some-value"
-    return tlv
+    new_tlv = copy.deepcopy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
+    new_tlv['ope'] = 'info'
+    if response_value==None:
+        new_tlv["value"] = ""
+    else:
+        new_tlv["value"] = response_value
+    
+    return new_tlv
 
 def response_ctrl_dp_ratelimit(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    tlv['ope'] = 'info'
-    #tlv["value"] = "some-value"
-    return tlv
+    new_tlv = copy.deepcopy(tlv)
+    group, code, cmp, ext, response_value = policy.get_available_policy(new_tlv)
+    new_tlv['ope'] = 'info'
+    if response_value==None:
+        new_tlv["value"] = ""
+    else:
+        new_tlv["value"] = response_value
+    
+    return new_tlv
 
 def response_ctrl_terminate(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    tlv['ope'] = 'info'
-    return tlv
+    new_tlv = copy.deepcopy(tlv)
+    new_tlv['ope'] = 'info'
+    return new_tlv
 
 def response_ctrl_warning(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    tlv['ope'] = 'info'
-    #tlv["value"] = "some-value"
-    return tlv
-
+    new_tlv = copy.deepcopy(tlv)
+    new_tlv['ope'] = 'info'
+    return new_tlv
 
 def verify_ctrl_dstep(**kwargs):
     tlv, code = kwargs["tlv"], kwargs["code"]
