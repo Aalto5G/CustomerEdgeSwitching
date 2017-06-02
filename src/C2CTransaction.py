@@ -23,8 +23,8 @@ LOGLEVEL_oC2CTransaction        = logging.INFO
 LOGLEVEL_iC2CTransaction        = logging.INFO
 
 DEFAULT_KEEPALIVE_TIMEOUT       = 2
-DEFAULT_KEEPALIVE_CYCLE         = 10
-DEFAULT_STATE_TIMEOUT           = 31
+DEFAULT_KEEPALIVE_CYCLE         = 20
+DEFAULT_STATE_TIMEOUT           = 11
 NEGOTIATION_RTT_THRESHOLD       = 3
 
 """

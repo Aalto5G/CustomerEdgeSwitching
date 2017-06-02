@@ -147,7 +147,7 @@ class iCESServerTCPTransport(asyncio.Protocol):
 
          
     def is_c2c_negotiated(self):
-        """ Terminates connection with a CETPClient that doesn't complete C2C negotiation in t<To) """        
+        """ Terminates connection with a CETPH2H that doesn't complete C2C negotiation in t<To) """        
         if (self.c2c_layer==None) and (self.is_connected):
             self._logger.info(" Remote end did not complete C2C negotiation in To={}".format(str(self.c2c_negotiation_threshold)))
             self.close()
@@ -244,7 +244,7 @@ class iCESServerTLSTransport(asyncio.Protocol):
 
 
     def is_c2c_negotiated(self):
-        """ Terminates connection with a CETPClient that doesn't complete C2C negotiation in t<To) """        
+        """ Terminates connection with a CETPH2H that doesn't complete C2C negotiation in t<To) """        
         if (self.c2c_layer==None) and (self.is_connected):
             self._logger.info(" Remote end did not complete C2C negotiation in To={}".format(str(self.c2c_negotiation_threshold)))
             self.close()

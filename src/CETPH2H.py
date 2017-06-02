@@ -54,7 +54,9 @@ class CETPH2H:
     def create_cetp_c2c_layer(self, naptr_list):
         """ Initiates CETPc2clayer between two CES nodes """
         self.c2c = CETPC2C.CETPC2CLayer(self._loop, cetp_h2h=self, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetpstate_mgr= self.cetpstate_mgr, \
-                                 policy_mgr=self.policy_mgr, cetp_mgr=self.cetp_mgr, ces_params=self.ces_params, cetp_security=self.cetp_security)      # Shall c2clayer be obtained from CETPManager for 'r_cesid'? 
+                                 policy_mgr=self.policy_mgr, cetp_mgr=self.cetp_mgr, ces_params=self.ces_params, cetp_security=self.cetp_security)
+        
+        self.cetp_mgr.register_c2c_layer(self.r_cesid, self.c2c)
         self.c2c.initiate_cetp_transport(naptr_list)
         
     def enqueue_h2h_requests_nowait(self, naptr_records, cb):
@@ -159,9 +161,9 @@ class CETPH2H:
 
     def set_closure_signal(self):
         self._closure_signal = True
-    
+        
     def resource_cleanup(self):
-        """ Deletes the CETPClient instance towards r_cesid, cancels the pending tasks, and handles the pending <H2H DNS-NAPTR responses. """
+        """ Deletes the CETPH2H instance towards r_cesid, cancels the pending tasks, and handles the pending <H2H DNS-NAPTR responses. """
         pending_dns_queries = self.h2h_q.qsize()
         if (pending_dns_queries>0) and (pending_dns_queries < self.DNS_Cleanup_Threshold):          # Issues DNS NXDOMAIN (if pending H2H-DNS queries < N in size)
             try:
@@ -180,7 +182,7 @@ class CETPH2H:
 
 
     def handle_interrupt(self):
-        """ Deletes the CETPClient instance, C2CLayer and pending tasks towards remote CES nodes """
+        """ Deletes the CETPH2H instance, C2CLayer and pending tasks towards remote CES nodes """
         self.set_closure_signal()
         self.c2c.handle_interrupt()
         self.close_pending_tasks()

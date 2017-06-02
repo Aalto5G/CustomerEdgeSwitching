@@ -8,9 +8,9 @@ CESParameters:
     ca_certificate: config_cesa/ca.crt
     dp_ttl: 3600
     keepalive_timeout: 2
-    keepalive_cycle: 10
+    keepalive_cycle: 30
     max_c2c_negotiation_duration: 5
-    state_timeout: 31
+    state_timeout: 5
     caces: 127.0.0.1
     fw_version: 0.1
     ces_session_limit: 30
@@ -26,7 +26,7 @@ DNS:
     zonefile: db.cesa.demo.lte.
     server:
         loopback:
-            ip: 127.0.0.1
+            ip: 10.0.3.101
             port: 53
     timeouts:
         naptr:

@@ -63,6 +63,7 @@ class CETPC2CLayer:
                     self._logger.info(" Initiating a new CETPTransport")
                     if not self.remote_endpoint_malicious_history(r_cesid, r_ip):
                         asyncio.ensure_future(self.initiate_transport(r_transport, r_ip, r_port, delay=0.1))        # Delay parameter prevents H2H negotiation from suffering delay due to triggering of transport/C2C-negotiation
+                        
             return dst_id
         except Exception as ex:
             self._logger.warning("Exception in parsing the NAPTR records: '{}'".format(ex))
@@ -76,11 +77,11 @@ class CETPC2CLayer:
             sstag, dstag    = inbound_dstag, inbound_sstag
             
             if ( (sstag==0) and (dstag ==0)) or (sstag < 0) or (dstag < 0):
-                self._logger.error(" Session tag values are not acceptable")
+                self._logger.error(" Session tag values are invalid")
                 return False
             
             if ver!=1:
-                self._logger.info(" The CETP version is not supported.")
+                self._logger.info(" CETP version is not supported.")
                 return False
             
             return (sstag, dstag, cetp_msg)
@@ -216,7 +217,8 @@ class CETPC2CLayer:
         
         if (len(self.initiated_transports) ==0) & (len(self.connected_transports) ==0):
             self._logger.info(" No ongoing or in-progress CETP transport -- Close CETP-H2H and C2C layer towards {}".format(self.r_cesid))
-            self.cetp_mgr.delete_c2c_layer(self.r_cesid)
+            self.cetp_mgr.remove_c2c_layer(self.r_cesid)
+            self.cetp_mgr.remove_cetp_endpoint(self.r_cesid)
             self.resource_cleanup()
 
     def _add_c2c_transactions(self, c2c_transaction):
@@ -242,7 +244,9 @@ class CETPC2CLayer:
         self._add_c2c_transactions(c2c_transaction)
         self._add_connected_transport(transport)
         self._add_c2c_transport_binding(c2c_transaction, transport)
-    
+        (ip_addr, port), proto = transport.remotepeer, transport.proto
+        self.remote_ces_eps.append( (ip_addr, port, proto))
+        
     def unregister_c2c_transport(self, transport):
         """ Removes the C2C-Transaction established on a CETPTransport, AND their binding """
         if transport in self.transport_c2c_binding:
@@ -250,6 +254,8 @@ class CETPC2CLayer:
             self._remove_c2c_transactions(c2c_transaction)
             self._remove_connected_transport(transport)
             self._remove_c2c_transport_binding(transport)
+            (ip_addr, port), proto = transport.remotepeer, transport.proto
+            self.remote_ces_eps.append( (ip_addr, port, proto))
             c2c_transaction.set_terminated()                            # To terminate the tasks scheduled within c2c-transaction.
 
     def set_closure_signal(self):
