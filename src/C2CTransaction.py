@@ -27,7 +27,6 @@ DEFAULT_KEEPALIVE_CYCLE         = 10
 DEFAULT_STATE_TIMEOUT           = 31
 NEGOTIATION_RTT_THRESHOLD       = 3
 
-
 """
 General_policy
         cesid: cesa.demo.lte.
@@ -211,7 +210,7 @@ class oC2CTransaction(C2CTransaction):
         self.proto                  = proto                                 # Protocol of the CETP-Transport.
         self.ces_params             = ces_params
         self.transport              = transport
-        self.remote_addr            = transport.peername
+        self.remote_addr            = transport.remotepeer
         self.cetp_security          = cetp_security
         self.c2c_layer              = c2c_layer
         self.rtt                    = 0
@@ -262,8 +261,8 @@ class oC2CTransaction(C2CTransaction):
             self.c2c_handler = self._loop.call_later(self.state_timeout, self.handle_c2c)
             return True
         
-        except Exception as msg:
-            self._logger.info(" Failure in initiating CES-to-CES session: {}".format(msg))
+        except Exception as ex:
+            self._logger.info(" Failure in initiating CES-to-CES session: {}".format(ex))
             return False
 
 
@@ -288,6 +287,7 @@ class oC2CTransaction(C2CTransaction):
         except Exception as ex:
             self._logger.info(" Exception in trigger negotiated functions {}".format(ex))
     
+    @asyncio.coroutine
     def initiate_c2c_negotiation(self):
         """ Initiates CES policy offers and requirments towards 'r_cesid' """
         try:

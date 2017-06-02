@@ -19,8 +19,8 @@ LOGLEVEL_CETPH2H             = logging.INFO
 
 
 class CETPH2H:
-    def __init__(self, loop=None, l_cesid="", r_cesid="", cetpstate_mgr= None, policy_client=None, policy_mgr=None, cetp_mgr=None, \
-                 ces_params=None, cetp_security=None, host_register= None, c2c_negotiated=False, c2c_layer=None, name="CETPH2H"):
+    def __init__(self, loop=None, l_cesid="", r_cesid="", cetpstate_mgr= None, policy_client=None, policy_mgr=None, cetp_mgr=None, ces_params=None, cetp_security=None, \
+                 host_register= None, c2c_negotiated=False, c2c_layer=None, name="CETPH2H"):
         self._loop                      = loop
         self.l_cesid                    = l_cesid
         self.r_cesid                    = r_cesid
@@ -35,7 +35,7 @@ class CETPH2H:
         self._closure_signal            = False
         self.ongoing_h2h_transactions   = 0
         self.max_session_limit          = 20                        # Dummy value for now, In reality the value shall come from C2C negotiation with remote CES.
-        self.client_q                   = asyncio.Queue()           # Enqueues the NAPTR responses triggered by the private hosts.
+        self.h2h_q                      = asyncio.Queue()           # Enqueues the NAPTR responses triggered by the private hosts.
         self.DNS_Cleanup_Threshold      = 5                         # No. of pending DNS queries gracefully handled in case of C2C termination. 
         self.c2c_negotiated              = c2c_negotiated
         self.pending_tasks              = []
@@ -53,24 +53,25 @@ class CETPH2H:
 
     def create_cetp_c2c_layer(self, naptr_list):
         """ Initiates CETPc2clayer between two CES nodes """
-        self.c2c = CETPC2C.oCES2CESLayer(self._loop, naptr_list=naptr_list, cetp_client=self, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetpstate_mgr= self.cetpstate_mgr, \
-                                 policy_mgr=self.policy_mgr, policy_client=self.policy_client, ces_params=self.ces_params, cetp_security=self.cetp_security)      # Shall c2clayer be obtained from CETPManager for 'r_cesid'? 
-
+        self.c2c = CETPC2C.CETPC2CLayer(self._loop, cetp_h2h=self, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetpstate_mgr= self.cetpstate_mgr, \
+                                 policy_mgr=self.policy_mgr, cetp_mgr=self.cetp_mgr, ces_params=self.ces_params, cetp_security=self.cetp_security)      # Shall c2clayer be obtained from CETPManager for 'r_cesid'? 
+        self.c2c.initiate_cetp_transport(naptr_list)
+        
     def enqueue_h2h_requests_nowait(self, naptr_records, cb):
         """ This method enqueues the naptr responses triggered by private hosts. """
         queue_msg = (naptr_records, cb)
-        self.client_q.put_nowait(queue_msg)               # Possible exception: If the queue is full, [It will simply drop the message (without waiting for space to be available in the queue]
+        self.h2h_q.put_nowait(queue_msg)               # Possible exception: If the queue is full, [It will simply drop the message (without waiting for space to be available in the queue]
 
     @asyncio.coroutine
     def enqueue_h2h_requests(self, msg):
-        yield from self.client_q.put(msg)                 # More safe enqueuing, if the queue is full, the call doesn't return until the queue has space to store this message - can be triggered via asyncio.ensure_future(enqueue) 
+        yield from self.h2h_q.put(msg)                 # More safe enqueuing, if the queue is full, the call doesn't return until the queue has space to store this message - can be triggered via asyncio.ensure_future(enqueue) 
 
     @asyncio.coroutine
     def consume_h2h_requests(self):
         """ To consume NAPTR-response triggered by the private hosts """
         while True:
             try:
-                queued_data = yield from self.client_q.get()
+                queued_data = yield from self.h2h_q.get()
                 (naptr_rr, cb) = queued_data
                 dst_id = self.c2c.add_naptr_records(naptr_rr)                      # TBD: Use NAPTR records as trigger for re-connecting to a terminated endpoint, or a new transport-endpoint. 
                                                                                    # If already connected, discard naptr records.
@@ -80,12 +81,12 @@ class CETPH2H:
                     else:
                         self._logger.info(" Number of Ongoing transactions have exceeded the C2C limit.")
                 
-                self.client_q.task_done()
+                self.h2h_q.task_done()
 
             except Exception as ex:
                 if self._closure_signal: break
                 self._logger.info(" Exception '{}' in consuming H2H request towards {}".format(ex, self.r_cesid))
-                self.client_q.task_done()
+                self.h2h_q.task_done()
             
     def c2c_negotiation_status(self, status=True):
         """ Reports that c2c-negotiation completed and whether it Succeeded/Failed """
@@ -106,7 +107,7 @@ class CETPH2H:
         dns_q, addr = cb_args
         ip_addr, port = addr
         h2h = H2HTransaction.H2HTransactionOutbound(loop=self._loop, cb=cb, host_ip=ip_addr, src_id="", dst_id=dst_id, l_cesid=self.l_cesid, r_cesid=self.r_cesid, \
-                                                    ces_params=self.ces_params, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, host_register=self.host_register, cetp_cleint=self)
+                                                    ces_params=self.ces_params, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, host_register=self.host_register, cetp_h2h=self)
         cetp_packet = yield from h2h.start_cetp_processing()
         if cetp_packet != None:
             self._logger.debug(" H2H transaction started.")
@@ -161,21 +162,20 @@ class CETPH2H:
     
     def resource_cleanup(self):
         """ Deletes the CETPClient instance towards r_cesid, cancels the pending tasks, and handles the pending <H2H DNS-NAPTR responses. """
-        pending_dns_queries = self.client_q.qsize()
+        pending_dns_queries = self.h2h_q.qsize()
         if (pending_dns_queries>0) and (pending_dns_queries < self.DNS_Cleanup_Threshold):          # Issues DNS NXDOMAIN (if pending H2H-DNS queries < N in size)
             try:
-                queued_data = self.client_q.get_nowait()
+                queued_data = self.h2h_q.get_nowait()
                 (naptr_rr, cb) = queued_data
                 (cb_func, cb_args) = cb
                 (dns_q, addr) = cb_args
                 cb_func(dns_q, addr, success=False)
-            except Exception as msg:
-                self._logger.info(" Exception in resource cleanup towards {}".format(self.r_cesid))
-                self._logger.info(msg)
+            except Exception as ex:
+                self._logger.info(" Exception '{}' in resource cleanup towards {}".format(ex, self.r_cesid))
         
         self.set_closure_signal()
         self.close_pending_tasks()
-        self.cetp_mgr.remove_client_endpoint(self.r_cesid)               # This ordering is important 
+        self.cetp_mgr.remove_cetp_endpoint(self.r_cesid)               # This ordering is important 
         del(self)
 
 

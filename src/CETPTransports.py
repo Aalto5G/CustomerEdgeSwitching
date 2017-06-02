@@ -133,10 +133,10 @@ class iCESServerTCPTransport(asyncio.Protocol):
         self.c2c_negotiation_threshold = ces_params['max_c2c_negotiation_duration']              # In seconds
         
     def connection_made(self, transport):
-        self.peername = transport.get_extra_info('peername')
-        self._logger.info('Connection from {}'.format(self.peername))
+        self.remotepeer = transport.get_extra_info('peername')
+        self._logger.info('Connection from {}'.format(self.remotepeer))
         self.transport = transport
-        ip_addr, port = self.peername
+        ip_addr, port = self.remotepeer
         self.is_connected   = True
         
         if self.cetp_mgr.remote_endpoint_malicious_history(ip_addr) == True:
@@ -202,7 +202,7 @@ class iCESServerTCPTransport(asyncio.Protocol):
         """ Called by asyncio framework """
         self._logger.info(" Remote endpoint closed the connection")
         if (self.c2c_layer != None) and self.is_connected:
-            self.c2c_layer.report_connection_closure(self)
+            self.c2c_layer.report_connectivity(self, status=False)
             self.is_connected = False
 
     def close(self):
@@ -210,7 +210,7 @@ class iCESServerTCPTransport(asyncio.Protocol):
         self._logger.info(" Closing connection to remote endpoint")
         self.transport.close()
         if (self.c2c_layer != None) and self.is_connected:
-            self.c2c_layer.report_connection_closure(self)
+            self.c2c_layer.report_connectivity(self, status=False)
             self.is_connected = False
 
 
@@ -230,10 +230,10 @@ class iCESServerTLSTransport(asyncio.Protocol):
         self.c2c_negotiation_threshold = ces_params['max_c2c_negotiation_duration']              # In seconds
         
     def connection_made(self, transport):
-        self.peername = transport.get_extra_info('peername')
+        self.remotepeer = transport.get_extra_info('peername')
         self._logger.info('Connection from {}'.format(self.peername))
         self.transport = transport
-        ip_addr, port = self.peername
+        ip_addr, port = self.remotepeer
         self.is_connected   = True
         
         if self.cetp_mgr.remote_endpoint_malicious_history(ip_addr) == True:
@@ -265,7 +265,6 @@ class iCESServerTLSTransport(asyncio.Protocol):
         len_bytes = (msg_length).to_bytes(CETP_LEN_FIELD, byteorder="big")
         to_send = len_bytes + cetp_msg
         return to_send
-
 
     def data_received(self, data):
         self.buffer_and_parse_stream(data)
@@ -310,6 +309,4 @@ class iCESServerTLSTransport(asyncio.Protocol):
         if (self.c2c_layer != None) and self.is_connected:
             self.c2c_layer.report_connection_closure(self)
             self.is_connected = False
-
-
 

@@ -162,7 +162,7 @@ class H2HTransaction(object):
 
 class H2HTransactionOutbound(H2HTransaction):
     def __init__(self, loop=None, sstag=0, dstag=0, cb=None, host_ip="", src_id="", dst_id="", l_cesid="", r_cesid="", policy_mgr= None, host_register=None, \
-                 cetpstate_mgr=None, cetp_cleint=None, ces_params=None, direction="outbound", name="H2HTransactionOutbound", rtt_time=[]):
+                 cetpstate_mgr=None, cetp_h2h=None, ces_params=None, direction="outbound", name="H2HTransactionOutbound", rtt_time=[]):
         self.sstag, self.dstag  = sstag, dstag
         self.cb                 = cb
         self.host_ip            = host_ip                   # IP of the sender host
@@ -173,7 +173,7 @@ class H2HTransactionOutbound(H2HTransaction):
         self.policy_mgr         = policy_mgr
         self.cetpstate_mgr      = cetpstate_mgr
         self._loop              = loop
-        self.cetp_client        = cetp_cleint
+        self.cetp_h2h           = cetp_h2h
         self.ces_params         = ces_params
         self.direction          = direction
         self.host_register      = host_register
@@ -191,7 +191,7 @@ class H2HTransactionOutbound(H2HTransaction):
         if not self.h2h_negotiation_status:
             self._logger.info(" Incomplete H2H-state towards '{}' expired".format(self.dst_id))
             self.cetpstate_mgr.remove_initiated_transaction((self.sstag, 0))
-            self.cetp_client.update_H2H_transaction_count(initiated=False)
+            self.cetp_h2h.update_H2H_transaction_count(initiated=False)
     
     def load_policies(self, l_cesid=None, r_cesid=None, src_id=None, dst_id=None):
         """ Selection of host policy """
@@ -219,7 +219,7 @@ class H2HTransactionOutbound(H2HTransaction):
             return False
 
     def send_cetp(self, cetp_packet):
-        self.cetp_client.send(cetp_packet)
+        self.cetp_h2h.send(cetp_packet)
     
     @asyncio.coroutine
     def start_cetp_processing(self):
@@ -254,7 +254,7 @@ class H2HTransactionOutbound(H2HTransaction):
         self.last_packet_sent = cetp_packet
         self.cetp_negotiation_history.append(cetp_packet)
         self.cetpstate_mgr.add_initiated_transaction((self.sstag,0), self)                # Registering the H2H state
-        self.cetp_client.update_H2H_transaction_count()
+        self.cetp_h2h.update_H2H_transaction_count()
         #self._logger.info("start_cetp_processing delay: {}".format(now-start_time))
         return cetp_packet
         
@@ -361,7 +361,7 @@ class H2HTransactionOutbound(H2HTransaction):
             # Locally terminate session, as iCES is stateless
             self._logger.warning(" H2H policy negotiation failed in {} RTT".format(self.rtt))
             self.cetpstate_mgr.remove_initiated_transaction((self.sstag, 0))
-            self.cetp_client.update_H2H_transaction_count(initiated=False)
+            self.cetp_h2h.update_H2H_transaction_count(initiated=False)
             self.h2h_handler.cancel()
             self._execute_dns_callback(resolution=False)
 
@@ -418,7 +418,7 @@ class H2HTransactionOutbound(H2HTransaction):
         1) Executes DNS callback,    2) Replaces initiated transaction with an established transaction
         3) Checks whether DST assigned by iCES has resulted in an (SST, DST) pair which is unique at oCES. If not, it sends a terminate to iCES.
         """
-        self.cetp_client.update_H2H_transaction_count(initiated=False)                            # To reduce number of ongoing transactions.
+        self.cetp_h2h.update_H2H_transaction_count(initiated=False)                            # To reduce number of ongoing transactions.
         self.cetpstate_mgr.remove_initiated_transaction((self.sstag, 0))
         
         #Checks whether (SST, DST) pair is locally unique.
