@@ -320,12 +320,12 @@ class CETPC2CLayer:
                 #sc.check_hostname = True
             
                 try:
-                    self.remote_ces_eps.append( (ip, port, proto) )
+                    self.remote_ces_eps.append( (ip_addr, port, proto) )
                     coro = self._loop.create_connection(lambda: transport_instance, ip_addr, port, ssl=sc)
                     self.initiated_transports.append(transport_instance)
                     yield from asyncio.ensure_future(coro)
                 except Exception as ex:
-                    self.remote_ces_eps.remove( (ip, port, proto) )
+                    self.remote_ces_eps.remove( (ip_addr, port, proto) )
                     self._logger.info(" Exception in {} transport towards {}: '{}'".format(proto, self.r_cesid, ex))                  # ex.errno == 111 -- means connection RST received
                     self.unregister_transport(transport_instance)
 

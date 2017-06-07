@@ -48,17 +48,29 @@ class CETPManager:
         self.name                   = name
         self._logger                = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPManager)
+        self.local_cetp             = CETPH2H.CETPH2HLocal(cetpstate_mgr=self.cetpstate_mgr, policy_mgr=self.policy_mgr, cetp_mgr=self, \
+                                                           cetp_security=self.cetp_security, host_register=self.host_register)
 
-    def process_outbound_cetp(self, r_cesid, naptr_list, dns_cb_func, cb_args):
+    def process_dns_message(self, dns_cb, cb_args, dst_id, r_cesid="", naptr_list=[]):
+        if len(naptr_list)==0:
+            self.process_local_cetp(dns_cb, cb_args, dst_id)
+        else:
+            self.process_outbound_cetp(dns_cb, cb_args, dst_id, r_cesid, naptr_list)
+
+    def process_local_cetp(self, dns_cb, cb_args, dst_id):
+        cb = (dns_cb, cb_args)
+        self.local_cetp.consume_h2h_requests(dst_id, cb)
+
+    def process_outbound_cetp(self, dns_cb, cb_args, dst_id, r_cesid, naptr_list):
         """ Gets/Creates the CETPH2H instance AND enqueues the NAPTR response for handling the H2H transactions """
         if self.has_cetp_endpoint(r_cesid):
             ep = self.get_cetp_endpoint(r_cesid)
         else:
             self._logger.info("Initiating a CETP-Endpoint towards cesid='{}': ".format(r_cesid))
-            ep = self.create_client_endpoint(self.cesid, r_cesid, naptr_list, dns_cb_func)
-        ep.enqueue_h2h_requests_nowait(naptr_list, (dns_cb_func, cb_args))                                # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
+            ep = self.create_client_endpoint(self.cesid, r_cesid, naptr_list)
+        ep.enqueue_h2h_requests_nowait(naptr_list, (dns_cb, cb_args))                                # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
 
-    def create_client_endpoint(self, l_cesid, r_cesid, naptr_list, dns_cb_func):
+    def create_client_endpoint(self, l_cesid, r_cesid, naptr_list):
         """ Creates the CETP-H2H layer towards remote CES-ID """
         cetp_ep = CETPH2H.CETPH2H(l_cesid = l_cesid, r_cesid = r_cesid, cetpstate_mgr= self.cetpstate_mgr, policy_mgr=self.policy_mgr, policy_client=None, \
                                   loop=self._loop, cetp_mgr=self, ces_params=self.ces_params, cetp_security=self.cetp_security, host_register=self.host_register)

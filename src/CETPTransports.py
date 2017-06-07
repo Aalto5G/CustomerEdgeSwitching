@@ -231,7 +231,7 @@ class iCESServerTLSTransport(asyncio.Protocol):
         
     def connection_made(self, transport):
         self.remotepeer = transport.get_extra_info('peername')
-        self._logger.info('Connection from {}'.format(self.peername))
+        self._logger.info('Connection from {}'.format(self.remotepeer))
         self.transport = transport
         ip_addr, port = self.remotepeer
         self.is_connected   = True
@@ -299,7 +299,7 @@ class iCESServerTLSTransport(asyncio.Protocol):
         """ Called by asyncio framework """
         self._logger.info(" Remote endpoint closed the connection")
         if (self.c2c_layer != None) and self.is_connected:
-            self.c2c_layer.report_connection_closure(self)
+            self.c2c_layer.report_connectivity(self, status=False)
             self.is_connected = False
 
     def close(self):
@@ -307,6 +307,6 @@ class iCESServerTLSTransport(asyncio.Protocol):
         self._logger.info(" Closing connection to remote endpoint")
         self.transport.close()
         if (self.c2c_layer != None) and self.is_connected:
-            self.c2c_layer.report_connection_closure(self)
+            self.c2c_layer.report_connectivity(self, status=False)
             self.is_connected = False
 

@@ -2,11 +2,11 @@
 {
 "type": "cespolicy",
 "proto":"tcp",
-"cesid": "cesb.demo.lte.",
+"cesid": "cesb.lte.",
 "policy":
     {
     "request": [
-        { "ope":"query", "group": "ces", "code": "cesid", "value":["cesa.demo.lte.", "cesc.demo.lte."]},
+        { "ope":"query", "group": "ces", "code": "cesid", "value":["cesa.lte.", "cesc.lte."]},
         { "ope":"query", "group": "ces", "code": "caces", "value":"195.148.124.145"},
         { "ope":"query", "group": "ces", "code": "fw_version", "value":"0.1"},
         { "ope":"query", "group": "ces", "code": "ttl", "value":{"min":"3600", "max":"7200"}},
@@ -17,7 +17,7 @@
         { "ope":"query", "group": "ces", "code": "evidence_format", "value":["IETF-IOC1", "IETF-IOC2"]}
     ],
     "offer": [
-        { "ope":"info", "group": "ces", "code": "cesid", "value":"cesb.demo.lte."},
+        { "ope":"info", "group": "ces", "code": "cesid", "value":"cesb.lte."},
         { "ope":"info", "group": "ces", "code": "caces", "value":"195.148.124.145"},
         { "ope":"info", "group": "ces", "code": "fw_version", "value":"0.1"},
         { "ope":"info", "group": "ces", "code": "ttl", "value":"3600"},
@@ -27,7 +27,7 @@
         { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"}
     ],
     "available": [
-        { "ope":"info", "group": "ces", "code": "cesid", "value":"cesb.demo.lte."},
+        { "ope":"info", "group": "ces", "code": "cesid", "value":"cesb.lte."},
         { "ope":"info", "group": "ces", "code": "pow"},
         { "ope":"info", "group": "ces", "code": "caces", "value":"195.148.124.145"},
         { "ope":"info", "group": "ces", "code": "fw_version", "value":"0.1"},
@@ -42,11 +42,11 @@
 {
 "type": "cespolicy",
 "proto":"tls",
-"cesid": "cesb.demo.lte.",
+"cesid": "cesb.lte.",
 "policy":
     {
     "request": [
-        { "ope":"query", "group": "ces", "code": "cesid", "value":["cesa.demo.lte.", "cesc.demo.lte."]},
+        { "ope":"query", "group": "ces", "code": "cesid", "value":["cesa.lte.", "cesc.lte."]},
         { "ope":"query", "group": "ces", "code": "caces", "value":"195.148.124.145"},
         { "ope":"query", "group": "ces", "code": "fw_version", "value":"0.1"},
         { "ope":"query", "group": "ces", "code": "ttl", "value":{"min":"3600", "max":"7200"}},
@@ -56,7 +56,7 @@
         { "ope":"query", "group": "ces", "code": "evidence_format", "value":["IETF-IOC1", "IETF-IOC2"]}
     ],
     "offer": [
-        { "ope":"info", "group": "ces", "code": "cesid", "value":"cesb.demo.lte."},
+        { "ope":"info", "group": "ces", "code": "cesid", "value":"cesb.lte."},
         { "ope":"info", "group": "ces", "code": "caces", "value":"195.148.124.145"},
         { "ope":"info", "group": "ces", "code": "fw_version", "value":"0.1"},
         { "ope":"info", "group": "ces", "code": "ttl", "value":"3600"},
@@ -66,7 +66,7 @@
         { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"}
     ],
     "available": [
-        { "ope":"info", "group": "ces", "code": "cesid", "value":"cesb.demo.lte."},
+        { "ope":"info", "group": "ces", "code": "cesid", "value":"cesb.lte."},
         { "ope":"info", "group": "ces", "code": "pow"},
         { "ope":"info", "group": "ces", "code": "caces", "value":"195.148.124.145"},
         { "ope":"info", "group": "ces", "code": "fw_version", "value":"0.1"},
@@ -80,7 +80,7 @@
 },
 {
 "type": "hostpolicy",
-"fqdn": "hostb1.demo.lte.",
+"fqdn": "hostb1.cesb.lte.",
 "direction": "outbound",
 "policy": {
     "request": [
@@ -90,13 +90,13 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "offer": [
-        { "ope":"info", "group": "id", "code": "fqdn", "value":"hostb1.demo.lte." },
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"hostb1.cesb.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
         { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" }
     ],
     "available": [
-        { "ope":"info", "group": "id", "code": "fqdn", "value":"hostb1.demo.lte." },
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"hostb1.cesb.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
         { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145"  }
@@ -105,7 +105,7 @@
 },
 {
 "type": "hostpolicy",
-"fqdn": "hostb1.demo.lte.",
+"fqdn": "hostb1.cesb.lte.",
 "direction": "inbound",
 "policy": {
     "request": [
@@ -115,7 +115,7 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "available": [
-        { "ope":"info", "group": "id", "code": "fqdn", "value":"hostb1.demo.lte." },
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"hostb1.cesb.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
         { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145"  }
@@ -124,7 +124,7 @@
 },
 {
 "type": "hostpolicy",
-"fqdn": "srv1.hostb1.demo.lte.",
+"fqdn": "srv1.hostb1.cesb.lte.",
 "direction": "inbound",
 "policy": {
     "request": [
@@ -134,7 +134,7 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "available": [
-        { "ope":"info", "group": "id", "code": "fqdn", "value":"srv1.hostb1.demo.lte." },
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"srv1.hostb1.cesb.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
         { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145"  },
@@ -144,7 +144,7 @@
 },
 {
 "type": "hostpolicy",
-"fqdn": "srv2.hostb1.demo.lte.",
+"fqdn": "srv2.hostb1.cesb.lte.",
 "direction": "inbound",
 "policy": {
     "request": [
@@ -155,7 +155,7 @@
         { "ope":"query", "group": "control", "code": "ack" }
     ],
     "available": [
-        { "ope":"info", "group": "id", "code": "fqdn", "value":"srv2.hostb1.demo.lte." },
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"srv2.hostb1.cesb.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
         { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145"  }
@@ -164,7 +164,7 @@
 },
 {
 "type": "hostpolicy",
-"fqdn": "hostb2.demo.lte.",
+"fqdn": "hostb2.cesb.lte.",
 "direction": "outbound",
 "policy": {
     "request": [
@@ -174,13 +174,13 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "offer": [
-        { "ope":"info", "group": "id", "code": "fqdn", "value":"hostb2.demo.lte." },
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"hostb2.cesb.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
         { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145"  }
     ],
     "available": [
-        { "ope":"info", "group": "id", "code": "fqdn", "value":"hostb2.demo.lte." },
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"hostb2.cesb.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
         { "ope":"info", "group": "control", "code": "ack" },
@@ -190,7 +190,7 @@
 },
 {
 "type": "hostpolicy",
-"fqdn": "hostb2.demo.lte.",
+"fqdn": "hostb2.cesb.lte.",
 "direction": "inbound",
 "policy": {
     "request": [
@@ -200,7 +200,7 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "available": [
-        { "ope":"info", "group": "id", "code": "fqdn", "value":"hostb2.demo.lte." },
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"hostb2.cesb.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
         { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145"  }
@@ -209,7 +209,7 @@
 },
 {
 "type": "hostpolicy",
-"fqdn": "hostb3.demo.lte.",
+"fqdn": "hostb3.cesb.lte.",
 "direction": "outbound",
 "policy": {
     "request": [
@@ -219,13 +219,13 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "offer": [
-        { "ope":"info", "group": "id", "code": "fqdn", "value":"hostb3.demo.lte." },
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"hostb3.cesb.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
         { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145"  }
     ],
     "available": [
-        { "ope":"info", "group": "id", "code": "fqdn", "value":"hostb3.demo.lte." },
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"hostb3.cesb.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
         { "ope":"info", "group": "control", "code": "ack" },
@@ -235,7 +235,7 @@
 },
 {
 "type": "hostpolicy",
-"fqdn": "hostb3.demo.lte.",
+"fqdn": "hostb3.cesb.lte.",
 "direction": "inbound",
 "policy": {
     "request": [
@@ -245,7 +245,7 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "available": [
-        { "ope":"info", "group": "id", "code": "fqdn", "value":"hostb3.demo.lte." },
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"hostb3.cesb.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
         { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145"  }
@@ -254,33 +254,7 @@
 },
 {
 "type": "hostpolicy",
-"fqdn": "son1.raimo.aalto.lte.",
-"direction": "outbound",
-"policy": {
-    "request": [
-        { "ope":"query", "group": "id", "code": "fqdn", "value":["raimo.aalto.lte."] },
-        { "ope":"query", "group": "rloc", "code": "eth" },
-        { "ope":"query", "group": "payload", "code": "eth" },
-        { "ope":"query", "group": "control", "code": "caep" }
-    ],
-    "offer": [
-        { "ope":"info", "group": "id", "code": "fqdn" },
-        { "ope":"info", "group": "rloc", "code": "eth" },
-        { "ope":"info", "group": "payload", "code": "eth" },
-        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145"  }
-    ],
-    "available": [
-        { "ope":"info", "group": "id", "code": "fqdn", "value":"son1.raimo.aalto.lte." },
-        { "ope":"info", "group": "rloc", "code": "eth" },
-        { "ope":"info", "group": "payload", "code": "eth" },
-        { "ope":"info", "group": "control", "code": "ack" },
-        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.146" }
-    ]
-    }
-},
-{
-"type": "hostpolicy",
-"fqdn": "raimo.aalto.lte.",
+"fqdn": "raimo.cesb.lte.",
 "direction": "outbound",
 "policy": {
     "request": [
@@ -290,13 +264,13 @@
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "offer": [
-        { "ope":"info", "group": "id", "code": "fqdn", "value":"raimo2.aalto.lte." },
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"raimo.cesb.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
         { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" }
     ],
     "available": [
-        { "ope":"info", "group": "id", "code": "fqdn", "value":"raimo2.aalto.lte." },
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"raimo.cesb.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
         { "ope":"info", "group": "control", "code": "ack" },
@@ -306,18 +280,18 @@
 },
 {
 "type": "hostpolicy",
-"fqdn": "raimo.aalto.lte.",
+"fqdn": "raimo.cesb.lte.",
 "direction": "inbound",
 "policy": {
     "request": [
-        { "ope":"query", "group": "id", "code": "fqdn", "value":["son1.raimo.aalto.lte.", "son2.raimo.aalto.lte."] },
+        { "ope":"query", "group": "id", "code": "fqdn", "value":["raimo_son1.cesa.lte.", "raimo_son2.cesa.lte."] },
         { "ope":"query", "group": "rloc", "code": "eth" },
         { "ope":"query", "group": "payload", "code": "eth" },
         { "ope":"query", "group": "control", "code": "caep" },
         { "ope":"query", "group": "control", "code": "ack" }
     ],
     "available": [
-        { "ope":"info", "group": "id", "code": "fqdn", "value":"raimo.aalto.lte." },
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"raimo.cesb.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
         { "ope":"info", "group": "control", "code": "ack" },
@@ -327,18 +301,18 @@
 },
 {
 "type": "hostpolicy",
-"fqdn": "raimo2.aalto.lte.",
+"fqdn": "raimo2.cesb.lte.",
 "direction": "inbound",
 "policy": {
     "request": [
-        { "ope":"query", "group": "id", "code": "fqdn", "value":["son1.raimo.aalto.lte.", "son2.raimo.aalto.lte."] },
+        { "ope":"query", "group": "id", "code": "fqdn", "value":["raimo_son1.cesa.lte.", "raimo_son2.cesa.lte."] },
         { "ope":"query", "group": "rloc", "code": "eth" },
         { "ope":"query", "group": "payload", "code": "eth" },
         { "ope":"query", "group": "control", "code": "caep" },
         { "ope":"query", "group": "control", "code": "ack" }
     ],
     "available": [
-        { "ope":"info", "group": "id", "code": "fqdn", "value":"raimo2.aalto.lte." },
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"raimo2.cesb.lte." },
         { "ope":"info", "group": "rloc", "code": "eth" },
         { "ope":"info", "group": "payload", "code": "eth" },
         { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" }

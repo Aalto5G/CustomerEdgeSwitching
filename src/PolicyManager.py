@@ -32,8 +32,9 @@ class HostRegister(object):
         
     def load_ip_fqdn_mapping(self):
         """ Acting as a static Identity assignment server to IP addresses """
-        #self.ip_fqdn_map = {"127.0.0.1":"son1.raimo.aalto.lte.", "10.0.3.118":"son1.raimo.aalto.lte.", "10.0.3.219":"raimo.aalto.lte.", "10.0.2.15":"son1.raimo.aalto.lte.", "10.0.2.16":"son2.raimo.aalto.lte."}
-        self.ip_fqdn_map = {"127.0.0.1":"son1.raimo.aalto.lte.", "10.0.3.118":"hosta1.demo.lte.", "10.0.3.219":"hostb1.demo.lte.", "10.0.3.189":"son1.raimo.aalto.lte.", "10.0.3.53":"raimo.aalto.lte."}
+        #self.ip_fqdn_map = {"127.0.0.1":"raimo_son1.cesa.fi.", "10.0.3.118":"son1.raimo.aalto.lte.", "10.0.3.219":"raimo.aalto.lte.", "10.0.2.15":"son1.raimo.aalto.lte.", "10.0.2.16":"son2.raimo.aalto.lte."}
+        self.ip_fqdn_map = {"10.0.3.118":"hosta1.cesa.lte.", "10.0.3.219":"hostb1.cesb.lte.", \
+                            "10.0.3.189":"raimo_son1.cesa.lte.", "10.0.3.53":"raimo.cesb.lte.", "127.0.0.1":"raimo_son1.cesa.lte."}
  
     def ip_to_fqdn_mapping(self, l_ip):
         if l_ip in self.ip_fqdn_map:
@@ -68,18 +69,18 @@ class PolicyManager(object):
 
     def assign_policy_to_host(self):
         self.fqdn_to_policy = {}
-        self.fqdn_to_policy['hosta1.demo.lte']   = 1
-        self.fqdn_to_policy['hosta2.demo.lte']   = 1
-        self.fqdn_to_policy['hosta3.demo.lte']   = 2
-        self.fqdn_to_policy['hosta4.demo.lte']   = 0
-        self.fqdn_to_policy['hostb1.demo.lte']   = 1
-        self.fqdn_to_policy['hostb2.demo.lte']   = 2
-        self.fqdn_to_policy['hostb3.demo.lte']   = 0
-        self.fqdn_to_policy['hostb4.demo.lte']   = 1
-        self.fqdn_to_policy['hostb5.demo.lte']   = 0
-        self.fqdn_to_policy['hostb6.demo.lte']   = 1
-        self.fqdn_to_policy['hostc1.demo.lte']   = 2
-        self.fqdn_to_policy['hostc2.demo.lte']   = 0
+        self.fqdn_to_policy['hosta1.cesa.lte']   = 1
+        self.fqdn_to_policy['hosta2.cesa.lte']   = 1
+        self.fqdn_to_policy['hosta3.cesa.lte']   = 2
+        self.fqdn_to_policy['hosta4.cesa.lte']   = 0
+        self.fqdn_to_policy['hostb1.cesb.lte']   = 1
+        self.fqdn_to_policy['hostb2.cesb.lte']   = 2
+        self.fqdn_to_policy['hostb3.cesb.lte']   = 0
+        self.fqdn_to_policy['hostb4.cesb.lte']   = 1
+        self.fqdn_to_policy['hostb5.cesb.lte']   = 0
+        self.fqdn_to_policy['hostb6.cesb.lte']   = 1
+        self.fqdn_to_policy['hostc1.cesc.lte']   = 2
+        self.fqdn_to_policy['hostc2.cesc.lte']   = 0
         self.fqdn_to_policy['www.google.com']    = 1
         self.fqdn_to_policy['www.aalto.fi']      = 2
     
@@ -107,13 +108,13 @@ class PolicyManager(object):
         try:
             policy_type = "hostpolicy"
             if host_id=="":
-                host_id="hosta1.demo.lte."
+                host_id="hosta1.cesa.lte."
             
             key = policy_type +":"+ direction +":"+ host_id
             policy = self._hostpolicy[key]
             return policy
             #return copy.deepcopy(policy)
-        except:
+        except Exception as ex:
             raise Exception("Host '{}' has no '{}' policy.".format(host_id, direction))
 
     def load_CES_policy(self):
@@ -175,22 +176,25 @@ class PolicyCETP(object):
         # setting value for CETP can be handled in CETP transaction module
 
     def get_available_policy(self, tlv):
-        group, code, cmp, ext, value = self.get_tlv_details(tlv)
+        ope, cmp, group, code, value = self.get_tlv_details(tlv)
         for rtlv in self.available:
             if (rtlv["group"] == tlv["group"]) and (rtlv["code"]==tlv["code"]):
-                group, code, cmp, ext, value = self.get_tlv_details(rtlv)
-                return group, code, cmp, ext, value
+                ope, cmp, group, code, value = self.get_tlv_details(rtlv)
+                return ope, cmp, group, code, value
 
     def get_policy_to_enforce(self, tlv):
-        group, code, cmp, ext, value = self.get_tlv_details(tlv)
+        ope, cmp, group, code, value = self.get_tlv_details(tlv)
         for rtlv in self.required:
             if (rtlv["group"] == tlv["group"]) and (rtlv["code"]==tlv["code"]):
-                group, code, cmp, ext, value = self.get_tlv_details(rtlv)
-                return group, code, cmp, ext, value
+                ope, cmp, group, code, value = self.get_tlv_details(rtlv)
+                return ope, cmp, group, code, value
     
     def get_tlv_details(self, tlv):
-        group, code, cmp, ext, value = None, None, None, None, None
+        ope, cmp, group, code, value = None, None, None, None, None
+        # group, code, cmp, ext, value
         try:
+            if "ope" in tlv:
+                group = tlv["ope"]            
             if "group" in tlv:
                 group = tlv["group"]
             if "code" in tlv:
@@ -200,14 +204,14 @@ class PolicyCETP(object):
             if 'value' in tlv:
                 value = tlv['value']
                 
-            return (group, code, cmp, ext, value)
+            return (ope, cmp, group, code, value)
         
         except Exception as ex:
             self._logger.info("Exception: {}".format(ex))
-            return (group, code, cmp, ext, value)
+            return (ope, cmp, group, code, value)
     
     def is_mandatory_required(self, tlv):
-        group, code, cmp, ext, value = self.get_tlv_details(tlv)
+        ope, cmp, group, code, value = self.get_tlv_details(tlv)
         for pol in self.required:
             if (group in pol["group"]) and (code in pol["code"]):
                 if 'cmp' in pol:
@@ -217,39 +221,48 @@ class PolicyCETP(object):
         return True
     
     def has_required(self, tlv):
-        group, code, cmp, ext, value = self.get_tlv_details(tlv)
+        ope, cmp, group, code, value = self.get_tlv_details(tlv)
         for pol in self.required:
             if (group in pol["group"]) and (code in pol["code"]):
                 return True
         return False
     
     def del_required(self, tlv):
-        group, code, cmp, ext, value = self.get_tlv_details(tlv)
+        ope, cmp, group, code, value = self.get_tlv_details(tlv)
         for pol in self.required:
             if (group in pol["group"]) and (code in pol["code"]):
                 self.required.remove(pol)
     
     def has_available(self, tlv):
-        group, code, cmp, ext, value = self.get_tlv_details(tlv)
+        ope, cmp, group, code, value = self.get_tlv_details(tlv)
         for pol in self.available:
             if (group in pol["group"]) and (code in pol["code"]):
                 return True
         return False
 
     def del_available(self, tlv):
-        group, code, cmp, ext, value = self.get_tlv_details(tlv)
+        ope, cmp, group, code, value = self.get_tlv_details(tlv)
         for pol in self.available:
             if (group in pol["group"]) and (code in pol["code"]):
                 self.available.remove(pol)
 
-    def get_required(self):
-        return self.required
+    def get_required(self, tlv=None):
+        if tlv != None:
+            pass
+        else:
+            return self.required
     
     def get_offer(self):
         return self.offer
     
-    def get_available(self):
-        return self.available                   # Store as CETPTLV field with additional possibility of value field
+    def get_available(self, tlv=None):
+        if tlv != None:
+            ope, cmp, group, code, value = self.get_tlv_details(tlv)
+            for rtlv in self.available:
+                if (rtlv["group"] == tlv["group"]) and (rtlv["code"]==tlv["code"]):
+                    return rtlv
+        else:
+            return self.available                   # Store as CETPTLV field with additional possibility of value field
     
     def get_tlv_response(self, tlv):
         for atlv in self.get_available():

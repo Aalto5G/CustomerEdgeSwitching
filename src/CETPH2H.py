@@ -16,7 +16,7 @@ import H2HTransaction
 import CETPC2C
 
 LOGLEVEL_CETPH2H             = logging.INFO
-
+LOGLEVEL_CETPH2HLocal        = logging.INFO
 
 class CETPH2H:
     def __init__(self, loop=None, l_cesid="", r_cesid="", cetpstate_mgr= None, policy_client=None, policy_mgr=None, cetp_mgr=None, ces_params=None, cetp_security=None, \
@@ -42,13 +42,6 @@ class CETPH2H:
         self._logger                    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPH2H)
         self._logger.info("CETPH2H layer created for cesid '{}'".format(r_cesid))
-        
-        """
-        From iCES:
-            self.c2c_q              = asyncio.Queue()
-            self.c2c                = c2c_layer
-            self.count              = 0                             # For debugging
-        """
 
 
     def create_cetp_c2c_layer(self, naptr_list):
@@ -187,3 +180,52 @@ class CETPH2H:
         self.c2c.handle_interrupt()
         self.close_pending_tasks()
 
+
+
+
+class CETPH2HLocal:
+    def __init__(self, loop=None, l_cesid="", r_cesid="", cetpstate_mgr= None, policy_mgr=None, cetp_mgr=None, ces_params=None, cetp_security=None, host_register= None, name="CETPH2H"):
+        self._loop                      = loop
+        self.l_cesid                    = l_cesid
+        self.r_cesid                    = r_cesid
+        self.cetpstate_mgr              = cetpstate_mgr
+        self.policy_mgr                 = policy_mgr
+        self.ces_params                 = ces_params
+        self.cetp_mgr                   = cetp_mgr
+        self.cetp_security              = cetp_security
+        self.host_register              = host_register
+        self._closure_signal            = False
+        self._logger                    = logging.getLogger(name)
+        self._logger.setLevel(LOGLEVEL_CETPH2H)
+        self._logger.info("CETPH2H for localCETP resolution")
+        
+    def consume_h2h_requests(self, dst_id, cb):
+        """ To consume NAPTR-response triggered by the private hosts """
+        try:
+            asyncio.ensure_future(self.h2h_transaction_start(cb, dst_id))     # Enable "try, except" within task to locally consume a task-raised exception
+        except Exception as ex:
+            self._logger.info(" Exception '{}' in triggering LocalH2HTransaction ".format(ex))
+            
+        
+    @asyncio.coroutine
+    def h2h_transaction_start(self, cb, dst_id):
+        (cb_func, cb_args) = cb
+        dns_q, addr = cb_args
+        ip_addr, port = addr
+        h2h = H2HTransaction.H2HTransactionLocal(loop=self._loop, cb=cb, host_ip=ip_addr, src_id="", dst_id=dst_id, policy_mgr=self.policy_mgr, \
+                                                 cetpstate_mgr=self.cetpstate_mgr, host_register=self.host_register, cetp_h2h=self)
+        result = yield from h2h.start_cetp_processing()     # Returns True or False
+        if result == True:
+            print("OK")
+        else:
+            print("NOK")
+
+    def pre_processing(self, dns_q, addr, dst_id):
+        sender_ip, sender_port = addr
+        sender_id = ""
+        key = (sender_id, dst_id)
+        # IF key exists, resuse a H2HTransactionLocal mapping
+        # Else, Create an H2HTransactionLocal mapping
+        
+    def set_closure_signal(self):
+        self._closure_signal = True

@@ -29,7 +29,7 @@ NEGOTIATION_RTT_THRESHOLD       = 3
 
 """
 General_policy
-        cesid: cesa.demo.lte.
+        cesid: cesa.lte.
         certificate: config_cesa/cesa.crt
         #private_key: config_cesa/cesa.key
         #ca_certificate: config_cesa/ca.crt

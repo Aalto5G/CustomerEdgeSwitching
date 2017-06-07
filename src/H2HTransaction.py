@@ -20,9 +20,10 @@ import copy
 LOGLEVEL_H2HTransaction         = logging.INFO
 LOGLEVEL_H2HTransactionOutbound = logging.INFO
 LOGLEVEL_H2HTransactionInbound  = logging.INFO
+LOGLEVEL_H2HTransactionLocal    = logging.INFO
 
 NEGOTIATION_RTT_THRESHOLD       = 3
-DEFAULT_STATE_TIMEOUT           = 31
+DEFAULT_STATE_TIMEOUT           = 5
 
 
 class H2HTransaction(object):
@@ -94,11 +95,14 @@ class H2HTransaction(object):
             tlv  = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy)
             return tlv
 
-    def _verify_tlv(self, tlv):
+    def _verify_tlv(self, tlv, policy=None):
         group, code = tlv['group'], tlv['code']
         if (group!="control") or ((group=="control") and (code in CETP.CONTROL_CODES)):
             func   = CETP.VERIFY_TLV_GROUP[group][code]
-            result = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy)
+            if policy!=None:
+                result = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=policy)
+            else:
+                result = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy)
             return result
 
     def _check_tlv(self, tlv, ope=None, cmp=None, group=None, code=None):
@@ -658,3 +662,106 @@ class H2HTransactionInbound(H2HTransaction):
     def get_policies_from_PolicySystem(self, r_hostid, r_cesid):
         yield from self.policy_client.send(r_hostid, r_cesid)
 
+
+
+class H2HTransactionLocal(H2HTransaction):
+    def __init__(self, loop=None, host_ip="", cb=None, src_id="", dst_id="", policy_mgr= None, host_register=None, cetpstate_mgr=None, cetp_h2h=None, name="H2HTransactionLocal"):
+        self.cb                 = cb
+        self.host_ip            = host_ip                   # IP of the sender host
+        self.src_id             = src_id                    # FQDN
+        self.dst_id             = dst_id
+        self.policy_mgr         = policy_mgr
+        self.cetpstate_mgr      = cetpstate_mgr
+        self._loop              = loop
+        self.cetp_h2h           = cetp_h2h
+        self.host_register      = host_register
+        self.l_cesid            = ""
+        self.r_cesid            = ""
+        self.name               = name
+        self._logger             = logging.getLogger(name)
+        self._logger.setLevel(LOGLEVEL_H2HTransactionLocal)
+
+    @asyncio.coroutine
+    def _initialize(self):
+        yield from asyncio.sleep(0.000)          # Simulating the delay in loading policies from the Policy System
+        self.src_id   = self.host_register.ip_to_fqdn_mapping(self.host_ip)
+        self.opolicy  = self.policy_mgr.get_host_policy("outbound", host_id=self.src_id)
+        self.ipolicy  = self.policy_mgr.get_host_policy("inbound",  host_id=self.dst_id)
+        
+    @asyncio.coroutine
+    def start_cetp_processing(self):
+        """ Starts the CETPLocal policy negotiation """
+        yield from self._initialize()
+        #self._logger.info("Local-host policy: {}".format(self.opolicy))
+        #self._logger.info("Remote-host policy: {}".format(self.ipolicy))
+        error = False
+        
+        # TBD: Verification & enforcement of policy elements is next
+        # If someone is reaching itself,     we don't assign any address to it (Or perform negotiation) 
+
+            
+        #Match Outbound-Requirements vs Inbound-Available TLVs:           1) Requirements are fulfilled; AND 2) Responses are acceptable 
+        #self._logger.info("Outbound-Requirements vs Inbound-Available")
+        for rtlv in self.opolicy.get_required():
+            #RLOC and payload-encapsulation polcies are not applicable in local connection context
+            if rtlv["group"] in ["rloc", "payload"]:
+                continue
+            
+            if not self.ipolicy.has_available(rtlv):
+                self._logger.warning("Outbound Requirement '{}.{}' is not met by destination" % (rtlv['group'], rtlv['code']))
+                error = True
+                break
+            else:
+                resp_tlv = self.ipolicy.get_available(tlv=rtlv)
+                # Check if the TLV value is acceptable to the sender host's requirements
+                if not self._verify_tlv(resp_tlv, policy=self.opolicy):
+                    # Absorbs failure in case of 'optional' required policy TLV
+                    if self.opolicy.is_mandatory_required(rtlv):
+                        self._logger.info(" TLV {}.{} failed verification".format(rtlv['group'], rtlv['code']))
+                        error=True
+                        break
+
+
+        if not error:
+            #Match Inbound-Requirements vs Outbound-Available TLVs        1) Requirements are fulfilled; AND 2) Responses are acceptable 
+            #self._logger.info("Match Inbound-Requirements vs Outbound-Available")
+            for rtlv in self.ipolicy.get_required():
+                #RLOC and payload-encapsulation polcies are not applicable in local connection context
+                if rtlv["group"] in ["rloc", "payload"]:
+                    continue
+                
+                if not self.opolicy.has_available(tlv=rtlv):
+                    self._logger.warning("Remote host requirement '{}.{}' is not met by the sender" % (rtlv['group'], rtlv['code']))
+                    error = True
+                    break
+                else:
+                    resp_tlv = self.opolicy.get_available(rtlv)
+                    if not self._verify_tlv(resp_tlv, policy=self.ipolicy):
+                        # Absorbs failure in case of 'optional' required policy TLV
+                        if self.opolicy.is_mandatory_required(rtlv):
+                            self._logger.info(" TLV {}.{} failed verification".format(resp_tlv['group'], resp_tlv['code']))
+                            error=True
+                            break
+
+
+        if error:
+            self._logger.warning("CETP Policy mismatched! Connection refused {} -> {}".format(self.src_id, self.dst_id))
+            self._execute_dns_callback(resolution=False)
+            #self.dns_state.delete(stateobj)
+            return False
+        else:
+            self._logger.warning("CETP Policy matched! Allocate proxy address. {} -> {}".format(self.src_id, self.dst_id))
+            self._execute_dns_callback()
+            #o_connection, i_connection = self.create_local_connection(localhost, remotehost)
+            #lpip = o_connection.lpip
+            #rrset = dns.rrset.from_text(domain, self.proxytimeout, dns.rdataclass.IN, query_type, lpip)
+            #self.answer_no_error(dns_query, stateobj, [rrset], [], [])
+            return True
+        
+        
+    def _execute_dns_callback(self, resolution=True):
+        """ Executes DNS callback towards host """
+        (cb_func, cb_args) = self.cb
+        dns_q, addr = cb_args
+        cb_func(dns_q, addr, success=resolution)
+        

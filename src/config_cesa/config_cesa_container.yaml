@@ -2,7 +2,7 @@
 
 CESParameters:
     name: cesa
-    cesid: cesa.demo.lte.
+    cesid: cesa.lte.
     certificate: config_cesa/cesa.crt
     private_key: config_cesa/cesa.key
     ca_certificate: config_cesa/ca.crt
@@ -22,8 +22,8 @@ CESParameters:
     min_keepalive_timeout: 10
     
 DNS:
-    soa: cesa.demo.lte.
-    zonefile: db.cesa.demo.lte.
+    soa: cesa.lte.
+    zonefile: db.cesa.lte.
     server:
         loopback:
             ip: 10.0.3.101

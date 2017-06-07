@@ -75,7 +75,7 @@ class CustomerEdgeSwitchv2(object):
         
         addr = self._dns['addr']['loopback']
         self._logger.info('Creating DNS Server {} @{}:{}'.format('loopback', addr[0],addr[1]))
-        factory = cesdns.DNSServer(cetp_mgr = self.cetp_mgr)
+        factory = cesdns.DNSServer(self.cesid, cetp_mgr = self.cetp_mgr)
         self._loop.create_task(self._loop.create_datagram_endpoint(lambda: factory, local_addr=addr))
 
     
