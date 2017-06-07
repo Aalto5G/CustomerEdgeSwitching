@@ -118,24 +118,23 @@ class CETPSecurity:
             challenge_token = str(ch_hash)+";"+str(self.acceptable_zeros)
             return challenge_token
         
-        except Exception as msg:
+        except Exception as ex:
             self._logger.info(" Error in generating the POW challenge.")
-            self._logger.info(msg)
+            self._logger.info(ex)
 
         
     def respond_pow(self, *args, **kwargs):
         """ Responds to the POW challenge """
-        sender_challenge = kwargs['challenge']
         try:
+            sender_challenge = kwargs['challenge']
             pow_challenge, ZEROS_IN_RESPONSE = sender_challenge.split(";")
             h = hashcash.make_token(pow_challenge.encode(), int(ZEROS_IN_RESPONSE))
             pow_resp = str(pow_challenge)+";"+str(h)
             return pow_resp
                 
-        except Exception as msg:
-            self._logger.info(" Exception in responding to the POW challenge.")
-            self._logger.info(msg)
-            return sender_challenge
+        except Exception as ex:
+            self._logger.info(" Exception '{}' in responding to the POW challenge.".format(ex))
+            return None
     
     
     def verify_pow(self, *args, **kwargs):
@@ -166,9 +165,8 @@ class CETPSecurity:
                     
             return self.pow_verification(inbound_challenge, inbound_solution)
         
-        except Exception as msg:
-            self._logger.info(" Exception in verifying the POW challenge.")
-            self._logger.info(msg)
+        except Exception as ex:
+            self._logger.info(" Exception '{}' in verifying the POW challenge.".format(ex))
             return False
     
     def pow_verification(self, inbound_challenge, inbound_solution):

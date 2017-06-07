@@ -324,16 +324,17 @@ class H2HTransactionOutbound(H2HTransaction):
                 if self._check_tlv(received_tlv, ope="query"):
                     if self.opolicy.has_available(received_tlv):
                         ret_tlv = self._create_response_tlv(received_tlv)
+                        if ret_tlv !=None:
+                            tlvs_to_send.append(ret_tlv)
+                            continue
+                                                
+                    if self._check_tlv(received_tlv, cmp="optional"):
+                        self._logger.info(" An optional requirement {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
+                        ret_tlv = self._get_unavailable_response(received_tlv)
                         tlvs_to_send.append(ret_tlv)
                     else:
-                        self._logger.info(" TLV {}.{} is notAvailable".format(received_tlv['group'], received_tlv['code']))
-                        if self._check_tlv(received_tlv, cmp="optional"):
-                            self._logger.info(" TLV {}.{} is not a mandatory requirement.".format(received_tlv['group'], received_tlv['code']))
-                            ret_tlv = self._get_unavailable_response(received_tlv)
-                            tlvs_to_send.append(ret_tlv)
-                        else:
-                            error = True
-                            break
+                        error = True
+                        break
     
             #A CETP response message is processed for: Policy Matching and TLV Verification. The message can have: 1) Less than required TLVs; 2) TLVs with wrong value; 3) a notAvailable TLV; OR 4) a terminate TLV.
             elif self._check_tlv(received_tlv, ope="info"):
@@ -562,19 +563,20 @@ class H2HTransactionInbound(H2HTransaction):
             if self._check_tlv(received_tlv, ope="query"):
                 if self.ipolicy.has_available(received_tlv):
                     ret_tlv = self._create_response_tlv(received_tlv)
+                    if ret_tlv !=None:
+                        tlvs_to_send.append(ret_tlv)
+                        continue
+                    
+                if self._check_tlv(received_tlv, cmp="optional"):
+                    self._logger.info(" An optional requirement TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
+                    ret_tlv = self._get_unavailable_response(received_tlv)
                     tlvs_to_send.append(ret_tlv)
                 else:
-                    self._logger.info(" TLV {}.{} is notAvailable".format(received_tlv['group'], received_tlv['code']))
-                    if self._check_tlv(received_tlv, cmp="optional"):
-                        self._logger.info(" TLV {}.{} is not a mandatory requirement.".format(received_tlv['group'], received_tlv['code']))
-                        ret_tlv = self._get_unavailable_response(received_tlv)
-                        tlvs_to_send.append(ret_tlv)
-                    else:
-                        self._logger.info(" TLV {}.{} is a mandatory requirement.".format(received_tlv['group'], received_tlv['code']))
-                        error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
-                        error = True
-                        break
-
+                    self._logger.info(" A required TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
+                    error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
+                    error = True
+                    break
+                        
             # Checks whether the sender's offer met the policy requirements of destination, and the Offer can be verified.
             elif self._check_tlv(received_tlv, ope="info"):
                 if received_tlv["group"] == "control" and received_tlv["code"]== "terminate":
@@ -640,7 +642,6 @@ class H2HTransactionInbound(H2HTransaction):
         #except Exception as msg:
         #    self._logger.info("Exception: {}".format(msg))
         #    return (None, "")
-            
 
     def dst_hostId_is_valid(self, host):
         """ Emulates that host exists behind CES """

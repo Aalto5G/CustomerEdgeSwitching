@@ -214,17 +214,24 @@ def send_ces_host_filtering(**kwargs):
 
 
 def response_to_wrong_query(tlv):
-    tlv["code"] = "terminate"
-    return tlv
+    try:
+        tlv["code"] = "terminate"
+        return tlv
+    except:
+        return None
 
 def response_ces_cesid(**kwargs):
-    tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
-    policy_code = CETP.CES_CODE_TO_POLICY[code]
-    new_tlv = copy.copy(tlv)
-    ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-    new_tlv['ope'] = "info"
-    new_tlv["value"] = response_value
-    return new_tlv
+    try:
+        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+        policy_code = CETP.CES_CODE_TO_POLICY[code]
+        new_tlv = copy.copy(tlv)
+        ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
+        new_tlv['ope'] = "info"
+        new_tlv["value"] = response_value
+        return new_tlv
+    except Exception as ex:
+        print("Exception in response_ces_cesid()", ex)
+        return None
 
 def response_ces_ttl(**kwargs):
     tlv, code, ces_params, policy, transaction, cetp_packet = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"], kwargs["transaction"], kwargs["packet"]
@@ -258,8 +265,8 @@ def response_ces_ttl(**kwargs):
     
         new_tlv['ope'] = "info"
         return new_tlv
-    except:
-        print("Exception in response_ces_ttl()")
+    except Exception as ex:
+        print("Exception in response_ces_ttl()", ex)
         return None
 
 
@@ -273,17 +280,22 @@ def response_ces_keepalive(**kwargs):
         new_tlv['value'] = ""
         return new_tlv
     except Exception as ex:
-        print(ex)
-        return response_to_wrong_query(tlv)
+        print("Exception in response_ces_keepalive()", ex)
+        return None
+
 
 def response_ces_keepalive_cycle(**kwargs):
-    tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
-    policy_code = CETP.CES_CODE_TO_POLICY[code]
-    new_tlv = copy.copy(tlv)
-    ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-    new_tlv['ope'] = "info"
-    new_tlv["value"] = response_value
-    return new_tlv
+    try:
+        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+        policy_code = CETP.CES_CODE_TO_POLICY[code]
+        new_tlv = copy.copy(tlv)
+        ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
+        new_tlv['ope'] = "info"
+        new_tlv["value"] = response_value
+        return new_tlv
+    except Exception as ex:
+        print("Exception in response_ces_keepalive_cycle()", ex)
+        return None
 
 def response_ces_certificate(**kwargs):
     tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
@@ -300,71 +312,99 @@ def response_ces_certificate(**kwargs):
         new_tlv["value"] = crt
         return new_tlv
     except Exception as ex:
-        print(ex)
-        return tlv
+        print("Exception in response_ces_certificate()", ex)
+        return None
  
 def response_ces_fw_version(**kwargs):
-    tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
-    policy_code = CETP.CES_CODE_TO_POLICY[code]
-    new_tlv = copy.copy(tlv)
-    ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-    new_tlv['ope'] = "info"
-    new_tlv["value"] = response_value
-    return new_tlv
+    try:
+        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+        policy_code = CETP.CES_CODE_TO_POLICY[code]
+        new_tlv = copy.copy(tlv)
+        ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
+        new_tlv['ope'] = "info"
+        new_tlv["value"] = response_value
+        return new_tlv
+    except Exception as ex:
+        print("Exception in response_ces_fw_version()", ex)
+        return None
 
 def response_ces_session_limit(**kwargs):
-    tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
-    policy_code = CETP.CES_CODE_TO_POLICY[code]
-    new_tlv = copy.copy(tlv)
-    ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-    new_tlv['ope'] = "info"
-    new_tlv["value"] = response_value
-    return new_tlv
+    try:
+        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+        policy_code = CETP.CES_CODE_TO_POLICY[code]
+        new_tlv = copy.copy(tlv)
+        ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
+        new_tlv['ope'] = "info"
+        new_tlv["value"] = response_value
+        return new_tlv
+    except Exception as ex:
+        print("Exception in response_ces_session_limit()", ex)
+        return None
 
 def response_ces_host_sessions(**kwargs):
-    tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
-    policy_code = CETP.CES_CODE_TO_POLICY[code]
-    new_tlv = copy.copy(tlv)
-    ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-    new_tlv['ope'] = "info"
-    new_tlv["value"] = response_value
-    return new_tlv
+    try:
+        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+        policy_code = CETP.CES_CODE_TO_POLICY[code]
+        new_tlv = copy.copy(tlv)
+        ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
+        new_tlv['ope'] = "info"
+        new_tlv["value"] = response_value
+        return new_tlv
+    except Exception as ex:
+        print("Exception in response_ces_host_sessions()", ex)
+        return None
 
 def response_ces_caces(**kwargs):
-    tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
-    policy_code = CETP.CES_CODE_TO_POLICY[code]
-    new_tlv = copy.copy(tlv)
-    ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-    new_tlv['ope'] = "info"
-    new_tlv["value"] = response_value
-    return new_tlv
+    try:
+        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+        policy_code = CETP.CES_CODE_TO_POLICY[code]
+        new_tlv = copy.copy(tlv)
+        ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
+        new_tlv['ope'] = "info"
+        new_tlv["value"] = response_value
+        return new_tlv
+    except Exception as ex:
+        print("Exception in response_ces_caces()", ex)
+        return None
 
 def response_ces_evidence_format(**kwargs):
-    tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
-    policy_code = CETP.CES_CODE_TO_POLICY[code]
-    new_tlv = copy.copy(tlv)
-    ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-    new_tlv['ope'] = "info"
-    new_tlv["value"] = response_value
-    return new_tlv
+    try:
+        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+        policy_code = CETP.CES_CODE_TO_POLICY[code]
+        new_tlv = copy.copy(tlv)
+        ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
+        new_tlv['ope'] = "info"
+        new_tlv["value"] = response_value
+        return new_tlv
+    except Exception as ex:
+        print("Exception in response_ces_evidence_format()", ex)
+        return None
 
 def response_ces_evidence(**kwargs):
-    tlv, code, ces_params, cetp_security, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["cetp_security"], kwargs["ces_policy"]
-    policy_code = CETP.CES_CODE_TO_POLICY[code]
-    evidence = tlv["value"]
-    new_tlv = copy.copy(tlv)
-    resp = cetp_security.process_evidence(r_cesid, evidence)
-    new_tlv['ope'] = "info"
-    new_tlv["value"] = response_value                   # Could be an ACKnowledgment/Error to provided evidence
-    return new_tlv
+    try:
+        tlv, code, ces_params, cetp_security, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["cetp_security"], kwargs["ces_policy"]
+        policy_code = CETP.CES_CODE_TO_POLICY[code]
+        evidence = tlv["value"]
+        new_tlv = copy.copy(tlv)
+        resp = cetp_security.process_evidence(r_cesid, evidence)
+        new_tlv['ope'] = "info"
+        new_tlv["value"] = response_value                   # Could be an ACKnowledgment/Error to provided evidence
+        return new_tlv
+    except Exception as ex:
+        print("Exception in response_ces_evidence()", ex)
+        return None
 
 def response_ces_headersignature(**kwargs):
-    tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
-    policy_code = CETP.CES_CODE_TO_POLICY[code]
-    new_tlv = copy.copy(tlv)
-    new_tlv['ope'] = "info"
-    new_tlv["value"] = "Not defined yet"
-    return new_tlv
+    try:
+        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+        policy_code = CETP.CES_CODE_TO_POLICY[code]
+        new_tlv = copy.copy(tlv)
+        new_tlv['ope'] = "info"
+        new_tlv["value"] = "Not defined yet"
+        return new_tlv
+    except Exception as ex:
+        print("Exception in response_ces_headersignature()", ex)
+        return None
 
 def response_ces_pow(**kwargs):
     tlv, code, ces_params, cetp_security, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["cetp_security"], kwargs["ces_policy"]
@@ -372,13 +412,16 @@ def response_ces_pow(**kwargs):
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         sender_challenge = tlv["value"]
         pow_resp = cetp_security.respond_pow(challenge = sender_challenge)
+        if pow_resp == None:
+            return None
+        
         new_tlv = copy.copy(tlv)
         new_tlv['ope'] = "info"
         new_tlv["value"] = pow_resp
         return new_tlv
-    except Exception as msg:
-        print(" Exception in responding to POW challenge.")
-        return tlv
+    except Exception as ex:
+        print(" Exception in responding to POW challenge. {}".format(ex))
+        return None
 
 def verify_ces_cesid(**kwargs):
     try:
@@ -941,153 +984,208 @@ def response_ctrl_fqdn(**kwargs):
     return new_tlv
 
 def response_ctrl_certificate(**kwargs):
-    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    new_tlv = copy.deepcopy(tlv)
-    ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-    new_tlv['ope'] = 'info'
-    if response_value==None:
-        new_tlv["value"] = ""
-    else:
-        new_tlv["value"] = response_value
-    return new_tlv
+    try:
+        tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+        new_tlv = copy.deepcopy(tlv)
+        ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
+        new_tlv['ope'] = 'info'
+        if response_value==None:
+            new_tlv["value"] = ""
+        else:
+            new_tlv["value"] = response_value
+        return new_tlv
+    except Exception as ex:
+        print("Exception in response_ctrl_certificate()", ex)
+        return None
+
 
 def response_ctrl_caep(**kwargs):
-    tlv, policy = kwargs["tlv"], kwargs["policy"]
-    new_tlv = copy.deepcopy(tlv)
-    ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-    #print("response_value", response_value)
-    new_tlv['ope'] = "info"
-    if response_value==None:
-        new_tlv["value"] = ""
-    else:
-        new_tlv["value"] = response_value
-    return new_tlv
+    try:
+        tlv, policy = kwargs["tlv"], kwargs["policy"]
+        new_tlv = copy.deepcopy(tlv)
+        ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
+        #print("response_value", response_value)
+        new_tlv['ope'] = "info"
+        if response_value==None:
+            new_tlv["value"] = ""
+        else:
+            new_tlv["value"] = response_value
+        return new_tlv
+
+    except Exception as ex:
+        print("Exception in response_ctrl_caep()", ex)
+        return None
+
 
 def response_ctrl_dp_rlocs(**kwargs):
-    tlv, policy = kwargs["tlv"], kwargs["policy"]
-    new_tlv = copy.deepcopy(tlv)
-    ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-    new_tlv['ope'] = 'info'
-    if response_value==None:
-        new_tlv["value"] = ""
-    else:
-        new_tlv["value"] = response_value
-    return new_tlv
+    try:
+        tlv, policy = kwargs["tlv"], kwargs["policy"]
+        new_tlv = copy.deepcopy(tlv)
+        ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
+        new_tlv['ope'] = 'info'
+        if response_value==None:
+            new_tlv["value"] = ""
+        else:
+            new_tlv["value"] = response_value
+        return new_tlv
+    except Exception as ex:
+        print("Exception in response_ctrl_dp_rlocs()", ex)
+        return None
 
 def response_ctrl_dp_ttl(**kwargs):
-    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    new_tlv = copy.deepcopy(tlv)
-    ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-    new_tlv['ope'] = 'info'
-    if response_value==None:
-        new_tlv["value"] = ""
-    else:
-        new_tlv["value"] = response_value
-    return new_tlv
+    try:
+        tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+        new_tlv = copy.deepcopy(tlv)
+        ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
+        new_tlv['ope'] = 'info'
+        if response_value==None:
+            new_tlv["value"] = ""
+        else:
+            new_tlv["value"] = response_value
+        return new_tlv
+    except Exception as ex:
+        print("Exception in response_ctrl_dp_ttl()", ex)
+        return None
+
 
 def response_ctrl_dp_keepalive_cycle(**kwargs):
-    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    policy_code = CETP.CONTROL_CODES[code]
-    tlv['ope'] = 'info'
-    #tlv["value"] = "some-value"
-    return tlv
-
-def response_ctrl_qos(**kwargs):
-    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    new_tlv = copy.deepcopy(tlv)
-    ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-    new_tlv['ope'] = 'info'
-    if response_value==None:
-        new_tlv["value"] = ""
-    else:
-        new_tlv["value"] = response_value
+    try:
+        tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+        policy_code = CETP.CONTROL_CODES[code]
+        tlv['ope'] = 'info'
+        #tlv["value"] = "some-value"
+        return tlv
+    except Exception as ex:
+        print("Exception in response_ctrl_dp_keepalive_cycle()", ex)
+        return None
     
-    return new_tlv
-
+def response_ctrl_qos(**kwargs):
+    try:
+        tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+        new_tlv = copy.deepcopy(tlv)
+        ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
+        new_tlv['ope'] = 'info'
+        if response_value==None:
+            new_tlv["value"] = ""
+        else:
+            new_tlv["value"] = response_value
+        return new_tlv
+    except Exception as ex:
+        print("Exception in response_ctrl_qos()", ex)
+        return None
 
 def response_ctrl_ack(**kwargs):
-    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    new_tlv = copy.deepcopy(tlv)
-    ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-    new_tlv['ope'] = 'info'
-    if response_value==None:
-        new_tlv["value"] = ""
-    else:
-        new_tlv["value"] = response_value
-    return new_tlv
+    try:
+        tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+        new_tlv = copy.deepcopy(tlv)
+        ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
+        new_tlv['ope'] = 'info'
+        if response_value==None:
+            new_tlv["value"] = ""
+        else:
+            new_tlv["value"] = response_value
+        return new_tlv
+    except Exception as ex:
+        print("Exception in response_ctrl_ack()", ex)
+        return None
 
     
 def response_ctrl_os_version(**kwargs):
-    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    new_tlv = copy.deepcopy(tlv)
-    ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-    new_tlv['ope'] = 'info'
-    if response_value==None:
-        new_tlv["value"] = ""
-    else:
-        new_tlv["value"] = response_value
-    return new_tlv
+    try:
+        tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+        new_tlv = copy.deepcopy(tlv)
+        ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
+        new_tlv['ope'] = 'info'
+        if response_value==None:
+            new_tlv["value"] = ""
+        else:
+            new_tlv["value"] = response_value
+        return new_tlv
+    except Exception as ex:
+        print("Exception in response_ctrl_os_version()", ex)
+        return None
 
 def response_ctrl_policy_caching(**kwargs):
-    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    new_tlv = copy.deepcopy(tlv)
-    ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-    new_tlv['ope'] = 'info'
-    if response_value==None:
-        new_tlv["value"] = ""
-    else:
-        new_tlv["value"] = response_value
-    
-    return new_tlv
+    try:
+        tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+        new_tlv = copy.deepcopy(tlv)
+        ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
+        new_tlv['ope'] = 'info'
+        if response_value==None:
+            new_tlv["value"] = ""
+        else:
+            new_tlv["value"] = response_value
+        return new_tlv
+    except Exception as ex:
+        print("Exception in response_ctrl_policy_caching()", ex)
+        return None
 
 
 def response_ctrl_dp_proto(**kwargs):
-    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    new_tlv = copy.deepcopy(tlv)
-    ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-    new_tlv['ope'] = 'info'
-    if response_value==None:
-        new_tlv["value"] = ""
-    else:
-        new_tlv["value"] = response_value
-    
-    return new_tlv
+    try:
+        tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+        new_tlv = copy.deepcopy(tlv)
+        ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
+        new_tlv['ope'] = 'info'
+        if response_value==None:
+            new_tlv["value"] = ""
+        else:
+            new_tlv["value"] = response_value
+        return new_tlv
+    except Exception as ex:
+        print("Exception in response_ctrl_dp_proto()", ex)
+        return None
+
 
 def response_ctrl_dp_port(**kwargs):
-    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    new_tlv = copy.deepcopy(tlv)
-    ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-    new_tlv['ope'] = 'info'
-    if response_value==None:
-        new_tlv["value"] = ""
-    else:
-        new_tlv["value"] = response_value
-    
-    return new_tlv
+    try:
+        tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+        new_tlv = copy.deepcopy(tlv)
+        ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
+        new_tlv['ope'] = 'info'
+        if response_value==None:
+            new_tlv["value"] = ""
+        else:
+            new_tlv["value"] = response_value
+        return new_tlv
+    except Exception as ex:
+        print("Exception in response_ctrl_dp_port()", ex)
+        return None
 
 def response_ctrl_dp_ratelimit(**kwargs):
-    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    new_tlv = copy.deepcopy(tlv)
-    ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-    new_tlv['ope'] = 'info'
-    if response_value==None:
-        new_tlv["value"] = ""
-    else:
-        new_tlv["value"] = response_value
-    
-    return new_tlv
+    try:
+        tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+        new_tlv = copy.deepcopy(tlv)
+        ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
+        new_tlv['ope'] = 'info'
+        if response_value==None:
+            new_tlv["value"] = ""
+        else:
+            new_tlv["value"] = response_value
+        return new_tlv
+    except Exception as ex:
+        print("Exception in response_ctrl_dp_ratelimit()", ex)
+        return None
 
 def response_ctrl_terminate(**kwargs):
-    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    new_tlv = copy.deepcopy(tlv)
-    new_tlv['ope'] = 'info'
-    return new_tlv
-
+    try:
+        tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+        new_tlv = copy.deepcopy(tlv)
+        new_tlv['ope'] = 'info'
+        return new_tlv
+    except Exception as ex:
+        print("Exception in response_ctrl_terminate()", ex)
+        return None
+    
 def response_ctrl_warning(**kwargs):
-    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    new_tlv = copy.deepcopy(tlv)
-    new_tlv['ope'] = 'info'
-    return new_tlv
+    try:
+        tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+        new_tlv = copy.deepcopy(tlv)
+        new_tlv['ope'] = 'info'
+        return new_tlv
+    except Exception as ex:
+        print("Exception in response_ctrl_warning()", ex)
+        return None
 
 def verify_ctrl_dstep(**kwargs):
     tlv, code = kwargs["tlv"], kwargs["code"]

@@ -96,7 +96,7 @@ class PolicyManager(object):
     def _get_host_policies(self):
         return self._hostpolicies
     
-    def get_ces_policy(self, proto="tcp", direction="outbound"):
+    def get_ces_policy(self, proto="tcp"):
         policy_type = "cespolicy"
         l_cesid = self.l_cesid
         key = policy_type+":"+proto+":"+l_cesid

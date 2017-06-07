@@ -233,9 +233,9 @@ class oC2CTransaction(C2CTransaction):
         self.cetp_negotiation_history  = []
         self.r_ces_requirements        = []         # To store r_ces requirements
 
-    def load_policies(self, l_ceisd, proto, direction):
+    def load_policies(self, l_cesid):
         """ Retrieves the policies stored in the Policy file"""
-        self.ces_policy  = self.policy_mgr.get_ces_policy(proto=self.proto, direction=direction)
+        self.ces_policy  = self.policy_mgr.get_ces_policy(proto=self.proto)
 
     def load_parameters(self):
         # Default values
@@ -255,7 +255,7 @@ class oC2CTransaction(C2CTransaction):
         """ Loads policies, generates session tags, and initiates event handlers """
         try:
             self.sstag = self.generate_session_tags()
-            self.load_policies(self.l_cesid, self.proto, self.direction)
+            self.load_policies(self.l_cesid)
             self.load_parameters()
             # Event handler to unregister the incomplete CETP-C2C transaction
             self.c2c_handler = self._loop.call_later(self.state_timeout, self.handle_c2c)
@@ -412,18 +412,15 @@ class oC2CTransaction(C2CTransaction):
                         ret_tlv = self._create_response_tlv(received_tlv)
                         if ret_tlv != None:
                             tlvs_to_send.append(ret_tlv)
-                        else:
-                            self._logger.info("Error in responding to queries")
+                            continue
                         
+                    if self._check_tlv(received_tlv, cmp="optional"):
+                        self._logger.info(" An optional Request TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
+                        ret_tlv = self._get_unavailable_response(received_tlv)
+                        tlvs_to_send.append(ret_tlv)
                     else:
-                        self._logger.info(" TLV {}.{} is notAvailable".format(received_tlv['group'], received_tlv['code']))
-                        if self._check_tlv(received_tlv, cmp="optional"):
-                            self._logger.info(" TLV {}.{} is not a mandatory requirement.".format(received_tlv['group'], received_tlv['code']))
-                            ret_tlv = self._get_unavailable_response(received_tlv)
-                            tlvs_to_send.append(ret_tlv)
-                        else:
-                            error = True
-                            break
+                        error = True
+                        break
 
             #A CETP response message is processed for: Policy Matching and TLV Verification. The message can have: 1) Less than required TLVs; 2) TLVs with wrong value; 3) a notAvailable TLV; OR 4) a terminate TLV.
             elif self._check_tlv(received_tlv, ope="info"):
@@ -623,11 +620,13 @@ class oC2CTransaction(C2CTransaction):
             if self._check_tlv(received_tlv, ope="query"):
                 if self.ces_policy.has_available(received_tlv):
                     ret_tlv = self._create_response_tlv(received_tlv)
-                    tlvs_to_send.append(ret_tlv)
+                    if ret_tlv !=None:
+                        tlvs_to_send.append(ret_tlv)
+                    else:
+                        self._logger.info("Invalid TLV received in post-c2c negotiation")
                 else:
-                    self._logger.info(" TLV {}.{} is notAvailable".format(received_tlv['group'], received_tlv['code']))
                     if self._check_tlv(received_tlv, cmp="optional"):
-                        self._logger.info(" TLV {}.{} is not a mandatory requirement.".format(received_tlv['group'], received_tlv['code']))
+                        self._logger.info(" An optional requirement {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
                         continue
                     else:
                         self._get_unavailable_response(received_tlv)
@@ -712,11 +711,11 @@ class iC2CTransaction(C2CTransaction):
         self._logger                    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_iC2CTransaction)
         
-    def load_policies(self, l_ceisd, proto, direction):
+    def load_policies(self, l_cesid):
         """ Retrieves the policies stored in the policy file"""
         self.ices_policy, self.ices_policy_tmp  = None, None
-        self.ices_policy        = self.policy_mgr.get_ces_policy(proto=self.proto, direction=direction)
-        self.ices_policy_tmp    = self.policy_mgr.get_ces_policy(proto=self.proto, direction=direction)
+        self.ices_policy        = self.policy_mgr.get_ces_policy(proto=self.proto)
+        self.ices_policy_tmp    = self.policy_mgr.get_ces_policy(proto=self.proto)
         self.ces_policy         = self.ices_policy
 
     def _pre_process(self, cetp_packet):
@@ -746,9 +745,9 @@ class iC2CTransaction(C2CTransaction):
             return False
         
         try:
-            self.load_policies(self.l_cesid, self.proto, self.direction)
-        except Exception as msg:
-            self._logger.error(" Loading of CETP-C2C policies failed.")
+            self.load_policies(self.l_cesid)
+        except Exception as ex:
+            self._logger.error(" Loading of CETP-C2C policies failed. '{}'".format(ex))
             return False
         return True
 
@@ -804,18 +803,19 @@ class iC2CTransaction(C2CTransaction):
                 if self._check_tlv(received_tlv, ope="query"):
                     if self.ices_policy.has_available(received_tlv):
                         ret_tlv = self._create_response_tlv(received_tlv)
+                        if ret_tlv!=None:
+                            tlvs_to_send.append(ret_tlv)
+                            continue
+                        
+                    if self._check_tlv(received_tlv, cmp="optional"):
+                        self._logger.info(" A mandatory required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
+                        ret_tlv = self._get_unavailable_response(received_tlv)
                         tlvs_to_send.append(ret_tlv)
                     else:
-                        self._logger.info(" TLV {}.{} is notAvailable".format(received_tlv['group'], received_tlv['code']))
-                        if self._check_tlv(received_tlv, cmp="optional"):
-                            self._logger.info(" TLV {}.{} is not a mandatory requirement.".format(received_tlv['group'], received_tlv['code']))
-                            ret_tlv = self._get_unavailable_response(received_tlv)
-                            tlvs_to_send.append(ret_tlv)
-                        else:
-                            self._logger.info(" TLV {}.{} is a mandatory requirement.".format(received_tlv['group'], received_tlv['code']))
-                            error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
-                            error = True
-                            break
+                        self._logger.info(" An optional required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
+                        error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
+                        error = True
+                        break
 
         if error:
             cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=error_tlvs)
@@ -857,7 +857,7 @@ class iC2CTransaction(C2CTransaction):
     def _export_to_stateful(self):
         new_transaction = oC2CTransaction(self._loop, l_cesid=self.l_cesid, r_cesid=self.r_cesid, c_sstag=self.sstag, c_dstag=self.dstag, policy_mgr= self.policy_mgr, \
                                           cetpstate_mgr=self.cetpstate_mgr, ces_params=self.ces_params, proto=self.proto, transport=self.transport, direction="inbound")
-        new_transaction.load_policies(self.l_cesid, self.proto, direction="inbound")
+        new_transaction.load_policies(self.l_cesid)
         new_transaction.c2c_negotiation_status = True
         new_transaction.trigger_negotiated_functions()
         self.cetpstate_mgr.add_established_transaction((self.sstag, self.dstag), new_transaction)
