@@ -28,7 +28,7 @@ class CETPC2CLayer:
         Management of CETPTransport failover, seemless to H2H-layer.
     """
     def __init__(self, loop, naptr_list=[], cetp_h2h=None, l_cesid=None, r_cesid=None, cetpstate_mgr=None, policy_mgr=None, policy_client=None, ces_params=None, \
-                 cetp_security=None, cetp_mgr=None, name="oCES2CESLayer"):
+                 cetp_security=None, cetp_mgr=None, name="CETPC2CLayer"):
         self._loop                      = loop
         self.naptr_list                 = naptr_list
         self.cetp_h2h                   = cetp_h2h               # H2H layer manager for remote-cesid 
@@ -279,16 +279,11 @@ class CETPC2CLayer:
                 self._logger.info("Terminating asyncio-task in c2c-layer towards remote CES '{}'".format(self.r_cesid))            
                 tsk.cancel()
     
-    def create_cetp_h2h(self, r_cesid, policy_mgr, cetpstate_mgr, l_cesid, ces_params, cetp_security, host_reg):
+    def trigger_cetp_h2h(self, cetp_h2h):
         """ Creates the CETP-H2H layer """
-        self.cetp_h2h = CETPH2H.CETPH2H(c2c_layer=self, l_cesid=l_cesid, r_cesid=r_cesid, policy_mgr=policy_mgr, cetpstate_mgr=cetpstate_mgr, c2c_negotiated=True, \
-                                   host_register=host_reg, loop=self._loop, cetp_mgr=self.cetp_mgr, ces_params=ces_params, cetp_security=cetp_security)
-        
-        self.cetp_mgr.add_cetp_endpoint(r_cesid, self.cetp_h2h)
+        self.cetp_h2h = cetp_h2h
         t1=asyncio.ensure_future(self.cetp_h2h.consume_h2h_requests())                       # For consuming DNS NAPTR-responses triggered by private hosts
         self.pending_tasks.append(t1)
-        return self.cetp_h2h
-
 
     def initiate_cetp_transport(self, naptr_list):
         """ Intiates CETP Transports towards remote endpoints (for each 'naptr' record in the naptr_list) """

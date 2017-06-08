@@ -20,7 +20,7 @@ LOGLEVEL_CETPH2HLocal        = logging.INFO
 
 class CETPH2H:
     def __init__(self, loop=None, l_cesid="", r_cesid="", cetpstate_mgr= None, policy_client=None, policy_mgr=None, cetp_mgr=None, ces_params=None, cetp_security=None, \
-                 host_register= None, c2c_negotiated=False, c2c_layer=None, name="CETPH2H"):
+                 host_register= None, c2c_negotiated=False, interfaces=None, c2c_layer=None, name="CETPH2H"):
         self._loop                      = loop
         self.l_cesid                    = l_cesid
         self.r_cesid                    = r_cesid
@@ -32,6 +32,7 @@ class CETPH2H:
         self.cetp_security              = cetp_security
         self.host_register              = host_register
         self.c2c                        = c2c_layer
+        self.interfaces                 = interfaces
         self._closure_signal            = False
         self.ongoing_h2h_transactions   = 0
         self.max_session_limit          = 20                        # Dummy value for now, In reality the value shall come from C2C negotiation with remote CES.
@@ -46,10 +47,7 @@ class CETPH2H:
 
     def create_cetp_c2c_layer(self, naptr_list):
         """ Initiates CETPc2clayer between two CES nodes """
-        self.c2c = CETPC2C.CETPC2CLayer(self._loop, cetp_h2h=self, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetpstate_mgr= self.cetpstate_mgr, \
-                                 policy_mgr=self.policy_mgr, cetp_mgr=self.cetp_mgr, ces_params=self.ces_params, cetp_security=self.cetp_security)
-        
-        self.cetp_mgr.register_c2c_layer(self.r_cesid, self.c2c)
+        self.c2c = self.cetp_mgr.create_c2c_layer(cetp_h2h=self, r_cesid=self.r_cesid)
         self.c2c.initiate_cetp_transport(naptr_list)
         
     def enqueue_h2h_requests_nowait(self, naptr_records, cb):
@@ -101,8 +99,8 @@ class CETPH2H:
         (cb_func, cb_args) = cb
         dns_q, addr = cb_args
         ip_addr, port = addr
-        h2h = H2HTransaction.H2HTransactionOutbound(loop=self._loop, cb=cb, host_ip=ip_addr, src_id="", dst_id=dst_id, l_cesid=self.l_cesid, r_cesid=self.r_cesid, \
-                                                    ces_params=self.ces_params, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, host_register=self.host_register, cetp_h2h=self)
+        h2h = H2HTransaction.H2HTransactionOutbound(loop=self._loop, cb=cb, host_ip=ip_addr, src_id="", dst_id=dst_id, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetp_h2h=self, \
+                                                    ces_params=self.ces_params, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, host_register=self.host_register, interfaces=self.interfaces)
         cetp_packet = yield from h2h.start_cetp_processing()
         if cetp_packet != None:
             self._logger.debug(" H2H transaction started.")
@@ -117,7 +115,8 @@ class CETPH2H:
         
         if inbound_dstag == 0:
             self._logger.info(" No prior H2H-transaction found -> Initiating Inbound H2HTransaction (SST={} -> DST={})".format(inbound_sstag, inbound_dstag))
-            i_h2h = H2HTransaction.H2HTransactionInbound(sstag=sstag, dstag=sstag, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr)
+            print(self.interfaces)
+            i_h2h = H2HTransaction.H2HTransactionInbound(sstag=sstag, dstag=sstag, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, interfaces=self.interfaces)
             asyncio.ensure_future(i_h2h.start_cetp_processing(cetp_msg, transport))
             
         elif self.cetpstate_mgr.has_initiated_transaction( (sstag, 0) ):
@@ -144,6 +143,7 @@ class CETPH2H:
 
         except Exception as ex:
             self._logger.info(" Exception in consuming message from c2c-layer: '{}'".format(ex))
+            traceback.print_exc(file=sys.stdout)
 
     def update_H2H_transaction_count(self, initiated=True):
         """ To limit the number of H2H transaction to limit agreed in C2C Negotiation """
