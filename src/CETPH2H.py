@@ -20,7 +20,7 @@ LOGLEVEL_CETPH2HLocal        = logging.INFO
 
 class CETPH2H:
     def __init__(self, loop=None, l_cesid="", r_cesid="", cetpstate_mgr= None, policy_client=None, policy_mgr=None, cetp_mgr=None, ces_params=None, cetp_security=None, \
-                 host_register= None, c2c_negotiated=False, interfaces=None, c2c_layer=None, name="CETPH2H"):
+                 host_register= None, c2c_negotiated=False, interfaces=None, c2c_layer=None, conn_table=None, name="CETPH2H"):
         self._loop                      = loop
         self.l_cesid                    = l_cesid
         self.r_cesid                    = r_cesid
@@ -33,6 +33,7 @@ class CETPH2H:
         self.host_register              = host_register
         self.c2c                        = c2c_layer
         self.interfaces                 = interfaces
+        self.conn_table                 = conn_table
         self._closure_signal            = False
         self.ongoing_h2h_transactions   = 0
         self.max_session_limit          = 20                        # Dummy value for now, In reality the value shall come from C2C negotiation with remote CES.
@@ -100,7 +101,8 @@ class CETPH2H:
         dns_q, addr = cb_args
         ip_addr, port = addr
         h2h = H2HTransaction.H2HTransactionOutbound(loop=self._loop, cb=cb, host_ip=ip_addr, src_id="", dst_id=dst_id, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetp_h2h=self, \
-                                                    ces_params=self.ces_params, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, host_register=self.host_register, interfaces=self.interfaces)
+                                                    ces_params=self.ces_params, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, host_register=self.host_register, \
+                                                    conn_table=self.conn_table, interfaces=self.interfaces)
         cetp_packet = yield from h2h.start_cetp_processing()
         if cetp_packet != None:
             self._logger.debug(" H2H transaction started.")
@@ -116,7 +118,8 @@ class CETPH2H:
         if inbound_dstag == 0:
             self._logger.info(" No prior H2H-transaction found -> Initiating Inbound H2HTransaction (SST={} -> DST={})".format(inbound_sstag, inbound_dstag))
             print(self.interfaces)
-            i_h2h = H2HTransaction.H2HTransactionInbound(sstag=sstag, dstag=sstag, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, interfaces=self.interfaces)
+            i_h2h = H2HTransaction.H2HTransactionInbound(sstag=sstag, dstag=sstag, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, \
+                                                         interfaces=self.interfaces, conn_table=self.conn_table)
             asyncio.ensure_future(i_h2h.start_cetp_processing(cetp_msg, transport))
             
         elif self.cetpstate_mgr.has_initiated_transaction( (sstag, 0) ):

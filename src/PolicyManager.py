@@ -42,6 +42,31 @@ class HostRegister(object):
             return l_fqdn
 
 
+class Interfaces(object):
+    def __init__(self, config_file=None, name="Interfaces"):
+        self._interfaces = []
+        self.register_interfaces(config_file)
+
+    def register_interfaces(self, config_file):
+        #r  = pref, order, rloc_type, rloc, iface
+        r1 = 100, 80, "ipv4", "10.0.3.101",         "ISP"
+        r2 = 100, 60, "ipv4", "10.0.3.121",         "ISP"
+        r3 = 100, 60, "ipv6", "11:22:33:44:55:66", "IXP"
+        self._interfaces.append(r1)
+        self._interfaces.append(r2)
+        self._interfaces.append(r3)
+                        
+    def get_interfaces(self):
+        self._interfaces
+        
+    def get_interface(self, rloc_type=None, iface=None):
+        for ifaces in self._interfaces:
+            pref, order, r_type, rloc, iface = ifaces
+            if r_type == rloc_type:
+                return (pref, order, rloc, iface)
+    
+    
+
 class PolicyManager(object):
     # Loads policies, and keeps policy elements as CETPTLV objects
     def __init__(self, l_cesid, policy_file=None, name="PolicyManager"):
@@ -289,7 +314,7 @@ class PolicyCETP(object):
                 pol_rep = gp+"."+code+"."+cmp
             elif 'value' in pol:
                 gp, code, value = pol['group'], pol['code'], pol['value']
-                if (type(value) == type(list())) or (type(value) == type(dict())):
+                if (type(value) != type(str())):
                     pol_rep = gp+"."+code
                 else:
                     pol_rep = gp+"."+code+": "+value

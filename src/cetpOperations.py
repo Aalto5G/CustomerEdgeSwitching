@@ -673,13 +673,15 @@ def verify_ces_pow(**kwargs):
 
 
 def send_rloc(**kwargs):
-    tlv, code, query, policy = kwargs["tlv"], kwargs["code"], kwargs["query"], kwargs["policy"]
+    tlv, code, query, policy, interfaces = kwargs["tlv"], kwargs["code"], kwargs["query"], kwargs["policy"], kwargs["interfaces"]
     if query==True:
         if 'value' in tlv:
             tlv["value"] = ""
     else:
-        if 'value' not in tlv:
-            tlv["value"] = ""
+        #Create an offer TLV
+        group, code = tlv["group"], tlv["code"]
+        pref, order, rloc, iface = interfaces.get_interface(rloc_type=code)
+        tlv["value"] = (pref, order, rloc, iface)
     return tlv
 
 def send_payload(**kwargs):
@@ -693,16 +695,17 @@ def send_payload(**kwargs):
     return tlv
 
 def response_rloc(**kwargs):
-    tlv, policy = kwargs["tlv"], kwargs["policy"]
-    new_tlv = copy.deepcopy(tlv)
-    ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-    new_tlv['ope'] = 'info'
-    
-    if response_value==None:
-        new_tlv["value"] = ""
-    else:
-        new_tlv["value"] = response_value
-    return new_tlv
+    try:
+        tlv, policy, interfaces = kwargs["tlv"], kwargs["policy"], kwargs["interfaces"]
+        new_tlv = copy.deepcopy(tlv)
+        ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
+        pref, order, rloc, iface = interfaces.get_interface(rloc_type=code)             # Value comes from dataplane/interface definitions
+        new_tlv["value"] = (pref, order, rloc, iface)
+        new_tlv['ope'] = 'info'
+        return new_tlv
+    except Exception as ex:
+        print("Exception in response_rloc(): ", ex)
+        return None
 
 def response_payload(**kwargs):
     tlv, policy = kwargs["tlv"], kwargs["policy"]
@@ -718,12 +721,52 @@ def response_payload(**kwargs):
 
 
 def verify_rloc(**kwargs):
-    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    return True
+    try:
+        #Check whether you have this interface.
+        tlv, code, policy, interfaces = kwargs["tlv"], kwargs["code"], kwargs["policy"], kwargs["interfaces"]
+        rrloc = tlv["value"]
+        
+        if len(rrloc)==0:
+            return False
+        if type(rrloc)!=type(list()):
+            return False
+        
+        r_pref, r_order, r_rloc, r_iface = rrloc
+        ope, cmp, group, code, response_value = policy.get_available_policy(tlv)
+        if response_value==None:
+            (l_pref, l_order, l_rloc, l_iface) = interfaces.get_interface(rloc_type=code)
+        
+        #if l_iface!=r_iface:
+        #    return False
+        if code=="ipv4":
+            if not CETP.is_IPv4(r_rloc):
+                return False
+        elif code=="ipv6":
+            if not CETP.is_IPv6(r_rloc):
+                return False
+        elif code=="eth":
+            pass
+        return True
+    except Exception as ex:
+        print("Exception in verify_rloc()", ex)
+        return False
 
 def verify_payload(**kwargs):
-    tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
-    return True
+    try:
+        tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+        r_payload = code
+        if len(r_payload)==0:
+            return False
+        
+        ope, cmp, group, code, response_value = policy.get_available_policy(tlv)
+        l_payload = code
+        
+        if l_payload!=r_payload:
+            return False
+        
+        return True
+    except:
+        return False
 
 def send_id(**kwargs):
     tlv, code, query, policy = kwargs["tlv"], kwargs["code"], kwargs["query"], kwargs["policy"]
@@ -745,7 +788,7 @@ def response_id(**kwargs):
     if response_value==None:
         new_tlv["value"] = ""
     else:
-        new_tlv["value"] = response_value
+        new_tlv["value"] = response_value           # There could be a check, whether value offered as ID indeed belongs to the sender.
     return new_tlv
 
     

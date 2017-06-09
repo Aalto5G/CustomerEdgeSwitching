@@ -80,14 +80,14 @@ class DNSServer(asyncio.DatagramProtocol):
             # In emergency case, CETPManager can use cb given in the transaction?
             
 
-    def process_dns_query_callback(self, dns_query, addr, success=True):
+    def process_dns_query_callback(self, dns_query, addr, r_addr, success=True):
         """ Sending DNS Response """
         qtype      = dns_query.question[0].rdtype
         domain     = dns_query.question[0].name.to_text().lower()
         flags      = [dns.flags.AA, dns.flags.RA]
 
         if success:
-            rrset = dns.rrset.from_text(domain, 10, dns.rdataclass.IN, dns_query.question[0].rdtype, "127.0.0.1")
+            rrset = dns.rrset.from_text(domain, 10, dns.rdataclass.IN, dns_query.question[0].rdtype, r_addr)
             dns_response = self.create_dns_response(dns_query, dns.rcode.NOERROR, flags, [rrset], authority_rr = [], additional_rr=[])
         else:
             dns_response = self.create_dns_response(dns_query, dns.rcode.NXDOMAIN, flags, [], authority_rr = [], additional_rr=[])

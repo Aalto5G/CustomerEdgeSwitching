@@ -16,6 +16,7 @@ import CETPC2C
 import cetpOperations
 import CETP
 import copy
+import ConnectionTable
 
 LOGLEVELCETP                    = logging.DEBUG
 LOGLEVEL_C2CTransaction         = logging.INFO
