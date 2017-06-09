@@ -52,7 +52,7 @@ class CETPManager:
         self._logger                = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPManager)
         self.local_cetp             = CETPH2H.CETPH2HLocal(cetpstate_mgr=self.cetpstate_mgr, policy_mgr=self.policy_mgr, cetp_mgr=self, \
-                                                           cetp_security=self.cetp_security, host_register=self.host_register)
+                                                           cetp_security=self.cetp_security, host_register=self.host_register, conn_table=self.conn_table)
 
     def process_dns_message(self, dns_cb, cb_args, dst_id, r_cesid="", naptr_list=[]):
         if len(naptr_list)==0:

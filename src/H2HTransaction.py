@@ -811,7 +811,7 @@ class H2HTransactionInbound(H2HTransaction):
 
 
 class H2HTransactionLocal(H2HTransaction):
-    def __init__(self, loop=None, host_ip="", cb=None, src_id="", dst_id="", policy_mgr= None, host_register=None, cetpstate_mgr=None, cetp_h2h=None, name="H2HTransactionLocal"):
+    def __init__(self, loop=None, host_ip="", cb=None, src_id="", dst_id="", policy_mgr= None, host_register=None, cetpstate_mgr=None, cetp_h2h=None, interfaces=None, conn_table=None, name="H2HTransactionLocal"):
         self.cb                 = cb
         self.host_ip            = host_ip                   # IP of the sender host
         self.src_id             = src_id                    # FQDN
@@ -821,6 +821,8 @@ class H2HTransactionLocal(H2HTransaction):
         self._loop              = loop
         self.cetp_h2h           = cetp_h2h
         self.host_register      = host_register
+        self.interfaces         = interfaces
+        self.conn_table         = conn_table
         self.l_cesid            = ""
         self.r_cesid            = ""
         self.name               = name
@@ -897,7 +899,8 @@ class H2HTransactionLocal(H2HTransaction):
             return False
         else:
             self._logger.warning("CETP Policy matched! Allocate proxy address. {} -> {}".format(self.src_id, self.dst_id))
-            self._execute_dns_callback()
+            lpip = self._create_local_connection()
+            self._execute_dns_callback(lpip)
             #o_connection, i_connection = self.create_local_connection(localhost, remotehost)
             #lpip = o_connection.lpip
             #rrset = dns.rrset.from_text(domain, self.proxytimeout, dns.rdataclass.IN, query_type, lpip)
@@ -905,9 +908,28 @@ class H2HTransactionLocal(H2HTransaction):
             return True
         
         
-    def _execute_dns_callback(self, resolution=True):
+    def _execute_dns_callback(self, r_addr, resolution=True):
         """ Executes DNS callback towards host """
         (cb_func, cb_args) = self.cb
         dns_q, addr = cb_args
-        cb_func(dns_q, addr, success=resolution)
+        cb_func(dns_q, addr, r_addr, success=resolution)
+    
+    def _create_local_connection(self):
+        lip, lpip       = self.host_ip, "192.168.0.101"
+        lfqdn, rfqdn    = self.src_id, self.dst_id
+        lid, rid        = None, None
+        rip, rpip       = "192.168.0.102", "192.168.0.101"          # Get from host-register    # Similarly get IPv4 or IPv6 proxy address.
+        connection_direction = "" #both outbound and inbound
+
+        self._logger.info("Creating Local connection between %s and %s" % (lfqdn, rfqdn))
         
+        o_connection = ConnectionTable.LocalConnection(120.0, "CONNECTION_OUTBOUND", lid=lid,lip=lip,lpip=lpip,lfqdn=lfqdn,
+                                                       rid=rid,rip=rip,rpip=rpip,rfqdn=rfqdn)
+        
+        i_connection = ConnectionTable.LocalConnection(120.0, "CONNECTION_INBOUND", rid=lid,rip=lip,rpip=lpip,rfqdn=lfqdn,
+                                                       lid=rid,lip=rip,lpip=rpip,lfqdn=rfqdn)        
+        self.conn_table.add(o_connection)
+        self.conn_table.add(i_connection)
+        return lpip
+        
+

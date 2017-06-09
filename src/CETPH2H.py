@@ -187,7 +187,8 @@ class CETPH2H:
 
 
 class CETPH2HLocal:
-    def __init__(self, loop=None, l_cesid="", r_cesid="", cetpstate_mgr= None, policy_mgr=None, cetp_mgr=None, ces_params=None, cetp_security=None, host_register= None, name="CETPH2H"):
+    def __init__(self, loop=None, l_cesid="", r_cesid="", cetpstate_mgr= None, policy_mgr=None, cetp_mgr=None, ces_params=None, cetp_security=None, host_register= None, \
+                 conn_table=None, name="CETPH2H"):
         self._loop                      = loop
         self.l_cesid                    = l_cesid
         self.r_cesid                    = r_cesid
@@ -197,6 +198,7 @@ class CETPH2HLocal:
         self.cetp_mgr                   = cetp_mgr
         self.cetp_security              = cetp_security
         self.host_register              = host_register
+        self.conn_table                 = conn_table
         self._closure_signal            = False
         self._logger                    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPH2H)
@@ -215,8 +217,8 @@ class CETPH2HLocal:
         (cb_func, cb_args) = cb
         dns_q, addr = cb_args
         ip_addr, port = addr
-        h2h = H2HTransaction.H2HTransactionLocal(loop=self._loop, cb=cb, host_ip=ip_addr, src_id="", dst_id=dst_id, policy_mgr=self.policy_mgr, \
-                                                 cetpstate_mgr=self.cetpstate_mgr, host_register=self.host_register, cetp_h2h=self)
+        h2h = H2HTransaction.H2HTransactionLocal(loop=self._loop, cb=cb, host_ip=ip_addr, src_id="", dst_id=dst_id, policy_mgr=self.policy_mgr, cetp_h2h=self, \
+                                                 cetpstate_mgr=self.cetpstate_mgr, host_register=self.host_register, conn_table=self.conn_table)
         result = yield from h2h.start_cetp_processing()     # Returns True or False
         if result == True:
             print("OK")
