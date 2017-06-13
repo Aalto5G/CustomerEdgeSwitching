@@ -119,7 +119,7 @@ class CETPH2H:
             self._logger.info(" No prior H2H-transaction found -> Initiating Inbound H2HTransaction (SST={} -> DST={})".format(inbound_sstag, inbound_dstag))
             print(self.interfaces)
             i_h2h = H2HTransaction.H2HTransactionInbound(sstag=sstag, dstag=sstag, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, \
-                                                         interfaces=self.interfaces, conn_table=self.conn_table)
+                                                         interfaces=self.interfaces, conn_table=self.conn_table, cetp_h2h=self)
             asyncio.ensure_future(i_h2h.start_cetp_processing(cetp_msg, transport))
             
         elif self.cetpstate_mgr.has_initiated_transaction( (sstag, 0) ):

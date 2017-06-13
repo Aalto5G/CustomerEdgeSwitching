@@ -516,7 +516,7 @@ class H2HTransactionOutbound(H2HTransaction):
         #Checks whether (SST, DST) pair is locally unique.
         if self.cetpstate_mgr.has_established_transaction((self.sstag, self.dstag)):
             self._logger.warning(" Terminating transaction as ({},{}) pair is not unique in CES".format(self.sstag, self.dstag))
-            self.terminate_transaction()
+            self.session_failure()
             return False
         
         proxy_ip = self._create_connection()
@@ -527,17 +527,18 @@ class H2HTransactionOutbound(H2HTransaction):
 
     def _create_connection(self):
         """ Extract the negotiated parameters to create a connection state """
-        lfqdn, rfqdn            = self.src_id, self.dst_id
-        lip                     = self.host_ip
-        proxy_ip                = self._allocate_proxy_address(lip)
-        lrloc, rrloc            = self._get_connection_rlocs()
-        lpayload, rpayload      = self._get_connection_payloads()
-        lid, rid                = None, None
+        self.lfqdn, self.rfqdn          = self.src_id, self.dst_id
+        self.lip                        = self.host_ip
+        self.proxy_ip                   = self._allocate_proxy_address(self.lip)
+        self.lrloc, self.rrloc          = self._get_connection_rlocs()
+        self.lpayload, self.rpayload    = self._get_connection_payloads()
+        self.lid, self.rid              = None, None
         
-        conn = ConnectionTable.CETPConnection(120.0, "outbound", lid, lip, proxy_ip, rid, lrloc, rrloc, lfqdn, rfqdn, self.sstag, self.dstag, lpayload, rpayload)
-        self.conn_table.add(conn)
-        print(lfqdn, rfqdn, lip, proxy_ip, lrloc, rrloc, lpayload, rpayload, lid, rid)
-        return proxy_ip
+        self.conn = ConnectionTable.H2HConnection(120.0, "outbound", self.lid, self.lip, self.proxy_ip, self.rid, self.lrloc, self.rrloc, self.lfqdn, self.rfqdn, \
+                                              self.sstag, self.dstag, self.lpayload, self.rpayload, self.r_cesid)
+        self.conn_table.add(self.conn)
+        print(self.lfqdn, self.rfqdn, self.lip, self.proxy_ip, self.lrloc, self.rrloc, self.lpayload, self.rpayload, self.lid, self.rid)
+        return self.proxy_ip
     
 
         """
@@ -578,13 +579,21 @@ class H2HTransactionOutbound(H2HTransaction):
         dns_q, addr = cb_args
         cb_func(dns_q, addr, r_addr, success=resolution)
 
-    def terminate_transaction(self):
-        """ Sends a terminate TLV and closes the connected transport """
+    def _create_terminate_message(self):
         terminate_tlv = self._create_offer_tlv2(group="control", code="terminate")
         tlv_to_send = [terminate_tlv]
         cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlv_to_send)
         cetp_packet = json.dumps(cetp_message)
+        return cetp_packet
+
+    def terminate_session(self):
+        """ Sends a terminate TLV and closes the established transaction """
+        cetp_packet = self._create_terminate_message()
         self.send_cetp(cetp_packet)
+        
+    def session_failure(self):
+        """ Sends a terminate TLV and closes the established transaction """
+        self.terminate_session()
         self._execute_dns_callback(resolution=False)
 
     def create_transaction_in_dp(self, cetp_msg):
@@ -607,16 +616,23 @@ class H2HTransactionOutbound(H2HTransaction):
             received_tlvs = cetp_packet['TLV']
         
         for received_tlv in received_tlvs:
-            if self._check_tlv(received_tlv, ope="info"):
-                if (received_tlv['group'] == 'control') and (received_tlv['code']=='terminate'):
-                    self._logger.info(" Terminate received with value: {}".format(received_tlv['value']) )
-                    self.cetpstate_mgr.remove_established_transaction((self.sstag, self.dstag))
-                    self._logger.warning(" H2H Session ({}->{}) terminated.".format(self.sstag, self.dstag))
+            if (received_tlv['group'] == 'control') and (received_tlv['code']=='terminate'):
+                self._logger.warning(" Terminate received for an established H2H Session ({}->{}).".format(self.sstag, self.dstag))
+                self.cetpstate_mgr.remove_established_transaction((self.sstag, self.dstag))
+                keytype = ConnectionTable.KEY_MAP_CES_TO_CES
+                key = (self.sstag, self.dstag)
+                if self.conn_table.has(keytype, key):
+                    conn = self.conn_table.get(keytype, key)
+                    self.conn_table.delete(conn)
+                    print("After terminate")
+                    print(self.conn_table.connection_dict)
+                    
 
 
 
 class H2HTransactionInbound(H2HTransaction):
-    def __init__(self, sstag=0, dstag=0, l_cesid="", r_cesid="", policy_mgr= None, cetpstate_mgr= None, interfaces=None, conn_table=None, name="H2HTransactionInbound"):
+    def __init__(self, sstag=0, dstag=0, l_cesid="", r_cesid="", policy_mgr= None, cetpstate_mgr= None, interfaces=None, conn_table=None, \
+                 cetp_h2h=None, name="H2HTransactionInbound"):
         self.sstag              = sstag
         self.dstag              = dstag
         self.l_cesid            = l_cesid
@@ -626,6 +642,8 @@ class H2HTransactionInbound(H2HTransaction):
         self.interfaces         = interfaces
         self.direction          = "inbound"
         self.conn_table         = conn_table
+        self.cetp_h2h           = cetp_h2h
+        print(self.cetp_h2h)
         self.name               = name
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HTransactionInbound)
@@ -792,12 +810,12 @@ class H2HTransactionInbound(H2HTransaction):
         lrloc, rrloc            = self._get_connection_rlocs()
         lpayload, rpayload      = self._get_connection_payloads()
         lid, rid                = None, None
-        conn = ConnectionTable.CETPConnection(120.0, "inbound", lid, lip, proxy_ip, rid, lrloc, rrloc, lfqdn, rfqdn, self.sstag, self.dstag, lpayload, rpayload)
+        conn = ConnectionTable.H2HConnection(120.0, "inbound", lid, lip, proxy_ip, rid, lrloc, rrloc, lfqdn, rfqdn, self.sstag, self.dstag, lpayload, rpayload, self.r_cesid)
         print(lfqdn, rfqdn, lip, proxy_ip, lrloc, rrloc, lpayload, rpayload, lid, rid)
         self.conn_table.add(conn)
         
-        new_transaction = H2HTransactionOutbound(sstag=self.sstag, dstag=self.dstag, policy_mgr= self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr,  \
-                                                 l_cesid=self.l_cesid, r_cesid=self.r_cesid, direction="inbound", src_id=self.src_id, dst_id=self.dst_id)
+        new_transaction = H2HTransactionOutbound(sstag=self.sstag, dstag=self.dstag, policy_mgr= self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, conn_table=self.conn_table, \
+                                                 l_cesid=self.l_cesid, r_cesid=self.r_cesid, direction="inbound", src_id=self.src_id, dst_id=self.dst_id, cetp_h2h=self.cetp_h2h)
         new_transaction.opolicy = self.ipolicy
         new_transaction.policy  = self.policy
         self.cetpstate_mgr.add_established_transaction((self.sstag, self.dstag), new_transaction)
@@ -915,21 +933,23 @@ class H2HTransactionLocal(H2HTransaction):
         cb_func(dns_q, addr, r_addr, success=resolution)
     
     def _create_local_connection(self):
-        lip, lpip       = self.host_ip, "192.168.0.101"
+        lip, rip        = self.host_ip, "10.0.3.103"                            # Get from host-register (IPv4 or IPv6 address depending on sender address type)
+        lpip            = self.cetpstate_mgr.allocate_proxy_address(lip)
         lfqdn, rfqdn    = self.src_id, self.dst_id
         lid, rid        = None, None
-        rip, rpip       = "192.168.0.102", "192.168.0.101"          # Get from host-register    # Similarly get IPv4 or IPv6 proxy address.
+        rpip            = self.cetpstate_mgr.allocate_proxy_address(rip)
+        
         connection_direction = "" #both outbound and inbound
 
         self._logger.info("Creating Local connection between %s and %s" % (lfqdn, rfqdn))
         
-        o_connection = ConnectionTable.LocalConnection(120.0, "CONNECTION_OUTBOUND", lid=lid,lip=lip,lpip=lpip,lfqdn=lfqdn,
+        self.o_connection = ConnectionTable.LocalConnection(120.0, "CONNECTION_OUTBOUND", lid=lid,lip=lip,lpip=lpip,lfqdn=lfqdn,
                                                        rid=rid,rip=rip,rpip=rpip,rfqdn=rfqdn)
         
-        i_connection = ConnectionTable.LocalConnection(120.0, "CONNECTION_INBOUND", rid=lid,rip=lip,rpip=lpip,rfqdn=lfqdn,
+        self.i_connection = ConnectionTable.LocalConnection(120.0, "CONNECTION_INBOUND", rid=lid,rip=lip,rpip=lpip,rfqdn=lfqdn,
                                                        lid=rid,lip=rip,lpip=rpip,lfqdn=rfqdn)        
-        self.conn_table.add(o_connection)
-        self.conn_table.add(i_connection)
+        self.conn_table.add(self.o_connection)
+        self.conn_table.add(self.i_connection)
         return lpip
         
 

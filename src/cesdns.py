@@ -10,6 +10,7 @@ import CETPH2H
 import CETPC2C
 
 import dns
+import dns.query
 import dns.message
 from dns.exception import DNSException
 from dns.rdataclass import *
@@ -62,25 +63,25 @@ class DNSServer(asyncio.DatagramProtocol):
         opcode = query.opcode()
         key = (query.id, dst_name, rdtype, rdclass, addr)
 
-        cb = self.process_dns_query_callback
+        cb = self.dns_query_callback
         cb_args = (query, addr)
         
-        #print("\nReceived DNS query for '%s'" % str(name))
-        if self.cesid in dst_domain:
-            self._cetpManager.process_dns_message(cb, cb_args, dst_domain)
-            return
-
-        else:
-            naptr_response_list = self.resolve_naptr(dst_name)
-            for naptr_resp in naptr_response_list:
-                dest_id, r_cesid, r_ip, r_port, r_transport = naptr_resp                # Expected format of NAPTR_response: (remote_ip, remote_port, remote_transport, dst_hostid)
-                                                                                        # Assumption: Detsination domain is reachable via one CES only. All list of DNS NAPTR response records point to one remote cesids?
-                                                                                        # TBD: Destination reachable via multiple CES nodes.
-            self._cetpManager.process_dns_message(cb, cb_args, dst_domain, r_cesid, naptr_list=naptr_response_list)
-            # In emergency case, CETPManager can use cb given in the transaction?
+        if len(dst_domain)!=0:
+            #print("\nReceived DNS query for '%s'" % str(name))
+            if ((rdtype == dns.rdatatype.A) or (rdtype == dns.rdatatype.AAAA)) and (self.cesid in dst_domain):
+                # DNS A query for local domains
+                self._cetpManager.process_dns_message(cb, cb_args, dst_domain)
+                return        
+            else:
+                naptr_response_list = self.resolve_naptr(dst_domain)                        # Simulating resolution process for NAPTR response records
+                # Sanitization of NAPTR response must happen at this place
+                for naptr_resp in naptr_response_list:
+                    dest_id, r_cesid, r_ip, r_port, r_transport = naptr_resp                # Assumption: Destination is reachable via one CES only. All list of DNS NAPTR response records point to one remote cesids?
+                                                                                            # TBD: Destination reachable via multiple CES nodes.
+                self._cetpManager.process_dns_message(cb, cb_args, dst_domain, r_cesid, naptr_list=naptr_response_list)
             
 
-    def process_dns_query_callback(self, dns_query, addr, r_addr, success=True):
+    def dns_query_callback(self, dns_query, addr, r_addr, success=True):
         """ Sending DNS Response """
         qtype      = dns_query.question[0].rdtype
         domain     = dns_query.question[0].name.to_text().lower()
@@ -92,7 +93,8 @@ class DNSServer(asyncio.DatagramProtocol):
         else:
             dns_response = self.create_dns_response(dns_query, dns.rcode.NXDOMAIN, flags, [], authority_rr = [], additional_rr=[])
         self._transport.sendto(dns_response.to_wire(), addr)
-        
+    
+    
     def create_dns_response(self, dns_query, rcode, flags, answer_rr, authority_rr = [], additional_rr = []):
         """
         Create a DNS response. 
