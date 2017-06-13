@@ -527,7 +527,7 @@ class H2HTransactionOutbound(H2HTransaction):
 
     def _create_connection(self):
         """ Extract the negotiated parameters to create a connection state """
-        self.lfqdn, self.rfqdn          = self.src_id, self.dst_id
+        self.lfqdn, self.rfqdn          = self.src_id, self.dst_id                  #self._create_connection_get_fqdns()
         self.lip                        = self.host_ip
         self.proxy_ip                   = self._allocate_proxy_address(self.lip)
         self.lrloc, self.rrloc          = self._get_connection_rlocs()
@@ -541,22 +541,8 @@ class H2HTransactionOutbound(H2HTransaction):
         return self.proxy_ip
     
 
-        """
-        lip,     lpip     = self._create_connection_allocate_proxy()
-        lfqdn,   rfqdn    = self._create_connection_get_fqdns()
-        lid,     rid      = self._create_connection_get_ids()
-        lrloc,   rrloc    = self._create_connection_get_rlocs()
-        lpayload,rpayload = self._create_connection_get_payloads()
-        
-        conn = CES_CONF.state_creator.createconnection(CONNECTION_CETP,direction='O',sstag=self.sstag, dstag=self.dstag,
-                                                  lip=lip,lpip=lpip,lid=lid,rid=rid,lfqdn=lfqdn,rfqdn=rfqdn,
-                                                  lrloc=lrloc,rrloc=rrloc,lpayload=lpayload,rpayload=rpayload)
-        
-        #Update the registration keys in CETP State after the connection is ready
-        CES_CONF.cetpstate.reregister(self)
-        #Use DNS Proxy to send the DNS response to the host
-        CES_CONF.dns_proxy.callback_dns_proxy(self.dnsmsg, lpip)        
-        """
+        #conn = CES_CONF.state_creator.createconnection(CONNECTION_CETP,direction='O',sstag=self.sstag, dstag=self.dstag,lip=lip,lpip=lpip,lid=lid,rid=rid,lfqdn=lfqdn,\
+        #rfqdn=rfqdn,lrloc=lrloc,rrloc=rrloc,lpayload=lpayload,rpayload=rpayload)
 
         """
         group, code, ope = TLV_GROUP["rloc"], None, [TLV_OPE["response"], TLV_OPE["info"]]

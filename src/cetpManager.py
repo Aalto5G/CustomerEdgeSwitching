@@ -55,13 +55,14 @@ class CETPManager:
         self._logger.setLevel(LOGLEVEL_CETPManager)
         self.local_cetp             = CETPH2H.CETPH2HLocal(cetpstate_mgr=self.cetpstate_mgr, policy_mgr=self.policy_mgr, cetp_mgr=self, \
                                                            cetp_security=self.cetp_security, host_register=self.host_register, conn_table=self.conn_table)
-        self._loop.call_later(17, self.test_func)
+        self._loop.call_later(15, self.test_func)
 
     def test_func(self):
         #self.terminate_local_host_sessions(l_hostid="hosta1.cesa.lte.")
         #self.terminate_local_host_sessions(lip="10.0.3.118")
-        #self.terminate_session_tags(200, 100)
-        self.terminate_remote_host_session("srv1.hostb1.cesb.lte.")
+        #self.terminate_cetp_session(200, 100)
+        #self.terminate_remote_host_session("srv1.hostb1.cesb.lte.")
+        self.terminate_host_session(l_hostid="hosta1.cesa.lte.", r_hostid="srv1.hostb1.cesb.lte.")
         print("\nPost deletion check")
         print("CETP session states:\n", self.cetpstate_mgr.cetp_transactions[ConnectionTable.KEY_ESTABLISHED_CETP])
         print("Connection Table:\n", self.conn_table.connection_dict)
@@ -139,7 +140,7 @@ class CETPManager:
     def terminate_session(self, sstag, dstag, r_cesid="", r_host_id=""):
         pass
 
-    def terminate_session_tags(self, sstag, dstag):
+    def terminate_cetp_session(self, sstag, dstag):
         """ Terminates a particular CETP session """
         try:
             if (sstag!=0) and (dstag!=0):
@@ -160,6 +161,27 @@ class CETPManager:
         except Exception as ex:
             self._logger.info("Exception '{}' in terminating session".format(ex))
             return
+
+    def terminate_host_session(self, l_hostid="", r_hostid=""):
+        """ Terminates a session between two hosts specified by their FQDNs"""
+        keytype = ConnectionTable.KEY_MAP_CES_FQDN
+        key = (l_hostid, r_hostid)
+        if self.conn_table.has(keytype, key):
+            conn = self.conn_table.get(keytype, key)
+            self.conn_table.delete(conn)
+            if conn.connectiontype=="CONNECTION_H2H":
+                sstag, dstag = conn.sstag, conn.dstag
+                h2h_transaction = self.cetpstate_mgr.get_established_transaction((sstag,dstag))
+                self.cetpstate_mgr.remove_established_transaction((sstag,dstag))
+                h2h_transaction.terminate_session()
+
+            elif conn.connectiontype=="CONNECTION_LOCAL":
+                self._logger.debug("Terminating Local H2HTransaction")
+                rip, rpip = conn.rip, conn.rpip
+                keytype = ConnectionTable.KEY_MAP_CETP_PRIVATE_NW
+                key = (rip, rpip)
+                r_conn = self.conn_table.get(keytype, key)
+                self.conn_table.delete(r_conn)                                              # Deleting the pair of local connection
 
 
     def terminate_remote_host_session(self, r_hostid):
