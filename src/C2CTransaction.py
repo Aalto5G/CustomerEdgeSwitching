@@ -568,6 +568,30 @@ class oC2CTransaction(C2CTransaction):
     def update_last_seen(self):
         self.last_seen = time.time()
 
+    def report_misbehavior_evidence(self, h_sstag, h_dstag, r_hostid, misbehavior_evidence):
+        """ Reports misbehavior evidence observed in (h_sstag, h_dstag) to the remote CES """
+        self._logger.info(" Sending misbehavior evidence towards remote CES '{}' )".format(self.r_cesid, r_hostid))
+        evidence = {"h2h_session":(h_sstag, h_dstag), "misbehavior":misbehavior_evidence}             # misbehavior_evidence="FSecure-MalwarePayload"
+        evidence_value = json.dumps(evidence)
+        evidence_tlv = self._create_request_tlv2(group="ces", code="evidence")
+        evidence_tlv["value"] = evidence_value
+        tlvs_to_send = [evidence_tlv]
+        cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
+        cetp_packet = json.dumps(cetp_message)
+        #self.pprint(cetp_message)
+        self.evidence_acknowledged = False
+        self.keepalive_reporter = self._loop.call_later(2, self.check_evidence_acknowledgment)      # Checking acknowledgement of the sent evidence.
+        self.transport.send_cetp(cetp_packet)
+        
+        
+    def check_evidence_acknowledgment(self):
+        """ Checks whether a sent evidence is received and acknowledged by remote CES. """
+        if not self.evidence_acknowledged:
+            self._logger.info("Remote CES '{}' has not acknowledged the send evidence.\n\n".format(self.r_cesid))
+        else:
+            print("Evidence is acknowledged")
+            
+    
     def report_connection_health(self):
         """ Evaluates whether remote CES is: active; inactive; or dead """
         now = time.time()
@@ -619,7 +643,20 @@ class oC2CTransaction(C2CTransaction):
         # Processing the inbound request packet
         for received_tlv in received_tlvs:
             if self._check_tlv(received_tlv, ope="query"):
-                if self.ces_policy.has_available(received_tlv):
+                if (received_tlv["group"]=="ces") and (received_tlv["code"]=="evidence"):
+                    self._logger.info(" Misbehavior evidence from remote CES '{}'".format(self.r_cesid))
+                    ret_tlv = self._create_response_tlv(received_tlv)
+                    if ret_tlv!=None:
+                        tlvs_to_send.append(ret_tlv)
+                    else:
+                        self._logger.warning("Couldn't respond to TLV. Send some kinda warning-TLV indicating mismatch to remote CES?")
+
+
+                elif (received_tlv["group"]=="ces") and (received_tlv["code"]=="comment"):
+                    self._logger.info("General commentary from remote CES")
+                    self._logger.info("Comment: '{}'".format(received_tlv['value']))
+                
+                elif self.ces_policy.has_available(received_tlv):
                     ret_tlv = self._create_response_tlv(received_tlv)
                     if ret_tlv !=None:
                         tlvs_to_send.append(ret_tlv)
@@ -643,6 +680,11 @@ class oC2CTransaction(C2CTransaction):
                     Verify the offered TLVs: their value and code/compatibility.    - Simply note the response (against sent queries)
                     We could respond with not acceptable? OR could aggregate all the responses or feedbacks (leave the decison-making discretion to: NW admin or to requesting function (on its next execution)
                     """
+
+                elif (received_tlv["group"]=="ces") and (received_tlv["code"]=="evidence"):
+                    self._logger.info(" Misbehavior evidence is ACKnowledged by remote CES '{}'".format(self.r_cesid))
+                    self.evidence_acknowledged = True
+                    print(received_tlv["value"])
                     
                 elif self.ces_policy.has_required(received_tlv):                         # TBD: This shall correspond to the requests sent in the last packet to remote CES.
                     # CES will only accept/process the response for the requests it sent to remote CES.
@@ -857,7 +899,8 @@ class iC2CTransaction(C2CTransaction):
 
     def _export_to_stateful(self):
         new_transaction = oC2CTransaction(self._loop, l_cesid=self.l_cesid, r_cesid=self.r_cesid, c_sstag=self.sstag, c_dstag=self.dstag, policy_mgr= self.policy_mgr, \
-                                          cetpstate_mgr=self.cetpstate_mgr, ces_params=self.ces_params, proto=self.proto, transport=self.transport, direction="inbound")
+                                          cetpstate_mgr=self.cetpstate_mgr, ces_params=self.ces_params, proto=self.proto, transport=self.transport, direction="inbound", \
+                                          cetp_security=self.cetp_security)
         new_transaction.load_policies(self.l_cesid)
         new_transaction.c2c_negotiation_status = True
         new_transaction.trigger_negotiated_functions()

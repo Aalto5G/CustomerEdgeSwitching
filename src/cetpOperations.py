@@ -382,13 +382,15 @@ def response_ces_evidence_format(**kwargs):
 
 def response_ces_evidence(**kwargs):
     try:
-        tlv, code, ces_params, cetp_security, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["cetp_security"], kwargs["ces_policy"]
-        policy_code = CETP.CES_CODE_TO_POLICY[code]
+        tlv, r_cesid, ces_params, cetp_security, policy = kwargs["tlv"], kwargs["r_cesid"], kwargs["ces_params"], kwargs["cetp_security"], kwargs["ces_policy"]
+        #policy_code = CETP.CES_CODE_TO_POLICY[code]
         evidence = tlv["value"]
         new_tlv = copy.copy(tlv)
-        resp = cetp_security.process_evidence(r_cesid, evidence)
+        if cetp_security.process_inbound_evidence(r_cesid, evidence)==None:
+            return None
+            
         new_tlv['ope'] = "info"
-        new_tlv["value"] = response_value                   # Could be an ACKnowledgment/Error to provided evidence
+        new_tlv["value"] = "ACKED"                   # ACK the receipt of evidence -- Could be an ACKnowledgment/Error to provided evidence
         return new_tlv
     except Exception as ex:
         print("Exception in response_ces_evidence()", ex)

@@ -43,9 +43,9 @@ class CETPManager:
         self.ces_certificate_path   = self.ces_params['certificate']
         self.ces_privatekey_path    = self.ces_params['private_key']
         self.ca_certificate_path    = self.ces_params['ca_certificate']                                       # Path of X.509 certificate of trusted CA, for validating the remote node's certificate.
-        self.cetp_security          = CETPSecurity.CETPSecurity(ces_params)
         self.cetpstate_mgr          = ConnectionTable.CETPStateTable()                                        # Records the established CETP transactions (both H2H & C2C). Required for preventing the re-allocation already in-use SST & DST (in CETP transaction).
         self.conn_table             = ConnectionTable.ConnectionTable()
+        self.cetp_security          = CETPSecurity.CETPSecurity(self.conn_table, ces_params)
         self.interfaces             = PolicyManager.Interfaces()
         self.policy_mgr             = PolicyManager.PolicyManager(self.cesid, policy_file= cetp_policies)     # Shall ideally fetch the policies from Policy Management System (of Hassaan)    - And will be called, policy_sys_agent
         self.host_register          = PolicyManager.HostRegister()
@@ -56,16 +56,19 @@ class CETPManager:
         self.local_cetp             = CETPH2H.CETPH2HLocal(cetpstate_mgr=self.cetpstate_mgr, policy_mgr=self.policy_mgr, cetp_mgr=self, \
                                                            cetp_security=self.cetp_security, host_register=self.host_register, conn_table=self.conn_table)
         self._loop.call_later(15, self.test_func)
+        self._loop.call_later(20, self.test_func)
+        self._loop.call_later(25, self.test_func)
 
     def test_func(self):
         #self.terminate_local_host_sessions(l_hostid="hosta1.cesa.lte.")
         #self.terminate_local_host_sessions(lip="10.0.3.118")
         #self.terminate_cetp_session(200, 100)
-        #self.terminate_remote_host_session("srv1.hostb1.cesb.lte.")
-        self.terminate_host_session(l_hostid="hosta1.cesa.lte.", r_hostid="srv1.hostb1.cesb.lte.")
-        print("\nPost deletion check")
-        print("CETP session states:\n", self.cetpstate_mgr.cetp_transactions[ConnectionTable.KEY_ESTABLISHED_CETP])
-        print("Connection Table:\n", self.conn_table.connection_dict)
+        #self.terminate_remote_host_sessions("srv1.hostb1.cesb.lte.")
+        #self.terminate_host_session(l_hostid="hosta1.cesa.lte.", r_hostid="srv1.hostb1.cesb.lte.")
+        self.send_evidence(sstag=200, dstag=100, evidence="FSecureMalware")
+        #print("\nPost deletion check")
+        #print("CETP session states:\n", self.cetpstate_mgr.cetp_transactions[ConnectionTable.KEY_ESTABLISHED_CETP])
+        #print("Connection Table:\n", self.conn_table.connection_dict)
         pass
             
         
@@ -140,6 +143,31 @@ class CETPManager:
     def terminate_session(self, sstag, dstag, r_cesid="", r_host_id=""):
         pass
 
+    
+    def send_evidence(self, sstag=0, dstag=0, lip="", lpip="", evidence=""):
+        """ The method is used to send misbehavior evidence observed by the dataplane to a remote CES 
+        @params sstag & dstag:     CETP session tags of Host-to-host session for which misbehavior is observed.
+        @params lip & lpip:        IP address of the local-host and the proxy-IP address for remote host
+        @params evidence:          Evidence of misbehavior/attack observed at data-plane 
+        """
+        try:
+            if (evidence=="") or ((sstag==0) and (dstag==0)):
+                return None
+            
+            keytype = ConnectionTable.KEY_MAP_CES_TO_CES
+            key     = (sstag, dstag)
+            conn    = self.conn_table.get(keytype, key)
+            r_cesid = conn.r_cesid
+            r_hostid = conn.remoteFQDN
+            c2c_layer = self.get_c2c_layer(r_cesid)
+            c2c_layer.report_evidence(sstag, dstag, r_hostid, r_cesid, evidence)
+
+        
+        except Exception as ex:
+            self._logger.info("Exception '{}' in terminating session".format(ex))
+            return
+
+
     def terminate_cetp_session(self, sstag, dstag):
         """ Terminates a particular CETP session """
         try:
@@ -184,7 +212,7 @@ class CETPManager:
                 self.conn_table.delete(r_conn)                                              # Deleting the pair of local connection
 
 
-    def terminate_remote_host_session(self, r_hostid):
+    def terminate_remote_host_sessions(self, r_hostid):
         """ Terminates a local CETP session """
         keytype = ConnectionTable.KEY_MAP_REMOTE_FQDN
         key = r_hostid

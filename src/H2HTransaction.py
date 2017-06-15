@@ -212,13 +212,13 @@ class H2HTransaction(object):
             if dstag ==0:
                 # For oCES, it checks the connecting transactions
                 if not self.cetpstate_mgr.has_initiated_transaction((sstag, 0)):
-                    return sstag
+                    return 200
             
             elif dstag:
                 self._logger.debug("iCES is requesting source session tag")
                 """ iCES checks if upon assigning 'sstag' the resulting (SST, DST) pair will lead to a unique transaction. """
                 if not self.cetpstate_mgr.has_established_transaction((sstag, dstag)):                   # Checks connected transactions
-                    return sstag
+                    return 100
                 
     def show(self, packet):
         self._logger.info("CETP Packet")

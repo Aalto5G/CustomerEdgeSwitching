@@ -51,6 +51,7 @@ class CETPC2CLayer:
         self.transport_lastseen         = {}
         self.c2c_negotiated             = False
         self._closure_signal            = False
+        self.active_transport           = None
         self._logger                    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPC2CLayer)
         self._logger.info("Initiating outbound CES2CESLayer towards cesid '{}'".format(r_cesid) )
@@ -166,6 +167,13 @@ class CETPC2CLayer:
     def update_transport(self, transport):
         c2c_transaction = self.get_c2c_transaction(transport)
         c2c_transaction.update_last_seen()
+        
+    def report_evidence(self, h_sstag, h_dstag, r_hostid, r_cesid, misbehavior_evidence):
+        """ Reports misbehavior evidence observed in (h_sstag, h_dstag) to the remote CES """
+        trans = self.select_transport()                             # Check to ensure that message is sent on a (recently) active transport connection
+        c2c_transaction = self.get_c2c_transaction(trans)
+        c2c_transaction.report_misbehavior_evidence(h_sstag, h_dstag, r_hostid, misbehavior_evidence)
+        self.cetp_security.record_misbehavior_evidence(r_cesid, r_hostid, misbehavior_evidence)
 
     @asyncio.coroutine
     def initiate_c2c_transaction(self, transport_obj):

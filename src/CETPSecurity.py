@@ -10,26 +10,28 @@ import time
 import traceback
 import json
 import ssl
-import cetpManager
-import C2CTransaction
-import H2HTransaction
-import CETPH2H
-import CETPC2C
 import string
 import sys, os
 sys.path.append(os.path.join(os.path.dirname('hashcash.py'), 'lib'))
 import hashcash
 import hashlib
-
+import cetpManager
+import C2CTransaction
+import H2HTransaction
+import CETPH2H
+import CETPC2C
+import ConnectionTable
 
 LOGLEVEL_CETPSecurity       = logging.INFO
 
 
 class CETPSecurity:
-    def __init__(self, ces_params, name="CETPSecurity"):
-        self.localhost_evidences             = {}                            # {host-fqdn: [evidence]}
-        self.remotehost_evidence             = {}
-        self.remote_ces_evidence             = {}
+    def __init__(self, conn_table, ces_params, name="CETPSecurity"):
+        self.evidences_against_localhosts    = {}                            # {host-fqdn: [evidence]}
+        self.evidences_against_remotehosts   = {}
+        self.evidences_against_remoteces     = {}
+        self.reporting_ces                   = {}
+        self.conn_table                      = conn_table
         self.ces_params                      = ces_params
         self._logger                         = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPSecurity)
@@ -37,18 +39,79 @@ class CETPSecurity:
         
     # CETPSecurity shall have specific 'CES-to-CES' view & aggregated view of all 'CES-to-CES' interactions
     
-    def process_evidence(self, r_cesid, evidence):
+    def process_inbound_evidence(self, r_cesid, evidence):
         """ Processes the evidence received from 'r_cesid' """
-        self.remote_ces_evidence[r_cesid] = evidence
-        # parse to retrieve the ID/FQDN of the host for which the evidence is received.        # ID could be a 'host-id' or 'cesid' itself
-        # Evidence could reveal more about the type of misbehavior observed from CES.
+        try:
+            outcome = self.check_format_compliance(evidence)
+            if outcome == False:    return None
+            session_tags, misbehavior = outcome
+            keytype = ConnectionTable.KEY_MAP_CES_TO_CES
+            inbound_sstag, inbound_dstag = session_tags[0], session_tags[1]
+            sstag, dstag = inbound_dstag, inbound_sstag
+            key     = (sstag, dstag)
+            
+            if self.conn_table.has(keytype, key):
+                conn     = self.conn_table.get(keytype, key)                
+                l_hostid = conn.remoteFQDN                                      # For inbound evidence, the destination-domain is the local host
+                self.add_evidence_against_local_hosts(l_hostid, misbehavior)
+                self.record_reporting_ces_node(r_cesid, misbehavior)
+                # Additionally, it is possibile to trigger some action (i.e. terminate flow etc.) upon receiving evidence against a host (or its session)
+                return True
+
+        except Exception as ex:
+            self._logger.warning("Exception '{}' in processing inbound evidence".format(ex))
+        return None
+            
+
+    def add_evidence_against_local_hosts(self, l_hostid, evidence):
+        if l_hostid in self.evidences_against_localhosts:
+            evidence_list = self.evidences_against_localhosts[l_hostid]
+            evidence_list.append(evidence)
+        else:
+            self.evidences_against_localhosts[l_hostid] = [evidence]
+        #print(self.evidences_against_localhosts)
+
+    def record_reporting_ces_node(self, r_cesid, evidence):
+        if r_cesid in self.reporting_ces:
+            evidence_list = self.reporting_ces[r_cesid]
+            evidence_list.append(evidence)
+        else:
+            self.reporting_ces[r_cesid] = [evidence]
+        #print(self.reporting_ces)            
     
-    def evidence_against_localhost(self, host_fqdn, r_cesid, evidence):
-        """ Gets evidence against local-host's fqdn from remote-CES.
-        Aggregates evidences against local-host's fqdn && counts number of evidences from 'r_cesid'
-        Accepts evidence if it meets a (standard) format, i.e. IOC. Otherwise, No.
-        """
-        pass
+    def check_format_compliance(self, evidence):
+        """ Checks whether the provided evidence complies to negotiated format, e.g. IOC evidence exchange format. """
+        try:
+            evd = json.loads(evidence)
+            session_tags, misbehavior = evd["h2h_session"], evd["misbehavior"]
+            return (session_tags, misbehavior)
+        except:
+            return False
+    
+    def check_misbehavior_threshold(self, l_hostid):
+        """ Checks whether the aggregated evidences against an FQDN have exceeded threshold. """
+        return False
+
+    def record_misbehavior_evidence(self, r_cesid, r_hostid, evidence):
+        self.add_evidence_against_remote_host(r_cesid, r_hostid, evidence)
+        self.add_evidence_against_remote_ces(r_cesid, evidence)
+    
+    def add_evidence_against_remote_host(self, r_cesid, r_hostid, evidence):
+        if r_hostid in self.evidences_against_remotehosts:
+            evidence_list = self.evidences_against_remotehosts[r_hostid]
+            evidence_list.append(evidence)
+        else:
+            self.evidences_against_remotehosts[r_hostid] = [evidence]
+        #print(self.evidences_against_remotehosts)
+        
+    def add_evidence_against_remote_ces(self, r_cesid, evidence):
+        if r_cesid in self.evidences_against_remoteces:
+            evidence_list = self.evidences_against_remoteces[r_cesid]
+            evidence_list.append(evidence)
+        else:
+            self.evidences_against_remoteces[r_cesid] = [evidence]
+        #print(self.evidences_against_remoteces)
+            
     
     def check_aggregation_threshold(self, host_fqdn):
         """ Checks if num. of evidences against host-fqdn have reached a threshold 
