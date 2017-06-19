@@ -64,7 +64,6 @@ class ConnectionTable:
         """
         self.connection_list.append(connection)
         for keytype, key in connection.lookupkeys():
-            print(keytype, key)
             if keytype not in self.connection_dict:
                 self.connection_dict[keytype] = {}
             
@@ -77,10 +76,9 @@ class ConnectionTable:
             else:
                 self.connection_dict[keytype][key] = connection
             
-            
         self._logger.debug("New connection: %s" % (connection))
-        print("ConnTable self.connection_dict")
-        print(self.connection_dict)
+        print("ConnTable: ", self.connection_dict)
+
 
     def delete(self, connection):
         """
@@ -132,7 +130,7 @@ class ConnectionTable:
 
 
 
-LOGLEVEL_H2HConnection  = logging.INFO
+LOGLEVEL_H2HConnection   = logging.INFO
 LOGLEVEL_LocalConnection = logging.INFO
 
 
@@ -262,7 +260,7 @@ class CETPStateTable(object):
     def add_established_transaction(self, session_tag, transaction):
         keytype = KEY_ESTABLISHED_CETP
         self._add(keytype, session_tag, transaction)
-        print(self.cetp_transactions[KEY_ESTABLISHED_CETP])
+        #print("Upon adding an established transaction", self.cetp_transactions[KEY_ESTABLISHED_CETP])
         
     def remove_initiated_transaction(self, session_tag):
         keytype = KEY_INITIATED_CETP
@@ -273,7 +271,7 @@ class CETPStateTable(object):
         keytype = KEY_ESTABLISHED_CETP
         if self._has(keytype, session_tag):
             self._remove(keytype, session_tag)
-        print(self.cetp_transactions[KEY_ESTABLISHED_CETP])
+        #print("\n After removal", self.cetp_transactions[KEY_ESTABLISHED_CETP])
             
     def get_initiated_transaction(self, session_tag):
         keytype = KEY_INITIATED_CETP

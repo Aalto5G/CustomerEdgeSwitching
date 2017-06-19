@@ -56,19 +56,24 @@ class CETPManager:
         self.local_cetp             = CETPH2H.CETPH2HLocal(cetpstate_mgr=self.cetpstate_mgr, policy_mgr=self.policy_mgr, cetp_mgr=self, \
                                                            cetp_security=self.cetp_security, host_register=self.host_register, conn_table=self.conn_table)
         self._loop.call_later(15, self.test_func)
-        self._loop.call_later(20, self.test_func)
-        self._loop.call_later(25, self.test_func)
 
     def test_func(self):
         #self.terminate_local_host_sessions(l_hostid="hosta1.cesa.lte.")
         #self.terminate_local_host_sessions(lip="10.0.3.118")
-        #self.terminate_cetp_session(200, 100)
+        #self.terminate_session_by_tags(200, 100)
         #self.terminate_remote_host_sessions("srv1.hostb1.cesb.lte.")
-        #self.terminate_host_session(l_hostid="hosta1.cesa.lte.", r_hostid="srv1.hostb1.cesb.lte.")
-        self.send_evidence(sstag=200, dstag=100, evidence="FSecureMalware")
+        #self.terminate_session_by_fqdns(l_hostid="hosta1.cesa.lte.", r_hostid="srv1.hostb1.cesb.lte.")
+        #self.send_evidence(sstag=200, dstag=100, evidence="FSecureMalware")
+        #self.terminate_cetp_c2c_signalling(r_cesid="cesb.lte.")
+        self.terminate_cetp_c2c_signalling(r_cesid="cesb.lte.", terminate_h2h=True)
+        
+        # Checks for verifying the test execution
         #print("\nPost deletion check")
         #print("CETP session states:\n", self.cetpstate_mgr.cetp_transactions[ConnectionTable.KEY_ESTABLISHED_CETP])
         #print("Connection Table:\n", self.conn_table.connection_dict)
+        print("self.has_cetp_endpoint(r_cesid): ", self.has_cetp_endpoint(r_cesid))
+        print("self.has_c2c_layer(r_cesid): ", self.has_c2c_layer(r_cesid))
+        print("CETP states: ", self.cetpstate_mgr.cetp_transactions[ConnectionTable.KEY_ESTABLISHED_CETP])
         pass
             
         
@@ -140,8 +145,22 @@ class CETPManager:
         for cesid, cetp_ep in self._cetp_endpoints.items():
             cetp_ep.handle_interrupt()
 
-    def terminate_session(self, sstag, dstag, r_cesid="", r_host_id=""):
-        pass
+    def terminate_cetp_c2c_signalling(self, r_cesid="", terminate_h2h=False):
+        """ Terminates the CETP signalling session with remote-CESID """
+        try:
+            if len(r_cesid)==0:
+                return
+            
+            if terminate_h2h:
+                self._logger.debug("Terminate all H2H transactions to/from {}".format(r_cesid))
+                self.terminate_remote_ces_sessions(r_cesid)
+            
+            if self.has_c2c_layer(r_cesid):
+                c2c_layer = self.get_c2c_layer(r_cesid)
+                c2c_layer.close_all_transport_connections()
+            
+        except Exception as ex:
+            self._logger.info("Exception '{}' in terminating cetp signalling channel to '{}'".format(ex))
 
     
     def send_evidence(self, sstag=0, dstag=0, lip="", lpip="", evidence=""):
@@ -152,24 +171,25 @@ class CETPManager:
         """
         try:
             if (evidence=="") or ((sstag==0) and (dstag==0)):
-                return None
+                return
             
             keytype = ConnectionTable.KEY_MAP_CES_TO_CES
             key     = (sstag, dstag)
             conn    = self.conn_table.get(keytype, key)
             r_cesid = conn.r_cesid
             r_hostid = conn.remoteFQDN
-            c2c_layer = self.get_c2c_layer(r_cesid)
-            c2c_layer.report_evidence(sstag, dstag, r_hostid, r_cesid, evidence)
-
+            self.cetp_security.record_misbehavior_evidence(r_cesid, r_hostid, evidence)
+            
+            if self.has_c2c_layer(r_cesid):                 # Checks if C2C-signalling channel is present.
+                c2c_layer = self.get_c2c_layer(r_cesid)
+                c2c_layer.report_evidence(sstag, dstag, r_hostid, r_cesid, evidence)
         
         except Exception as ex:
             self._logger.info("Exception '{}' in terminating session".format(ex))
-            return
 
 
-    def terminate_cetp_session(self, sstag, dstag):
-        """ Terminates a particular CETP session """
+    def terminate_session_by_tags(self, sstag, dstag):
+        """ Terminates a particular CETP session idnetified by its tags """
         try:
             if (sstag!=0) and (dstag!=0):
                 if self.cetpstate_mgr.has_established_transaction((sstag, dstag)):
@@ -190,8 +210,8 @@ class CETPManager:
             self._logger.info("Exception '{}' in terminating session".format(ex))
             return
 
-    def terminate_host_session(self, l_hostid="", r_hostid=""):
-        """ Terminates a session between two hosts specified by their FQDNs"""
+    def terminate_session_by_fqdns(self, l_hostid="", r_hostid=""):
+        """ Terminates CETP session (and connection) between two hosts specified by their FQDNs """
         keytype = ConnectionTable.KEY_MAP_CES_FQDN
         key = (l_hostid, r_hostid)
         if self.conn_table.has(keytype, key):
@@ -211,6 +231,26 @@ class CETPManager:
                 r_conn = self.conn_table.get(keytype, key)
                 self.conn_table.delete(r_conn)                                              # Deleting the pair of local connection
 
+    
+    def filter_malicious_remote_host(self, r_cesid="", r_hostid=""):
+        """ Initiates a message requesting remote CES not to forward connection from a particular host/domain, or to a host/domain. """
+        try:
+            if (len(r_cesid)==0) or (len(r_hostid)==0):
+                return
+            
+        # Local CES shall not accept connection from this remote host.       
+        # [Store this state in CETPSecurity module]
+        # Before accepting a connection towards this host-id. Check with CETPSecurity module.
+        
+        except Exception as ex:
+            self._logger.info("Exception '{}' ".format(ex))
+
+
+    def make_local_host_unreachable(self, l_hostid=""):
+        pass
+
+    def terminate_session(self, sstag, dstag, r_cesid="", r_host_id=""):
+        pass
 
     def terminate_remote_host_sessions(self, r_hostid):
         """ Terminates a local CETP session """
@@ -276,32 +316,24 @@ class CETPManager:
                     self.conn_table.delete(r_conn)                                              # Deleting the pair of local connection
                     # Terminate at the local transaction at H2HLocalTransaction level.
 
-        
-    def terminate_remote_host_sessions(self, r_hostid):
-        """ Terminate all sessions to/from a remote-FQDN """
-        keytype = ConnectionTable.KEY_MAP_REMOTE_FQDN
-        key = r_hostid
-        if self.conn_table.has(keytype, key):
-            conn_list = self.conn_table.get(keytype, key)
-            for conn in conn_list:
-                self.conn_table.delete(conn)
-                if conn.connectiontype=="CONNECTION_H2H":
-                    sstag, dstag = conn.sstag, conn.dstag
-                    self.cetpstate_mgr.remove_established_transaction((sstag,dstag))
-
-            
     def terminate_remote_ces_sessions(self, r_cesid):
-        """ Terminate all sessions to/from a remote-FQDN """
+        """ Terminate all H2H sessions to/from a remote-CESID """
         keytype = ConnectionTable.KEY_MAP_REMOTE_CESID
         key = r_cesid
+        
         if self.conn_table.has(keytype, key):
             conn_list = self.conn_table.get(keytype, key)
-            for conn in conn_list:
+            total_connections = len(conn_list)
+            for num in range(0, total_connections):
+                conn = conn_list[0]
                 self.conn_table.delete(conn)
+                
                 if conn.connectiontype=="CONNECTION_H2H":
+                    self._logger.debug("Terminating H2HTransaction state")
                     sstag, dstag = conn.sstag, conn.dstag
+                    h2h_transaction = self.cetpstate_mgr.get_established_transaction((sstag,dstag))
                     self.cetpstate_mgr.remove_established_transaction((sstag,dstag))
-
+                    h2h_transaction.terminate_session()
 
 
     def register_server_endpoint(self, ep):

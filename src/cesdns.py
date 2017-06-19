@@ -156,7 +156,7 @@ class DNSServer(asyncio.DatagramProtocol):
         self.naptr_records['srv2.hostb1.cesb.lte.']         = ('srv2.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49002', 'tcp')
         self.naptr_records['raimo.cesb.lte.']               = ('raimo.cesb.lte.',           'cesb.lte.', '10.0.3.103', '49001', 'tcp')
         self.naptr_records['raimo2.cesb.lte.']              = ('raimo2.cesb.lte.',          'cesb.lte.', '10.0.3.103', '49002', 'tcp')
-        self.naptr_records['www.google.com.']               = ('www.google.com.',           'cesd.lte.', '127.0.0.4', '49001', 'tcp')
+        self.naptr_records['www.google.com.']               = ('www.google.com.',           'cesd.lte.', '', '49001', 'tcp')
         self.naptr_records['www.aalto.fi.']                 = ('www.aalto.fi.',             'cese.lte.', '10.0.3.101', '48001', 'tcp')
         self.naptr_records['test.']                         = ('test.',                     'cesa.lte.', '10.0.3.101', '48001', 'tcp')        
         

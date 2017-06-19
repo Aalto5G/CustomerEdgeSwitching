@@ -24,6 +24,12 @@ import ConnectionTable
 
 LOGLEVEL_CETPSecurity       = logging.INFO
 
+KEY_BlockedLHosts           = 0
+KEY_BlockedRHosts           = 1
+KEY_DisabledLHosts          = 2 
+KEY_BlockedHostsFromRCES    = 3
+KEY_BlockedHostsFromLCES    = 4
+
 
 class CETPSecurity:
     def __init__(self, conn_table, ces_params, name="CETPSecurity"):
@@ -31,6 +37,7 @@ class CETPSecurity:
         self.evidences_against_remotehosts   = {}
         self.evidences_against_remoteces     = {}
         self.reporting_ces                   = {}
+        self.domains_to_filter               = {}
         self.conn_table                      = conn_table
         self.ces_params                      = ces_params
         self._logger                         = logging.getLogger(name)
@@ -38,6 +45,36 @@ class CETPSecurity:
         self._initialize_pow()
         
     # CETPSecurity shall have specific 'CES-to-CES' view & aggregated view of all 'CES-to-CES' interactions
+
+
+    def add_filtered_domains(self, keytype, value, key=None):
+        if keytype in [KEY_BlockedHostsFromLCES, KEY_BlockedHostsFromRCES]:                
+            if keytype not in self.domains_to_filter:
+                self.domains_to_filter[keytype] = {}
+                self.domains_to_filter[keytype][key]=[value]
+            else:
+                filtered_domains = self.domains_to_filter[keytype][key]
+                filtered_domains.append(value)
+        else:
+            if keytype not in self.domains_to_filter:
+                self.domains_to_filter[keytype] = [value]
+            else:
+                filtered_domains = self.domains_to_filter[keytype]
+                filtered_domains.append(value)
+                
+    def remove_filtered_domains(self, keytype, value, key=None):
+        pass
+
+
+    def has_filtered_domain(self, keytype, value, key=None):
+        pass
+
+    def register_local_host_filtered_by_rCES(self, r_cesid, l_hostid):
+        keytype = KEY_BlockedHostsFromRCES
+        key = r_cesid
+        value = hostid
+        self.add_filtered_domains(keytype, value, key=key)
+
     
     def process_inbound_evidence(self, r_cesid, evidence):
         """ Processes the evidence received from 'r_cesid' """

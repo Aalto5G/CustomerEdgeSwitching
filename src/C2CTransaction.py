@@ -87,9 +87,14 @@ class C2CTransaction(object):
                        cetp_security=self.cetp_security, ces_policy = self.ces_policy, query=False)
         return tlv
                     
-    def _create_offer_tlv2(self, group=None, code=None):
+    def _create_offer_tlv2(self, group=None, code=None, value=None):
         tlv ={}
-        tlv['ope'], tlv['group'], tlv['code'], tlv["value"] = "info", group, code, ""
+        tlv['ope'], tlv['group'], tlv['code'] = "info", group, code
+        if value!=None:
+            tlv["value"] = value
+        else:
+            tlv["value"] = ""
+            
         if (group=="ces") and (code in CETP.CES_CODE_TO_POLICY):
             func = CETP.SEND_TLV_GROUP[group][code]
             tlv = func(tlv=tlv, code=code, ces_params=self.ces_params, cesid=self.l_cesid, r_cesid=self.r_cesid, r_addr=self.remote_addr, \
@@ -498,7 +503,7 @@ class oC2CTransaction(C2CTransaction):
 
     def terminate_transport(self, error_tlv=None):
         """ Sends a terminate TLV and closes the connected transport """
-        terminate_tlv = self._create_offer_tlv2(group="ces", code="terminate")
+        terminate_tlv = self._create_offer_tlv2(group="ces", code="terminate", value=error_tlv)
         tlv_to_send = [terminate_tlv]
         cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlv_to_send)
         cetp_packet = json.dumps(cetp_message)

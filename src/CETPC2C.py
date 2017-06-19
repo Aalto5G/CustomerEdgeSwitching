@@ -10,6 +10,7 @@ import time
 import traceback
 import json
 import ssl
+import copy
 import cetpManager
 import C2CTransaction
 import H2HTransaction
@@ -167,13 +168,24 @@ class CETPC2CLayer:
     def update_transport(self, transport):
         c2c_transaction = self.get_c2c_transaction(transport)
         c2c_transaction.update_last_seen()
+
+    def close_all_transport_connections(self):
+        """ Closes all connected transports to remote CES """
+        conn_transports = copy.copy(self.connected_transports)
+        for transport in conn_transports:
+            self._close_transport_connection(transport)
+        
+    def _close_transport_connection(self, transport):
+        """ Closes the transport connection """
+        c2c_transaction = self.get_c2c_transaction(transport)
+        c2c_transaction.set_terminated()
+        c2c_transaction.terminate_transport()
         
     def report_evidence(self, h_sstag, h_dstag, r_hostid, r_cesid, misbehavior_evidence):
-        """ Reports misbehavior evidence observed in (h_sstag, h_dstag) to the remote CES """
+        """ Reports misbehavior evidence observed in H2H (sstag, dstag) to the remote CES """
         trans = self.select_transport()                             # Check to ensure that message is sent on a (recently) active transport connection
         c2c_transaction = self.get_c2c_transaction(trans)
         c2c_transaction.report_misbehavior_evidence(h_sstag, h_dstag, r_hostid, misbehavior_evidence)
-        self.cetp_security.record_misbehavior_evidence(r_cesid, r_hostid, misbehavior_evidence)
 
     @asyncio.coroutine
     def initiate_c2c_transaction(self, transport_obj):
