@@ -24,11 +24,12 @@ import ConnectionTable
 
 LOGLEVEL_CETPSecurity       = logging.INFO
 
-KEY_BlockedLHosts           = 0
-KEY_BlockedRHosts           = 1
+KEY_BlacklistedLHosts       = 0
+KEY_BlacklistedRHosts       = 1
 KEY_DisabledLHosts          = 2 
-KEY_BlockedHostsFromRCES    = 3
-KEY_BlockedHostsFromLCES    = 4
+KEY_BlockedHostsOfRCES      = 3
+KEY_BlockedHostsByRCES      = 4
+KEY_Unreachable_destinations= 5
 
 
 class CETPSecurity:
@@ -48,7 +49,7 @@ class CETPSecurity:
 
 
     def add_filtered_domains(self, keytype, value, key=None):
-        if keytype in [KEY_BlockedHostsFromLCES, KEY_BlockedHostsFromRCES]:                
+        if keytype in [KEY_BlockedHostsByRCES, KEY_BlockedHostsOfRCES, KEY_Unreachable_destinations]:                
             if keytype not in self.domains_to_filter:
                 self.domains_to_filter[keytype] = {}
                 self.domains_to_filter[keytype][key]=[value]
@@ -63,11 +64,46 @@ class CETPSecurity:
                 filtered_domains.append(value)
                 
     def remove_filtered_domains(self, keytype, value, key=None):
-        pass
+        if keytype in self.domains_to_filter:
+            if key==None:
+                filtered_domains = self.domains_to_filter[keytype]
+                if value in filtered_domains:
+                    filtered_domains.remove(value)
+            else:
+                if key in self.domains_to_filter[keytype]:
+                    filtered_domains = self.domains_to_filter[keytype][key]
+                    if value in filtered_domains:
+                        filtered_domains.remove(value)
+                
 
 
     def has_filtered_domain(self, keytype, value, key=None):
-        pass
+        try:
+            if keytype in self.domains_to_filter:
+                if key==None:
+                    if value in self.domains_to_filter[keytype]:
+                        return True
+                else:
+                    if key in self.domains_to_filter[keytype]:
+                        if value in self.domains_to_filter[keytype][key]:
+                            return True
+                    
+            return False
+        except Exception as ex:
+            self._logger.warning("Exception '{}'".format(ex))
+            return False
+        
+    def get_filtered_domains(self, keytype, key=None):
+        try:
+            if key!=None:
+                filtered_domains = self.domains_to_filter[keytype][key]
+            else:
+                filtered_domains = self.domains_to_filter[keytype]
+            return filtered_domains
+        except Exception as ex:
+            self._logger.info("Exception '{}'".format(ex))
+            return None
+            
 
     def register_local_host_filtered_by_rCES(self, r_cesid, l_hostid):
         keytype = KEY_BlockedHostsFromRCES

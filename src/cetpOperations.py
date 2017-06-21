@@ -1,15 +1,16 @@
 #!/usr/bin/python3.5
 
-import CETP
-import C2CTransaction
-import H2HTransaction
 import sys, os
 sys.path.append(os.path.join(os.path.dirname('hashcash.py'), 'lib'))
 import hashcash
 import hashlib
 import time
 import copy
-
+import json
+import CETP
+import C2CTransaction
+import H2HTransaction
+import CETPSecurity
 
 def send_ces_cesid(**kwargs):
     tlv, code, ces_params, query = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["query"] 
@@ -281,6 +282,32 @@ def response_ces_keepalive(**kwargs):
         return new_tlv
     except Exception as ex:
         print("Exception in response_ces_keepalive()", ex)
+        return None
+
+
+def response_ces_host_filtering(**kwargs):
+    try:
+        tlv, r_cesid, ces_params, cetp_security, policy, transaction = kwargs["tlv"], kwargs["r_cesid"], kwargs["ces_params"], kwargs["cetp_security"], kwargs["ces_policy"], kwargs["transaction"]
+        new_tlv = copy.copy(tlv)
+        ope, cmp, group, code, response_value = policy.get_tlv_details(new_tlv)
+        filtering_msg = json.loads(response_value)
+        print("filtering_msg: ", filtering_msg)
+        if "remote_host" in filtering_msg:
+            value = filtering_msg["remote_host"]
+            keytype = CETPSecurity.KEY_BlockedHostsByRCES
+            cetp_security.add_filtered_domains(keytype, value, key=r_cesid)
+            
+        elif "local_domain" in filtering_msg:
+            l_domain = filtering_msg["local_domain"]
+            value = l_domain
+            keytype = CETPSecurity.KEY_Unreachable_destinations
+            cetp_security.add_filtered_domains(keytype, value, key=r_cesid)
+            
+        new_tlv['ope'] = "info"
+        new_tlv['value'] = "ACKED"
+        return new_tlv
+    except Exception as ex:
+        print("Exception in response_ces_host_filtering()", ex)
         return None
 
 
@@ -575,6 +602,15 @@ def verify_ces_host_sessions(**kwargs):
     except Exception as ex:
         print("Exception in verifying the verify_ces_host_sessions", ex)
         return False
+
+def verify_ces_host_filtering(**kwargs):
+    try:
+        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+        return True
+    except Exception as ex:
+        print("Exception in verifying the verify_ces_host_sessions", ex)
+        return False
+
 
 def verify_ces_fw_version(**kwargs):
     try:

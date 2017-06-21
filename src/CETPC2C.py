@@ -183,9 +183,22 @@ class CETPC2CLayer:
         
     def report_evidence(self, h_sstag, h_dstag, r_hostid, r_cesid, misbehavior_evidence):
         """ Reports misbehavior evidence observed in H2H (sstag, dstag) to the remote CES """
-        trans = self.select_transport()                             # Check to ensure that message is sent on a (recently) active transport connection
-        c2c_transaction = self.get_c2c_transaction(trans)
+        c2c_transaction = self.get_active_c2c_link()
         c2c_transaction.report_misbehavior_evidence(h_sstag, h_dstag, r_hostid, misbehavior_evidence)
+
+    def block_malicious_remote_host(self, r_hostid):
+        c2c_transaction = self.get_active_c2c_link()
+        c2c_transaction.block_remote_host(r_hostid)
+        
+    def drop_connection_to_local_domain(self, l_domain):
+        c2c_transaction = self.get_active_c2c_link()
+        c2c_transaction.drop_connection_to_local_domain(l_domain)
+        
+    def get_active_c2c_link(self):
+        """ Returns c2c-transaction corresponding to an active signalling transport """
+        trans = self.select_transport()
+        c2c_transaction = self.get_c2c_transaction(trans)
+        return c2c_transaction
 
     @asyncio.coroutine
     def initiate_c2c_transaction(self, transport_obj):

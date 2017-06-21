@@ -17,6 +17,7 @@ import cetpOperations
 import CETP
 import copy
 import ConnectionTable
+import CETPSecurity
 
 LOGLEVEL_H2HTransaction         = logging.INFO
 LOGLEVEL_H2HTransactionOutbound = logging.INFO
@@ -204,6 +205,26 @@ class H2HTransaction(object):
     def get_proxy_address(self, key, local_ip):
         proxy_ip = "10.1.3.103"
         return proxy_ip
+
+    def is_local_host_allowed(self, hostid):
+        """ Checks in the CETPSecurity module if the traffic from the sender is permitted (towards remote CES).. OR  whether the host is blacklisted """
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlacklistedLHosts, hostid):
+            return False
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_DisabledLHosts, hostid):
+            return False
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlockedHostsByRCES, hostid, key=self.r_cesid):
+            return False
+        return True
+
+    def is_remote_host_allowed(self, hostid):
+        """ Determines whether the traffic to destination is permitted """
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlacklistedRHosts, hostid):
+            return False
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlockedHostsOfRCES, hostid, key=self.r_cesid):
+            return False
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_Unreachable_destinations, hostid, key=self.r_cesid):
+            return False
+        return True
     
     def generate_session_tags(self, dstag=0):
         """ Returns a session-tag of 4-byte length, if sstag is not part of an connecting or ongoing transaction """
@@ -250,7 +271,7 @@ class H2HTransaction(object):
 
 
 class H2HTransactionOutbound(H2HTransaction):
-    def __init__(self, loop=None, sstag=0, dstag=0, cb=None, host_ip="", src_id="", dst_id="", l_cesid="", r_cesid="", policy_mgr= None, host_register=None, \
+    def __init__(self, loop=None, sstag=0, dstag=0, cb=None, host_ip="", src_id="", dst_id="", l_cesid="", r_cesid="", policy_mgr= None, host_register=None, cetp_security=None, \
                  cetpstate_mgr=None, cetp_h2h=None, ces_params=None, interfaces=None, conn_table=None, direction="outbound", name="H2HTransactionOutbound", rtt_time=[]):
         self.sstag, self.dstag  = sstag, dstag
         self.cb                 = cb
@@ -269,6 +290,7 @@ class H2HTransactionOutbound(H2HTransaction):
         self.src_id             = src_id
         self.interfaces         = interfaces
         self.conn_table         = conn_table
+        self.cetp_security      = cetp_security
         self.rtt                = 0
         self.name               = name
         self._logger            = logging.getLogger(name)
@@ -294,6 +316,13 @@ class H2HTransactionOutbound(H2HTransaction):
         """ Loads policies, generates session tags, and initiates event handlers """
         try:
             self.src_id = self.host_register.ip_to_fqdn_mapping(self.host_ip)
+            if not self.is_local_host_allowed(self.src_id):
+                self._logger.warning(" Sender '{}' cannot initiate connection towards CES '{}'".format(self.src_id, self.r_cesid))
+                return False
+            if not self.is_remote_host_allowed(self.dst_id):
+                self._logger.warning(" Remote CES doesn't accept connection to '{}'.".format(self.dst_id))
+                return False
+            
             self.sstag = self.generate_session_tags()
             self.load_policies(src_id = self.src_id)
             self.state_timeout = DEFAULT_STATE_TIMEOUT
@@ -618,7 +647,7 @@ class H2HTransactionOutbound(H2HTransaction):
 
 class H2HTransactionInbound(H2HTransaction):
     def __init__(self, sstag=0, dstag=0, l_cesid="", r_cesid="", policy_mgr= None, cetpstate_mgr= None, interfaces=None, conn_table=None, \
-                 cetp_h2h=None, name="H2HTransactionInbound"):
+                 cetp_h2h=None, cetp_security=None, name="H2HTransactionInbound"):
         self.sstag              = sstag
         self.dstag              = dstag
         self.l_cesid            = l_cesid
@@ -629,7 +658,7 @@ class H2HTransactionInbound(H2HTransaction):
         self.direction          = "inbound"
         self.conn_table         = conn_table
         self.cetp_h2h           = cetp_h2h
-        print(self.cetp_h2h)
+        self.cetp_security      = cetp_security
         self.name               = name
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HTransactionInbound)
@@ -665,7 +694,14 @@ class H2HTransactionInbound(H2HTransaction):
                 return False
 
             if not self.dst_hostId_is_valid(self.dst_id):
-                self._logger.info(" Destination is not hosted by CES.")
+                self._logger.warning(" Destination is not served by this CES.")
+                return False
+            
+            if not self.is_remote_host_allowed(self.src_id):
+                self._logger.warning(" Sender '{}' is blocked.".format(self.src_id))
+                return False
+            if not self.is_local_host_allowed(self.dst_id):
+                self._logger.warning(" Connection to destination '{}' is not allowed".format(self.dst_id))
                 return False
             
             self.load_policies(self.dst_id)
@@ -801,7 +837,8 @@ class H2HTransactionInbound(H2HTransaction):
         self.conn_table.add(conn)
         
         new_transaction = H2HTransactionOutbound(sstag=self.sstag, dstag=self.dstag, policy_mgr= self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, conn_table=self.conn_table, \
-                                                 l_cesid=self.l_cesid, r_cesid=self.r_cesid, direction="inbound", src_id=self.src_id, dst_id=self.dst_id, cetp_h2h=self.cetp_h2h)
+                                                 l_cesid=self.l_cesid, r_cesid=self.r_cesid, direction="inbound", src_id=self.src_id, dst_id=self.dst_id, cetp_h2h=self.cetp_h2h, \
+                                                 cetp_security=self.cetp_security)
         new_transaction.opolicy = self.ipolicy
         new_transaction.policy  = self.policy
         self.cetpstate_mgr.add_established_transaction((self.sstag, self.dstag), new_transaction)

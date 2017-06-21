@@ -55,7 +55,8 @@ class CETPManager:
         self._logger.setLevel(LOGLEVEL_CETPManager)
         self.local_cetp             = CETPH2H.CETPH2HLocal(cetpstate_mgr=self.cetpstate_mgr, policy_mgr=self.policy_mgr, cetp_mgr=self, \
                                                            cetp_security=self.cetp_security, host_register=self.host_register, conn_table=self.conn_table)
-        self._loop.call_later(15, self.test_func)
+        self._loop.call_later(13, self.test_func)
+        #self._loop.call_later(13.5, self.test_func)
 
     def test_func(self):
         #self.terminate_local_host_sessions(l_hostid="hosta1.cesa.lte.")
@@ -65,17 +66,64 @@ class CETPManager:
         #self.terminate_session_by_fqdns(l_hostid="hosta1.cesa.lte.", r_hostid="srv1.hostb1.cesb.lte.")
         #self.send_evidence(sstag=200, dstag=100, evidence="FSecureMalware")
         #self.terminate_cetp_c2c_signalling(r_cesid="cesb.lte.")
-        self.terminate_cetp_c2c_signalling(r_cesid="cesb.lte.", terminate_h2h=True)
+        
+        #self.make_local_host_unreachable(local_domain="srv2.hostb1.cesb.lte.")
+        #self.block_host_of_rces(r_cesid="cesb.lte.", r_hostid="srv1.hostb1.cesb.lte.")
+        #self.block_host_of_rces(r_cesid="cesb.lte.", r_hostid="hostb1.cesb.lte.")
+        self.drop_connection_to_local_domain(r_cesid="cesb.lte.", l_domain="srv1.hosta1.cesa.lte.")
+        
+        self._loop.call_later(1, self.test_func2)
         
         # Checks for verifying the test execution
         #print("\nPost deletion check")
         #print("CETP session states:\n", self.cetpstate_mgr.cetp_transactions[ConnectionTable.KEY_ESTABLISHED_CETP])
         #print("Connection Table:\n", self.conn_table.connection_dict)
+        
+        """
+        self.terminate_cetp_c2c_signalling(r_cesid="cesb.lte.", terminate_h2h=True)
         print("self.has_cetp_endpoint(r_cesid): ", self.has_cetp_endpoint(r_cesid))
         print("self.has_c2c_layer(r_cesid): ", self.has_c2c_layer(r_cesid))
         print("CETP states: ", self.cetpstate_mgr.cetp_transactions[ConnectionTable.KEY_ESTABLISHED_CETP])
+        """
         pass
+
+    def drop_connection_to_local_domain(self, r_cesid="", l_domain=""):
+        """ Informs remote CES to block (future) connections towards the local domain of this CES """
+        try:
+            if (len(r_cesid)==0) and (len(l_domain)==0):
+                return
             
+            #Store locally to detect non-compliance by remote CES
+            #self.cetp_security.add_filtered_domains(CETPSecurity.KEY_BlockedHostsOfRCES, r_hostid, key=r_cesid)
+            
+            #Report malicious-host to remote CES
+            if self.has_c2c_layer(r_cesid):
+                c2c_layer = self.get_c2c_layer(r_cesid)
+                c2c_layer.drop_connection_to_local_domain(l_domain)
+        except Exception as ex:
+            self._logger.info("Exception '{}'".format(ex))
+            return
+    
+    def block_host_of_rces(self, r_cesid="", r_hostid=""):
+        """ Reports (to block future connections) from a remote-host served by a remote CES-ID """
+        try:
+            if (len(r_cesid)==0) and (len(r_hostid)==0):
+                return
+            
+            #Stores the domains to be filtered in the security module.         # Also used in detecting non-compliance of remote CES
+            self.cetp_security.add_filtered_domains(CETPSecurity.KEY_BlockedHostsOfRCES, r_hostid, key=r_cesid)
+            
+            #Report malicious-host to remote CES
+            if self.has_c2c_layer(r_cesid):
+                c2c_layer = self.get_c2c_layer(r_cesid)
+                c2c_layer.block_malicious_remote_host(r_hostid)
+        except Exception as ex:
+            self._logger.info("Exception '{}'".format(ex))
+
+    
+    def test_func2(self):
+        print(self.cetp_security.domains_to_filter)
+           
         
     def process_dns_message(self, dns_cb, cb_args, dst_id, r_cesid="", naptr_list=[]):
         if len(naptr_list)!=0:
@@ -246,8 +294,22 @@ class CETPManager:
             self._logger.info("Exception '{}' ".format(ex))
 
 
-    def make_local_host_unreachable(self, l_hostid=""):
-        pass
+    def blacklist_the_remote_hosts(self, r_hostid):
+        """ Blacklists a remote-hosts """
+        self.cetp_security.add_filtered_domains(CETPSecurity.KEY_BlacklistedRHosts, r_hostid)
+
+    def make_local_host_unreachable(self, local_domain=""):
+        """ Allows to disable connection initiations towards a local_domain """
+        try:
+            if len(local_domain)==0:    
+                return
+            #Store the domain-name to filter
+            self.cetp_security.add_filtered_domains(CETPSecurity.KEY_DisabledLHosts, local_domain)
+            
+        except Exception as ex:
+            self._logger.info("Exception '{}'".format(ex))
+            return
+
 
     def terminate_session(self, sstag, dstag, r_cesid="", r_host_id=""):
         pass

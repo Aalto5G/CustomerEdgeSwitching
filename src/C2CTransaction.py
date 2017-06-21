@@ -149,6 +149,21 @@ class C2CTransaction(object):
         except:
             return False
 
+    def _check_tlv2(self, tlv, ope=None, cmp=None, group=None, code=None):
+        """ Check whether an attribute with given value exists in a TLV"""
+        try:
+            if (ope != None) and (tlv["ope"] == ope):
+                return True
+            if (cmp != None) and (tlv["cmp"] == cmp):
+                return True
+            if (group != None) and (tlv["group"] == group):
+                return True
+            if (code != None) and (tlv["code"] == code):
+                return True
+            return False
+        except:
+            return False
+
     def generate_session_tags(self, dstag=0):
         """ Returns a session-tag of 4-byte length, if sstag is not part of an connecting or ongoing transaction """
         while True:
@@ -585,9 +600,36 @@ class oC2CTransaction(C2CTransaction):
         cetp_packet = json.dumps(cetp_message)
         #self.pprint(cetp_message)
         self.evidence_acknowledged = False
-        self.keepalive_reporter = self._loop.call_later(2, self.check_evidence_acknowledgment)      # Checking acknowledgement of the sent evidence.
+        self._loop.call_later(2, self.check_evidence_acknowledgment)      # Checking acknowledgement of the sent evidence.
         self.transport.send_cetp(cetp_packet)
         
+    def block_remote_host(self, r_hostid):
+        self._logger.info(" Blocking a remote host '{}' at remote CES '{}'.".format(r_hostid, self.r_cesid))
+        blocking_msg = {"remote_host": r_hostid}             # misbehavior_evidence="FSecure-MalwarePayload"
+        blocking_payload = json.dumps(blocking_msg)
+        host_filter_tlv = self._create_request_tlv2(group="ces", code="host_filtering")
+        host_filter_tlv["value"] = blocking_payload
+        tlvs_to_send = [host_filter_tlv]
+        cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
+        cetp_packet = json.dumps(cetp_message)
+        #self.pprint(cetp_message)
+        #self.evidence_acknowledged = False
+        #self._loop.call_later(2, self.check_acknowledgement)      # Checking acknowledgement of the sent evidence.
+        self.transport.send_cetp(cetp_packet)
+        
+    def drop_connection_to_local_domain(self, l_domain):
+        self._logger.info(" Preventing remote CES '{}' from forwarind traffic to '{}'.".format(self.r_cesid, l_domain))
+        blocking_msg = {"local_domain": l_domain}             # misbehavior_evidence="FSecure-MalwarePayload"
+        blocking_payload = json.dumps(blocking_msg)
+        host_filter_tlv = self._create_request_tlv2(group="ces", code="host_filtering")
+        host_filter_tlv["value"] = blocking_payload
+        tlvs_to_send = [host_filter_tlv]
+        cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
+        cetp_packet = json.dumps(cetp_message)
+        #self.pprint(cetp_message)
+        #self.evidence_acknowledged = False
+        #self._loop.call_later(2, self.check_acknowledgement)      # Checking acknowledgement of the sent evidence.
+        self.transport.send_cetp(cetp_packet)
         
     def check_evidence_acknowledgment(self):
         """ Checks whether a sent evidence is received and acknowledged by remote CES. """
@@ -647,8 +689,8 @@ class oC2CTransaction(C2CTransaction):
         
         # Processing the inbound request packet
         for received_tlv in received_tlvs:
-            if self._check_tlv(received_tlv, ope="query"):
-                if (received_tlv["group"]=="ces") and (received_tlv["code"]=="evidence"):
+            if self._check_tlv(received_tlv, ope="query") and (self._check_tlv(received_tlv, group="ces")):
+                if received_tlv["code"]=="evidence":
                     self._logger.info(" Misbehavior evidence from remote CES '{}'".format(self.r_cesid))
                     ret_tlv = self._create_response_tlv(received_tlv)
                     if ret_tlv!=None:
@@ -657,9 +699,14 @@ class oC2CTransaction(C2CTransaction):
                         self._logger.warning("Couldn't respond to TLV. Send some kinda warning-TLV indicating mismatch to remote CES?")
 
 
-                elif (received_tlv["group"]=="ces") and (received_tlv["code"]=="comment"):
+                elif received_tlv["code"]=="comment":
                     self._logger.info("General commentary from remote CES")
                     self._logger.info("Comment: '{}'".format(received_tlv['value']))
+                
+                elif received_tlv["code"]=="host_filtering":
+                    self._logger.info(" Request for host filtering received")
+                    ret_tlv = self._create_response_tlv(received_tlv)
+                    
                 
                 elif self.ces_policy.has_available(received_tlv):
                     ret_tlv = self._create_response_tlv(received_tlv)
@@ -675,8 +722,8 @@ class oC2CTransaction(C2CTransaction):
                         self._get_unavailable_response(received_tlv)
                         tlvs_to_send.append(received_tlv)
                         
-            elif self._check_tlv(received_tlv, ope="info"):
-                if (received_tlv['group'] == 'ces') and (received_tlv['code']=='terminate'):
+            elif (self._check_tlv(received_tlv, ope="info")) and (self._check_tlv(received_tlv, group="ces")):
+                if received_tlv['code']=='terminate':
                     self._logger.info("Closing the C2C session")
                     self._logger.info(" Terminate received with value: {}".format(received_tlv['value']) )
                     self.set_terminated()
@@ -686,11 +733,14 @@ class oC2CTransaction(C2CTransaction):
                     We could respond with not acceptable? OR could aggregate all the responses or feedbacks (leave the decison-making discretion to: NW admin or to requesting function (on its next execution)
                     """
 
-                elif (received_tlv["group"]=="ces") and (received_tlv["code"]=="evidence"):
+                elif received_tlv["code"]=="evidence":
                     self._logger.info(" Misbehavior evidence is ACKnowledged by remote CES '{}'".format(self.r_cesid))
                     self.evidence_acknowledged = True
                     print(received_tlv["value"])
-                    
+
+                elif received_tlv["code"]=="host_filtering":
+                    self._logger.info(" Host filtering is acked")                        #May wanna verify it
+
                 elif self.ces_policy.has_required(received_tlv):                         # TBD: This shall correspond to the requests sent in the last packet to remote CES.
                     # CES will only accept/process the response for the requests it sent to remote CES.
                     if (received_tlv["group"]=="ces") and (received_tlv["code"]=="keepalive"):
