@@ -24,12 +24,18 @@ import ConnectionTable
 
 LOGLEVEL_CETPSecurity       = logging.INFO
 
-KEY_BlacklistedLHosts       = 0
-KEY_BlacklistedRHosts       = 1
-KEY_DisabledLHosts          = 2 
-KEY_BlockedHostsOfRCES      = 3
-KEY_BlockedHostsByRCES      = 4
-KEY_Unreachable_destinations= 5
+#Local record
+KEY_BlacklistedLHosts               = 0
+KEY_BlacklistedRHosts               = 1
+KEY_DisabledLHosts                  = 2
+
+#Remote CES specific record    (Local-view)
+KEY_BlockedHostsOfRCES              = 3
+KEY_Unreachable_local_destinations  = 4
+
+# Remote CES specific record   (Remote view)
+KEY_BlockedHostsByRCES              = 5
+KEY_Unreachable_remote_destinations = 6
 
 
 class CETPSecurity:
@@ -49,7 +55,7 @@ class CETPSecurity:
 
 
     def add_filtered_domains(self, keytype, value, key=None):
-        if keytype in [KEY_BlockedHostsByRCES, KEY_BlockedHostsOfRCES, KEY_Unreachable_destinations]:                
+        if keytype in [KEY_BlockedHostsByRCES, KEY_BlockedHostsOfRCES, KEY_Unreachable_remote_destinations, KEY_Unreachable_local_destinations]:                
             if keytype not in self.domains_to_filter:
                 self.domains_to_filter[keytype] = {}
                 self.domains_to_filter[keytype][key]=[value]
@@ -87,7 +93,6 @@ class CETPSecurity:
                     if key in self.domains_to_filter[keytype]:
                         if value in self.domains_to_filter[keytype][key]:
                             return True
-                    
             return False
         except Exception as ex:
             self._logger.warning("Exception '{}'".format(ex))
