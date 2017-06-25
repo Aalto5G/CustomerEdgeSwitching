@@ -56,7 +56,6 @@ class CETPManager:
         self.local_cetp             = CETPH2H.CETPH2HLocal(cetpstate_mgr=self.cetpstate_mgr, policy_mgr=self.policy_mgr, cetp_mgr=self, \
                                                            cetp_security=self.cetp_security, host_register=self.host_register, conn_table=self.conn_table)
         self._loop.call_later(13, self.test_func)
-        #self._loop.call_later(13.5, self.test_func)
 
     def test_func(self):
         #self.terminate_local_host_sessions(l_hostid="hosta1.cesa.lte.")
@@ -71,7 +70,6 @@ class CETPManager:
         #self.block_host_of_rces(r_cesid="cesb.lte.", r_hostid="srv1.hostb1.cesb.lte.")
         #self.block_host_of_rces(r_cesid="cesb.lte.", r_hostid="hostb1.cesb.lte.")
         self.drop_connection_to_local_domain(r_cesid="cesb.lte.", l_domain="srv1.hosta1.cesa.lte.")
-        
         self._loop.call_later(1, self.test_func2)
         
         # Checks for verifying the test execution
@@ -94,7 +92,8 @@ class CETPManager:
                 return
             
             #Store locally to detect non-compliance by remote CES
-            #self.cetp_security.add_filtered_domains(CETPSecurity.KEY_BlockedHostsOfRCES, r_hostid, key=r_cesid)
+            keytype = CETPSecurity.KEY_Unreachable_local_destinations
+            self.cetp_security.add_filtered_domains(keytype, l_domain, key=r_cesid)
             
             #Report malicious-host to remote CES
             if self.has_c2c_layer(r_cesid):
@@ -201,7 +200,7 @@ class CETPManager:
             
             if terminate_h2h:
                 self._logger.debug("Terminate all H2H transactions to/from {}".format(r_cesid))
-                self.terminate_remote_ces_sessions(r_cesid)
+                self.terminate_rces_h2h_sessions(r_cesid)
             
             if self.has_c2c_layer(r_cesid):
                 c2c_layer = self.get_c2c_layer(r_cesid)
@@ -280,20 +279,6 @@ class CETPManager:
                 self.conn_table.delete(r_conn)                                              # Deleting the pair of local connection
 
     
-    def filter_malicious_remote_host(self, r_cesid="", r_hostid=""):
-        """ Initiates a message requesting remote CES not to forward connection from a particular host/domain, or to a host/domain. """
-        try:
-            if (len(r_cesid)==0) or (len(r_hostid)==0):
-                return
-            
-        # Local CES shall not accept connection from this remote host.       
-        # [Store this state in CETPSecurity module]
-        # Before accepting a connection towards this host-id. Check with CETPSecurity module.
-        
-        except Exception as ex:
-            self._logger.info("Exception '{}' ".format(ex))
-
-
     def blacklist_the_remote_hosts(self, r_hostid):
         """ Blacklists a remote-hosts """
         self.cetp_security.add_filtered_domains(CETPSecurity.KEY_BlacklistedRHosts, r_hostid)
@@ -378,7 +363,7 @@ class CETPManager:
                     self.conn_table.delete(r_conn)                                              # Deleting the pair of local connection
                     # Terminate at the local transaction at H2HLocalTransaction level.
 
-    def terminate_remote_ces_sessions(self, r_cesid):
+    def terminate_rces_h2h_sessions(self, r_cesid):
         """ Terminate all H2H sessions to/from a remote-CESID """
         keytype = ConnectionTable.KEY_MAP_REMOTE_CESID
         key = r_cesid
