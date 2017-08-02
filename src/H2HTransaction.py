@@ -62,7 +62,7 @@ class H2HTransaction(object):
         if (group!="control") or ((group=="control") and (code in CETP.CONTROL_CODES)):
             func = CETP.SEND_TLV_GROUP[group][code]
             tlv = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, interfaces=self.interfaces, query=False)
-        return tlv
+        return tlv          # shall use try, except here.
 
     def _create_offer_tlv2(self, group=None, code=None):
         tlv ={}
@@ -119,7 +119,6 @@ class H2HTransaction(object):
             return False
         except:
             return False
-        
         
     def _get_from_tlvlist(self, tlvlist, group, code = None, ope = ""):
         retlist = []
@@ -824,8 +823,7 @@ class H2HTransactionInbound(H2HTransaction):
         """ Emulates that host exists behind CES """
         return True
 
-    def _export_to_stateful(self):
-        """ Creates connection and complete H2Htransaction to stateful """
+    def _create_connection(self):
         lfqdn, rfqdn            = self.src_id, self.dst_id
         lip                     = "10.0.3.111"
         proxy_ip                = self._allocate_proxy_address(lip)          # Get local IP for a domain from Host-register
@@ -835,7 +833,9 @@ class H2HTransactionInbound(H2HTransaction):
         conn = ConnectionTable.H2HConnection(120.0, "inbound", lid, lip, proxy_ip, rid, lrloc, rrloc, lfqdn, rfqdn, self.sstag, self.dstag, lpayload, rpayload, self.r_cesid)
         print(lfqdn, rfqdn, lip, proxy_ip, lrloc, rrloc, lpayload, rpayload, lid, rid)
         self.conn_table.add(conn)
-        
+
+    def _export_to_stateful(self):
+        """ Creates connection and complete H2Htransaction to stateful """
         new_transaction = H2HTransactionOutbound(sstag=self.sstag, dstag=self.dstag, policy_mgr= self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, conn_table=self.conn_table, \
                                                  l_cesid=self.l_cesid, r_cesid=self.r_cesid, direction="inbound", src_id=self.src_id, dst_id=self.dst_id, cetp_h2h=self.cetp_h2h, \
                                                  cetp_security=self.cetp_security)

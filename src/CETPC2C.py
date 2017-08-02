@@ -29,7 +29,7 @@ class CETPC2CLayer:
         Management of CETPTransport failover, seemless to H2H-layer.
     """
     def __init__(self, loop, naptr_list=[], cetp_h2h=None, l_cesid=None, r_cesid=None, cetpstate_mgr=None, policy_mgr=None, policy_client=None, ces_params=None, \
-                 cetp_security=None, cetp_mgr=None, name="CETPC2CLayer"):
+                 cetp_security=None, cetp_mgr=None, conn_table=None, interfaces=None, name="CETPC2CLayer"):
         self._loop                      = loop
         self.naptr_list                 = naptr_list
         self.cetp_h2h                   = cetp_h2h               # H2H layer manager for remote-cesid 
@@ -41,6 +41,8 @@ class CETPC2CLayer:
         self.ces_params                 = ces_params
         self.cetp_security              = cetp_security
         self.cetp_mgr                   = cetp_mgr
+        self.interfaces                 = interfaces
+        self.conn_table                 = conn_table
         self.q                          = asyncio.Queue()        # Enqueues the messages from CETP Transport
         self.pending_tasks              = []                     # oCESC2CLayer specific
         self.initiated_transports       = []
@@ -204,7 +206,8 @@ class CETPC2CLayer:
     def initiate_c2c_transaction(self, transport_obj):
         """ Initiates/Continues CES-to-CES negotiation """
         c2c_transaction  = C2CTransaction.oC2CTransaction(self._loop, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetpstate_mgr=self.cetpstate_mgr, transport=transport_obj, \
-                                                          policy_mgr=self.policy_mgr, proto=transport_obj.proto, ces_params=self.ces_params, cetp_security=self.cetp_security, c2c_layer=self)
+                                                          policy_mgr=self.policy_mgr, proto=transport_obj.proto, ces_params=self.ces_params, cetp_security=self.cetp_security, \
+                                                          interfaces=self.interfaces, c2c_layer=self, conn_table=self.conn_table)
         self._add_c2c_transport_binding(c2c_transaction, transport_obj)
         self._add_c2c_transactions(c2c_transaction)
         cetp_resp = yield from c2c_transaction.initiate_c2c_negotiation()          # Shall be a coroutine.

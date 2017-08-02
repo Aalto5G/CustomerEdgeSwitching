@@ -80,59 +80,84 @@ class C2CTransaction(object):
         return terminate_tlv
 
     def _create_offer_tlv(self, tlv):
-        group, code = tlv['group'], tlv['code']
-        if (group=="ces") and (code in CETP.CES_CODE_TO_POLICY):
-            func = CETP.SEND_TLV_GROUP[group][code]
-            tlv = func(tlv=tlv, code=code, ces_params=self.ces_params, cesid=self.l_cesid, r_cesid=self.r_cesid, r_addr=self.remote_addr, \
-                       cetp_security=self.cetp_security, ces_policy = self.ces_policy, query=False)
-        return tlv
+        try:
+            group, code = tlv['group'], tlv['code']
+            if group in ["ces", "rloc", "payload"]:
+                func = CETP.SEND_TLV_GROUP[group][code]
+                tlv = func(tlv=tlv, code=code, ces_params=self.ces_params, cesid=self.l_cesid, r_cesid=self.r_cesid, r_addr=self.remote_addr, \
+                           cetp_security=self.cetp_security, policy = self.ces_policy, interfaces=self.interfaces, query=False)
+            return tlv
+        except Exception as ex:
+            self._logger.error(ex)
+            return None
                     
     def _create_offer_tlv2(self, group=None, code=None, value=None):
-        tlv ={}
-        tlv['ope'], tlv['group'], tlv['code'] = "info", group, code
-        if value!=None:
-            tlv["value"] = value
-        else:
-            tlv["value"] = ""
-            
-        if (group=="ces") and (code in CETP.CES_CODE_TO_POLICY):
-            func = CETP.SEND_TLV_GROUP[group][code]
-            tlv = func(tlv=tlv, code=code, ces_params=self.ces_params, cesid=self.l_cesid, r_cesid=self.r_cesid, r_addr=self.remote_addr, \
-                       cetp_security=self.cetp_security, ces_policy = self.ces_policy, query=False)
-        return tlv
+        try:
+            tlv ={}
+            tlv['ope'], tlv['group'], tlv['code'] = "info", group, code
+            if value!=None:
+                tlv["value"] = value
+            else:
+                tlv["value"] = ""
+                
+            if group in ["ces", "rloc", "payload"]:
+                func = CETP.SEND_TLV_GROUP[group][code]
+                tlv = func(tlv=tlv, code=code, ces_params=self.ces_params, cesid=self.l_cesid, r_cesid=self.r_cesid, r_addr=self.remote_addr, \
+                           cetp_security=self.cetp_security, policy = self.ces_policy, interfaces=self.interfaces, query=False)
+            return tlv
+        
+        except Exception as ex:
+            self._logger.error(ex)
+            return None
 
     def _create_request_tlv(self, tlv):
-        group, code = tlv['group'], tlv['code']
-        if (group=="ces") and (code in CETP.CES_CODE_TO_POLICY):
-            func = CETP.SEND_TLV_GROUP[group][code]
-            tlv  = func(tlv=tlv, code=code, ces_params=self.ces_params, cesid=self.l_cesid, r_cesid=self.r_cesid, r_addr=self.remote_addr, \
-                        cetp_security=self.cetp_security, ces_policy = self.ces_policy, query=True)
+        try:
+            group, code = tlv['group'], tlv['code']
+            if group in ["ces", "rloc", "payload"]:
+                func = CETP.SEND_TLV_GROUP[group][code]
+                tlv  = func(tlv=tlv, code=code, ces_params=self.ces_params, cesid=self.l_cesid, r_cesid=self.r_cesid, r_addr=self.remote_addr, \
+                            cetp_security=self.cetp_security, policy = self.ces_policy, interfaces=self.interfaces, query=True)
             return tlv
+        except Exception as ex:
+            self._logger.error(ex)
+            return None
         
     def _create_request_tlv2(self, group=None, code=None):
-        tlv = {}
-        tlv['ope'], tlv['group'], tlv['code'], tlv['value'] = "query", group, code, ""
-        if (group=="ces") and (code in CETP.CES_CODE_TO_POLICY):
-            func = CETP.SEND_TLV_GROUP[group][code]
-            tlv  = func(tlv=tlv, code=code, ces_params=self.ces_params, cesid=self.l_cesid, r_cesid=self.r_cesid, r_addr=self.remote_addr, \
-                        cetp_security=self.cetp_security, ces_policy = self.ces_policy, query=True)
-            return tlv
+        try:
+            tlv = {}
+            tlv['ope'], tlv['group'], tlv['code'], tlv['value'] = "query", group, code, ""
+            if group in ["ces", "rloc", "payload"]:
+                func = CETP.SEND_TLV_GROUP[group][code]
+                tlv  = func(tlv=tlv, code=code, ces_params=self.ces_params, cesid=self.l_cesid, r_cesid=self.r_cesid, r_addr=self.remote_addr, \
+                            cetp_security=self.cetp_security, policy = self.ces_policy, interfaces=self.interfaces, query=True)
+                return tlv
+        except Exception as ex:
+            self._logger.error(ex)
+            return None
     
     def _create_response_tlv(self, tlv):
-        group, code = tlv['group'], tlv['code']
-        if (group=="ces") and (code in CETP.CES_CODE_TO_POLICY):
-            func = CETP.RESPONSE_TLV_GROUP[group][code]
-            tlv  = func(tlv=tlv, code=code, ces_params=self.ces_params, l_cesid=self.l_cesid, r_cesid=self.r_cesid, r_addr=self.remote_addr, \
-                        cetp_security=self.cetp_security, ces_policy = self.ces_policy, transaction=self, packet=self.packet)
+        try:
+            group, code = tlv['group'], tlv['code']
+            if group in ["ces", "rloc", "payload"]:
+                func = CETP.RESPONSE_TLV_GROUP[group][code]
+                tlv  = func(tlv=tlv, code=code, ces_params=self.ces_params, l_cesid=self.l_cesid, r_cesid=self.r_cesid, r_addr=self.remote_addr, \
+                            cetp_security=self.cetp_security, policy = self.ces_policy, transaction=self, interfaces=self.interfaces, packet=self.packet)
             return tlv
+        except Exception as ex:
+            self._logger.error(ex)
+            return None
         
     def _verify_tlv(self, tlv):
-        group, code = tlv['group'], tlv['code']
-        if (group=="ces") and (code in CETP.CES_CODE_TO_POLICY):
-            func   = CETP.VERIFY_TLV_GROUP[group][code]
-            result = func(tlv=tlv, code=code, ces_params=self.ces_params, l_cesid=self.l_cesid, r_cesid=self.r_cesid, r_addr=self.remote_addr, packet=self.packet, \
-                          cetp_security=self.cetp_security, ces_policy = self.ces_policy, transaction=self, session_established=self.c2c_negotiation_status)
-            return result
+        try:
+            group, code = tlv['group'], tlv['code']
+            if group in ["ces", "rloc", "payload"]:
+                func   = CETP.VERIFY_TLV_GROUP[group][code]
+                result = func(tlv=tlv, code=code, ces_params=self.ces_params, l_cesid=self.l_cesid, r_cesid=self.r_cesid, r_addr=self.remote_addr, packet=self.packet, \
+                              cetp_security=self.cetp_security, policy = self.ces_policy, transaction=self, interfaces=self.interfaces, session_established=self.c2c_negotiation_status)
+                return result
+        except Exception as ex:
+            self._logger.error(ex)
+            return False
 
     def _check_tlv(self, tlv, ope=None, cmp=None, group=None, code=None):
         """ Check whether an attribute with given value exists in a TLV"""
@@ -146,23 +171,37 @@ class C2CTransaction(object):
             if (code != None) and (tlv["code"] == code):
                 return True
             return False
-        except:
+        except Exception as ex:
+            print(ex)
             return False
 
-    def _check_tlv2(self, tlv, ope=None, cmp=None, group=None, code=None):
+    def _check_tlv2(self, tlv, group=[], code=[]):
         """ Check whether an attribute with given value exists in a TLV"""
         try:
-            if (ope != None) and (tlv["ope"] == ope):
+            if (group != []) and (tlv["group"] in group):
                 return True
-            if (cmp != None) and (tlv["cmp"] == cmp):
-                return True
-            if (group != None) and (tlv["group"] == group):
-                return True
-            if (code != None) and (tlv["code"] == code):
+            if (code != []) and (tlv["code"] in code):
                 return True
             return False
-        except:
+        except Exception as ex:
+            print(ex)
             return False
+
+    def _get_from_tlvlist(self, tlvlist, group, code = None, ope = ""):
+        retlist = []
+        for tlv in tlvlist:
+            if tlv["group"] != group:
+                continue
+            if len(ope) != 0:
+                if tlv["ope"] != ope:
+                    continue
+            
+            if code is None:
+                retlist.append(tlv)
+            elif tlv.code == code:
+                retlist.append(tlv)
+        return retlist
+        
 
     def generate_session_tags(self, dstag=0):
         """ Returns a session-tag of 4-byte length, if sstag is not part of an connecting or ongoing transaction """
@@ -179,8 +218,50 @@ class C2CTransaction(object):
                 if not self.cetpstate_mgr.has_established_transaction((sstag, dstag)):                   # Checks connected transactions
                     return sstag
                 
+    def get_rloc(self, rrloc_tlv, policy):
+        #iface_list = CES_CONF.network.get((KEY_NETWORK_PORT, KEY_IFACE_REALM, INTERFACE_PUBLIC), update=False)
+        #for iface in iface_list:
+        if policy.has_available(rrloc_tlv):
+            lrloc_tlv = policy.get_available(rrloc_tlv)
+            self._create_offer_tlv(lrloc_tlv)
+            #print(rrloc_tlv)
+            lrloc = lrloc_tlv["value"]
+            rrloc = rrloc_tlv["value"]
+        return (lrloc, rrloc)
+
+
+    def _get_connection_rlocs(self):
+        l_rlocs, r_rlocs = [], []
+        rrloc_tlvs = self._get_from_tlvlist(self.received_tlvs, "rloc", ope="info", code=None)
+        #print("rrlocs: ", rrloc_tlvs)
+        for rrloc_tlv in rrloc_tlvs:
+            lrloc, rrloc = self.get_rloc(rrloc_tlv, self.ces_policy)
+            l_rlocs.append(lrloc)
+            r_rlocs.append(rrloc)
+        return (l_rlocs, r_rlocs)
+
+
+    def get_payload(self, rpayload_tlv, policy):
+        if policy.has_available(rpayload_tlv):
+            lpayload_tlv = policy.get_available(rpayload_tlv)
+            self._create_offer_tlv(lpayload_tlv)
+            lpayload = lpayload_tlv["code"]
+            rpayload = rpayload_tlv["code"]
+        return (lpayload, rpayload)
+
+    def _get_connection_payloads(self):
+        l_payloads, r_payloads = [], []
+        rpayloads = self._get_from_tlvlist(self.received_tlvs, "payload", ope="info", code=None)
+        for rpayload in rpayloads:
+            lpayload, rpayload = self.get_payload(rpayload, self.ces_policy)
+            l_payloads.append(lpayload)
+            r_payloads.append(rpayload)
+        return (lpayload, rpayload)
+                
+
+    
     def negotiated_parameters(self):
-        s = [self.l_cesid, self.r_cesid, self.ttl, self.evidence_format, self.remote_session_limit]
+        s = [self.l_cesid, self.r_cesid, self.ttl, self.evidence_format, self.remote_session_limit, self.lrloc, self.rrloc, self.lpayload, self.rpayload]
         return s
 
     def show(self, packet):
@@ -210,7 +291,8 @@ class C2CTransaction(object):
 
     def pprint(self, packet):
         self.show2(packet)
-                
+
+
 
 class oC2CTransaction(C2CTransaction):
     """
@@ -218,7 +300,7 @@ class oC2CTransaction(C2CTransaction):
     Also contains methods to facilitate signalling in the post-c2c negotiation phase between CES nodes.
     """
     def __init__(self, loop, l_cesid="", r_cesid="", c_sstag=0, c_dstag=0, cetpstate_mgr=None, policy_client=None, policy_mgr=None, proto="tls", ces_params=None, \
-                 cetp_security=None, transport=None, c2c_layer=None, direction="outbound", name="oC2CTransaction"):
+                 cetp_security=None, transport=None, interfaces=None, c2c_layer=None, conn_table=None, direction="outbound", name="oC2CTransaction"):
         self._loop                  = loop
         self.l_cesid                = l_cesid
         self.r_cesid                = r_cesid
@@ -234,6 +316,8 @@ class oC2CTransaction(C2CTransaction):
         self.remote_addr            = transport.remotepeer
         self.cetp_security          = cetp_security
         self.c2c_layer              = c2c_layer
+        self.interfaces             = interfaces
+        self.conn_table             = conn_table
         self.rtt                    = 0
         self.packet_count           = 0
         self.missed_keepalives      = 0
@@ -324,12 +408,14 @@ class oC2CTransaction(C2CTransaction):
             # The offered TLVs
             for otlv in self.ces_policy.get_offer():
                 tlv = self._create_offer_tlv(otlv)
-                tlvs_to_send.append(tlv)
+                if tlv!=None:
+                    tlvs_to_send.append(tlv)
     
             # The required TLVs
             for rtlv in self.ces_policy.get_required():
                 tlv = self._create_request_tlv(rtlv)
-                tlvs_to_send.append(tlv)
+                if tlv!=None:
+                    tlvs_to_send.append(tlv)
             
             # Signing the CETP header, if required by policy    - Depends on the type of transport layer.
             # self.attach_cetp_signature(tlv_to_send)
@@ -500,7 +586,8 @@ class oC2CTransaction(C2CTransaction):
                 # Issuing oCES Full query                                -- This will not scale to oCES for allowing another RTT, unless we send offers/availables as well.
                 for rtlv in self.ces_policy.get_required():
                     tlv = self._create_request_tlv(rtlv)
-                    tlvs_to_send.append(tlv)
+                    if tlv!=None:
+                        tlvs_to_send.append(tlv)
 
                 negotiation_status = None
                 cetp_msg = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)           # Sending 'response' as 'info'
@@ -519,10 +606,11 @@ class oC2CTransaction(C2CTransaction):
     def terminate_transport(self, error_tlv=None):
         """ Sends a terminate TLV and closes the connected transport """
         terminate_tlv = self._create_offer_tlv2(group="ces", code="terminate", value=error_tlv)
-        tlv_to_send = [terminate_tlv]
-        cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlv_to_send)
-        cetp_packet = json.dumps(cetp_message)
-        self.transport.send_cetp(cetp_packet)
+        if terminate_tlv!=None:
+            tlv_to_send = [terminate_tlv]
+            cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlv_to_send)
+            cetp_packet = json.dumps(cetp_message)
+            self.transport.send_cetp(cetp_packet)
         self.transport.close()
 
     def _cetp_established(self):
@@ -533,9 +621,20 @@ class oC2CTransaction(C2CTransaction):
         self.cetpstate_mgr.remove_initiated_transaction((self.sstag, 0))
         self.cetpstate_mgr.add_established_transaction((self.sstag, self.dstag), self)
         self.c2c_handler.cancel()
-        keepalive_required = False
+        self._create_connection()
+        self.trigger_negotiated_functionality()
+        
+    def _create_connection(self):
+        """ Extract the negotiated parameters to create a connection state """
+        self.lrloc, self.rrloc          = self._get_connection_rlocs()
+        self.lpayload, self.rpayload    = self._get_connection_payloads()
         self._logger.info("Negotiated params: {}".format(self.negotiated_parameters()))
-
+        self.conn = ConnectionTable.C2CConnection(self.l_cesid, self.r_cesid, self.lrloc, self.rrloc, self.lpayload, self.rpayload)
+        self.conn_table.add(self.conn)
+    
+    def trigger_negotiated_functionality(self):
+        """ Trigger the functionality negotiated with remote end """
+        keepalive_required = False
         # Processing the queries of remote CES, to trigger functionality
         if len(self.r_ces_requirements) !=0:
             # CES doesn't send keepalive, if the other end doesn't request keepalive.
@@ -553,6 +652,7 @@ class oC2CTransaction(C2CTransaction):
                     self._logger.info(" oCES must offer keepalive support.")
                     self._loop.call_later(2, self.initiate_keepalive_functionality)
 
+    
                     
     def initiate_keepalive_functionality(self):
         """ Schedules keepalive upon inactivity of time 'To' on a link """
@@ -785,7 +885,7 @@ LOGLEVEL_iC2CTransaction        = logging.INFO
 
 class iC2CTransaction(C2CTransaction):
     def __init__(self, loop, sstag=0, dstag=0, l_cesid="", r_cesid="", l_addr=(), r_addr=(), policy_mgr= None, policy_client=None, cetpstate_mgr= None, ces_params=None, \
-                 cetp_security=None, proto="tcp", transport=None, name="iC2CTransaction"):
+                 cetp_security=None, interfaces=None, conn_table=None, proto="tcp", transport=None, name="iC2CTransaction"):
         self._loop                      = loop
         self.local_addr                 = l_addr
         self.remote_addr                = r_addr
@@ -800,7 +900,9 @@ class iC2CTransaction(C2CTransaction):
         self.ces_params                 = ces_params
         self.transport                  = transport
         self.cetp_security              = cetp_security
+        self.interfaces                 = interfaces
         self.name                       = name
+        self.conn_table                 = conn_table
         self.health_report              = True
         self.c2c_negotiation_status     = False
         self.last_seen                  = time.time()
@@ -899,6 +1001,7 @@ class iC2CTransaction(C2CTransaction):
             for received_tlv in self.received_tlvs:
                 # Evaluates whether the remote CES's requirements could be answered
                 if self._check_tlv(received_tlv, ope="query"):
+                        
                     if self.ices_policy.has_available(received_tlv):
                         ret_tlv = self._create_response_tlv(received_tlv)
                         if ret_tlv!=None:
@@ -906,11 +1009,11 @@ class iC2CTransaction(C2CTransaction):
                             continue
                         
                     if self._check_tlv(received_tlv, cmp="optional"):
-                        self._logger.info(" A mandatory required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
+                        self._logger.info(" An optional required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
                         ret_tlv = self._get_unavailable_response(received_tlv)
                         tlvs_to_send.append(ret_tlv)
                     else:
-                        self._logger.info(" An optional required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
+                        self._logger.info(" A mandatory required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
                         error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
                         error = True
                         break
@@ -926,6 +1029,7 @@ class iC2CTransaction(C2CTransaction):
             if (satisfied_requriements == len(self.ices_policy.required)):
                 #All the  requirements of remote-CES are also met -> Now Accept/Create CETP connection (i.e. by assigning 'SST') and Export to stateful (for post-negotiation CETP flow etc.)
                 self.sstag = self.generate_session_tags(self.dstag)
+                self._create_connection()
                 stateful_transansaction = self._export_to_stateful()
                 self._logger.info("C2C-policy negotiation succeeded -> Create stateful transaction (SST={}, DST={})".format(self.sstag, self.dstag))
                 self._logger.info("{}".format(42*'*') )
@@ -933,7 +1037,7 @@ class iC2CTransaction(C2CTransaction):
 
                 cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
                 self.pprint(cetp_message)
-                self._logger.info("Negotiated params: {}".format(self.negotiated_parameters()))
+                #self._logger.info(" Negotiated params: {}".format(self.negotiated_parameters()))
                 cetp_packet = json.dumps(cetp_message)
                 self.last_packet_sent = cetp_packet
                 return (negotiation_status, cetp_packet)
@@ -943,7 +1047,8 @@ class iC2CTransaction(C2CTransaction):
                 tlvs_to_send = []
                 for rtlv in self.ices_policy.get_required():            
                     tlv = self._create_request_tlv(rtlv)
-                    tlvs_to_send.append(tlv)
+                    if tlv!=None:
+                        tlvs_to_send.append(tlv)
                 
                 negotiation_status = None
                 cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
@@ -952,11 +1057,18 @@ class iC2CTransaction(C2CTransaction):
                 return (negotiation_status, cetp_packet)
 
 
+    def _create_connection(self):
+        self.lrloc, self.rrloc          = self._get_connection_rlocs()
+        self.lpayload, self.rpayload    = self._get_connection_payloads()
+        self._logger.info(" Negotiated params: {}".format(self.negotiated_parameters()))
+        self.conn = ConnectionTable.C2CConnection(self.l_cesid, self.r_cesid, self.lrloc, self.rrloc, self.lpayload, self.rpayload)
+        self.conn_table.add(self.conn)
+
     def _export_to_stateful(self):
         new_transaction = oC2CTransaction(self._loop, l_cesid=self.l_cesid, r_cesid=self.r_cesid, c_sstag=self.sstag, c_dstag=self.dstag, policy_mgr= self.policy_mgr, \
                                           cetpstate_mgr=self.cetpstate_mgr, ces_params=self.ces_params, proto=self.proto, transport=self.transport, direction="inbound", \
-                                          cetp_security=self.cetp_security)
-        new_transaction.load_policies(self.l_cesid)
+                                          cetp_security=self.cetp_security, conn_table=self.conn_table)
+        new_transaction.ces_policy = self.ces_policy
         new_transaction.c2c_negotiation_status = True
         new_transaction.trigger_negotiated_functions()
         self.cetpstate_mgr.add_established_transaction((self.sstag, self.dstag), new_transaction)

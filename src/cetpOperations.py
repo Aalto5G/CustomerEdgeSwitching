@@ -223,7 +223,7 @@ def response_to_wrong_query(tlv):
 
 def response_ces_cesid(**kwargs):
     try:
-        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["policy"]
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         new_tlv = copy.copy(tlv)
         ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
@@ -235,7 +235,7 @@ def response_ces_cesid(**kwargs):
         return None
 
 def response_ces_ttl(**kwargs):
-    tlv, code, ces_params, policy, transaction, cetp_packet = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"], kwargs["transaction"], kwargs["packet"]
+    tlv, code, ces_params, policy, transaction, cetp_packet = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["policy"], kwargs["transaction"], kwargs["packet"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
     remote_default_dp_ttl = None
     try:
@@ -272,7 +272,7 @@ def response_ces_ttl(**kwargs):
 
 
 def response_ces_keepalive(**kwargs):
-    tlv, code, ces_params, policy, transaction = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"], kwargs["transaction"]
+    tlv, code, ces_params, policy, transaction = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["policy"], kwargs["transaction"]
     try:
         new_tlv = copy.copy(tlv)
         ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
@@ -287,7 +287,7 @@ def response_ces_keepalive(**kwargs):
 
 def response_ces_host_filtering(**kwargs):
     try:
-        tlv, r_cesid, ces_params, cetp_security, policy, transaction = kwargs["tlv"], kwargs["r_cesid"], kwargs["ces_params"], kwargs["cetp_security"], kwargs["ces_policy"], kwargs["transaction"]
+        tlv, r_cesid, ces_params, cetp_security, policy, transaction = kwargs["tlv"], kwargs["r_cesid"], kwargs["ces_params"], kwargs["cetp_security"], kwargs["policy"], kwargs["transaction"]
         new_tlv = copy.copy(tlv)
         ope, cmp, group, code, response_value = policy.get_tlv_details(new_tlv)
         filtering_msg = json.loads(response_value)
@@ -313,7 +313,7 @@ def response_ces_host_filtering(**kwargs):
 
 def response_ces_keepalive_cycle(**kwargs):
     try:
-        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["policy"]
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         new_tlv = copy.copy(tlv)
         ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
@@ -325,7 +325,7 @@ def response_ces_keepalive_cycle(**kwargs):
         return None
 
 def response_ces_certificate(**kwargs):
-    tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+    tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["policy"]
     try:
         new_tlv = copy.copy(tlv)
         ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
@@ -344,7 +344,7 @@ def response_ces_certificate(**kwargs):
  
 def response_ces_fw_version(**kwargs):
     try:
-        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["policy"]
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         new_tlv = copy.copy(tlv)
         ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
@@ -357,7 +357,7 @@ def response_ces_fw_version(**kwargs):
 
 def response_ces_session_limit(**kwargs):
     try:
-        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["policy"]
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         new_tlv = copy.copy(tlv)
         ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
@@ -370,7 +370,7 @@ def response_ces_session_limit(**kwargs):
 
 def response_ces_host_sessions(**kwargs):
     try:
-        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["policy"]
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         new_tlv = copy.copy(tlv)
         ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
@@ -383,7 +383,7 @@ def response_ces_host_sessions(**kwargs):
 
 def response_ces_caces(**kwargs):
     try:
-        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["policy"]
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         new_tlv = copy.copy(tlv)
         ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
@@ -396,7 +396,7 @@ def response_ces_caces(**kwargs):
 
 def response_ces_evidence_format(**kwargs):
     try:
-        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["policy"]
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         new_tlv = copy.copy(tlv)
         ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
@@ -409,7 +409,7 @@ def response_ces_evidence_format(**kwargs):
 
 def response_ces_evidence(**kwargs):
     try:
-        tlv, r_cesid, ces_params, cetp_security, policy = kwargs["tlv"], kwargs["r_cesid"], kwargs["ces_params"], kwargs["cetp_security"], kwargs["ces_policy"]
+        tlv, r_cesid, ces_params, cetp_security, policy = kwargs["tlv"], kwargs["r_cesid"], kwargs["ces_params"], kwargs["cetp_security"], kwargs["policy"]
         #policy_code = CETP.CES_CODE_TO_POLICY[code]
         evidence = tlv["value"]
         new_tlv = copy.copy(tlv)
@@ -425,7 +425,7 @@ def response_ces_evidence(**kwargs):
 
 def response_ces_headersignature(**kwargs):
     try:
-        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["policy"]
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         new_tlv = copy.copy(tlv)
         new_tlv['ope'] = "info"
@@ -436,7 +436,7 @@ def response_ces_headersignature(**kwargs):
         return None
 
 def response_ces_pow(**kwargs):
-    tlv, code, ces_params, cetp_security, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["cetp_security"], kwargs["ces_policy"]
+    tlv, code, ces_params, cetp_security, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["cetp_security"], kwargs["policy"]
     try:
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         sender_challenge = tlv["value"]
@@ -454,7 +454,7 @@ def response_ces_pow(**kwargs):
 
 def verify_ces_cesid(**kwargs):
     try:
-        tlv, code, ces_params, r_cesid, transaction, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["r_cesid"], kwargs["transaction"], kwargs['ces_policy']
+        tlv, code, ces_params, r_cesid, transaction, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["r_cesid"], kwargs["transaction"], kwargs['policy']
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         ope, cmp, group, code, value = policy.get_tlv_details(tlv)
         
@@ -476,7 +476,7 @@ def verify_ces_cesid(**kwargs):
 
 def verify_ces_ttl(**kwargs):
     try:
-        tlv, code, ces_params, transaction, session_established, policy, cetp_packet = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["transaction"], kwargs["session_established"], kwargs['ces_policy'], kwargs['packet']
+        tlv, code, ces_params, transaction, session_established, policy, cetp_packet = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["transaction"], kwargs["session_established"], kwargs['policy'], kwargs['packet']
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         ope, cmp, group, code, value = policy.get_tlv_details(tlv)
         if cmp =="NotAvailable":
@@ -520,7 +520,7 @@ def verify_ces_certificate(**kwargs):
 
 def verify_ces_keepalive(**kwargs):
     try:
-        tlv, code, ces_params, transaction, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["transaction"], kwargs['ces_policy']
+        tlv, code, ces_params, transaction, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["transaction"], kwargs['policy']
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         ope, cmp, group, code, value = policy.get_tlv_details(tlv)
         
@@ -541,7 +541,7 @@ def verify_ces_keepalive(**kwargs):
 
 def verify_ces_keepalive_cycle(**kwargs):
     try:
-        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs['ces_policy']
+        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs['policy']
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         ope, cmp, group, code, value = policy.get_tlv_details(tlv)
         if cmp =="NotAvailable":
@@ -567,7 +567,7 @@ def verify_ces_certificate(**kwargs):
     return True
  
 def verify_ces_session_limit(**kwargs):
-    tlv, code, ces_params, session_established, transaction, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["session_established"], kwargs["transaction"], kwargs['ces_policy']
+    tlv, code, ces_params, session_established, transaction, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["session_established"], kwargs["transaction"], kwargs['policy']
     policy_code = CETP.CES_CODE_TO_POLICY[code]
     ope, cmp, group, code, value = policy.get_tlv_details(tlv)
     
@@ -592,7 +592,7 @@ def verify_ces_session_limit(**kwargs):
 
 def verify_ces_host_sessions(**kwargs):
     try:
-        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["policy"]
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         ope, cmp, group, code, value = policy.get_tlv_details(tlv)
         if cmp =="NotAvailable":
@@ -605,7 +605,7 @@ def verify_ces_host_sessions(**kwargs):
 
 def verify_ces_host_filtering(**kwargs):
     try:
-        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["policy"]
         return True
     except Exception as ex:
         print("Exception in verifying the verify_ces_host_sessions", ex)
@@ -614,7 +614,7 @@ def verify_ces_host_filtering(**kwargs):
 
 def verify_ces_fw_version(**kwargs):
     try:
-        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["policy"]
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         ope, cmp, group, code, value = policy.get_tlv_details(tlv)
         if cmp =="NotAvailable":
@@ -634,7 +634,7 @@ def verify_ces_fw_version(**kwargs):
 
 def verify_ces_evidence(**kwargs):
     try:
-        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["policy"]
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         ope, cmp, group, code, value = policy.get_tlv_details(tlv)
         if cmp =="NotAvailable":
@@ -649,7 +649,7 @@ def verify_ces_evidence(**kwargs):
 
 def verify_ces_evidence_format(**kwargs):
     try:
-        tlv, code, ces_params, policy, transaction = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"], kwargs["transaction"]
+        tlv, code, ces_params, policy, transaction = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["policy"], kwargs["transaction"]
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         ope, cmp, group, code, value = policy.get_tlv_details(tlv)
         if cmp =="NotAvailable":
@@ -672,7 +672,7 @@ def verify_ces_evidence_format(**kwargs):
 
 def verify_ces_caces(**kwargs):
     try:
-        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["ces_policy"]
+        tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["policy"]
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         ope, cmp, group, code, value = policy.get_tlv_details(tlv)
         if cmp =="NotAvailable":

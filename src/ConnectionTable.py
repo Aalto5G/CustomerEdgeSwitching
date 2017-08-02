@@ -19,19 +19,22 @@ import copy
 KEY_INITIATED_CETP                  = 0
 KEY_ESTABLISHED_CETP                = 1
 LOGLEVELCETP                        = logging.DEBUG
+LOGLEVEL_C2CConnection              = logging.INFO
 
+# Keys for indexing connections
+KEY_MAP_LOCAL_FQDN          = 0     # Indexes host connections against FQDN of local host
+KEY_MAP_REMOTE_FQDN         = 1     # Indexes host connections against FQDN of remote host
 
-KEY_MAP_LOCAL_HOST          =0
-KEY_MAP_CETP_PRIVATE_NW     =1
-KEY_MAP_LOCAL_FQDN          =2
-KEY_MAP_REMOTE_FQDN         =3
-KEY_MAP_REMOTE_CESID        =4
+KEY_MAP_LOCAL_HOST          = 2     # Indexes host connections against local host's IP
+KEY_MAP_CETP_PRIVATE_NW     = 3     # Indexes host connections against (lip, lpip) pair
+KEY_MAP_REMOTE_CESID        = 4     # Indexes host connections against remote CESID 
 
-KEY_MAP_CES_FQDN            =5
-KEY_MAP_CES_TO_CES          =6
+KEY_MAP_CES_FQDN            = 5     # Indexes host connection against pair of FQDN (of local and remote host)
+KEY_MAP_CES_TO_CES          = 6     # Indexes host connection against an (SST, DST) pair
 
+KEY_MAP_RCESID_C2C          = 7     # Indexes C2C connection against a remote CESID
 
-
+    
 def is_IPv4(ip4_addr):
     try:
         socket.inet_pton(socket.AF_INET, ip4_addr)
@@ -132,6 +135,55 @@ class ConnectionTable:
 
 LOGLEVEL_H2HConnection   = logging.INFO
 LOGLEVEL_LocalConnection = logging.INFO
+
+
+class C2CConnection:
+    def __init__(self, l_cesid, r_cesid, lrloc, rrloc, lpayload, rpayload):
+        """
+        Initialize a C2CConnection object.
+        
+        @param timeout: The expiration time of the connection
+        @param direction: The direction of the connection  -> 'E'stablished / 'I'ncoming / 'O'utgoing  
+        @param lid: The ID of the local host -> (int:idtype, str:value)
+        @param lip: The IP address of the local host
+        @param lpip: The IP proxy address of the local host
+        @param rid: The ID of the remote host -> (int:idtype, str:value)
+        @param lrloc: The local RLOC of the connection -> [(int:order, int:preference, int:addrtype, str:addrvalue)]
+        @param rrloc: The remote RLOC of the connection -> [(int:order, int:preference, int:addrtype, str:addrvalue)]
+        """
+        self.l_cesid, self.r_cesid      = l_cesid, r_cesid
+        self.lrloc, self.rrloc          = lrloc, rrloc
+        self.lpayload, self.rpayload    = lpayload, rpayload
+        self.connectiontype = "CONNECTION_C2C"
+        #self._set_address_family(lip=lip)
+        #self.remote_af = AF_INET
+        #self._set_encapsulation()
+        self.active_af = 0
+        #Set b port based on local rloc
+        self._logger = logging.getLogger("C2CConnection")
+        self._logger.setLevel(LOGLEVEL_C2CConnection)
+
+    
+    def lookupkeys(self):
+        keys = []
+        keys +=[(KEY_MAP_RCESID_C2C, self.r_cesid)]
+        return keys
+        
+
+    def delete(self):
+        self._logger.debug("Deleting a {} connection!".format(self.connectiontype))
+        # Release the cached DNS responses, allocated proxy addresses and whatnot.
+        """
+        if self.local_af == AF_INET:
+            CES_CONF.address_pool.get(AP_PROXY4_HOST_ALLOCATION).release(self.lip, self.lpip)
+        elif self.local_af == AF_INET6:
+            CES_CONF.address_pool.get(AP_PROXY6_HOST_ALLOCATION).release(self.lip, self.lpip)
+        #Delete the DNS cached information
+        if CES_CONF.cache_table.has(KEY_CACHEDNS_HOST_LPIP, (self.lip, self.lpip)):
+            cached_entry = CES_CONF.cache_table.get(KEY_CACHEDNS_HOST_LPIP, (self.lip, self.lpip))
+            CES_CONF.cache_table.delete(cached_entry)
+        """
+
 
 
 class H2HConnection:

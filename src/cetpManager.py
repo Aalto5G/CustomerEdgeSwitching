@@ -55,7 +55,7 @@ class CETPManager:
         self._logger.setLevel(LOGLEVEL_CETPManager)
         self.local_cetp             = CETPH2H.CETPH2HLocal(cetpstate_mgr=self.cetpstate_mgr, policy_mgr=self.policy_mgr, cetp_mgr=self, \
                                                            cetp_security=self.cetp_security, host_register=self.host_register, conn_table=self.conn_table)
-        self._loop.call_later(13, self.test_func)
+        #self._loop.call_later(13, self.test_func)
         #self._loop.call_later(13.5, self.test_func)
 
     def test_func(self):
@@ -451,8 +451,8 @@ class CETPManager:
 
     def create_c2c_layer(self, r_cesid="", cetp_h2h=None):
         """ Creates a C2CLayer for a remote CES-ID """
-        cetp_c2c = CETPC2C.CETPC2CLayer(self._loop, l_cesid=self.cesid, r_cesid=r_cesid, cetpstate_mgr= self.cetpstate_mgr, policy_mgr=self.policy_mgr, \
-                                        ces_params=self.ces_params, cetp_security=self.cetp_security, cetp_mgr=self, cetp_h2h=cetp_h2h)
+        cetp_c2c = CETPC2C.CETPC2CLayer(self._loop, l_cesid=self.cesid, r_cesid=r_cesid, cetpstate_mgr= self.cetpstate_mgr, policy_mgr=self.policy_mgr, conn_table=self.conn_table, \
+                                        ces_params=self.ces_params, cetp_security=self.cetp_security, cetp_mgr=self, cetp_h2h=cetp_h2h, interfaces=self.interfaces)
         
         self.register_c2c_layer(r_cesid, cetp_c2c)
         return cetp_c2c
@@ -553,7 +553,8 @@ class CETPManager:
             peer_addr = transport.remotepeer
             proto     = transport.proto
             ic2c_transaction = C2CTransaction.iC2CTransaction(self._loop, r_addr=peer_addr, sstag=sstag, dstag=sstag, l_cesid=self.cesid, policy_mgr=self.policy_mgr, \
-                                                               cetpstate_mgr=self.cetpstate_mgr, ces_params=self.ces_params, proto=proto, transport=transport, cetp_security=self.cetp_security)
+                                                               cetpstate_mgr=self.cetpstate_mgr, ces_params=self.ces_params, proto=proto, transport=transport, \
+                                                               cetp_security=self.cetp_security, interfaces=self.interfaces, conn_table=self.conn_table)
             response = ic2c_transaction.process_c2c_transaction(cetp_msg)
             return response
 
