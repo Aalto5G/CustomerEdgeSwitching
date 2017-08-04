@@ -164,8 +164,9 @@ class C2CTransaction(object):
         try:
             if (ope != None) and (tlv["ope"] == ope):
                 return True
-            if (cmp != None) and (tlv["cmp"] == cmp):
-                return True
+            if 'cmp' in tlv:
+                if (cmp != None) and (tlv["cmp"] == cmp):
+                    return True
             if (group != None) and (tlv["group"] == group):
                 return True
             if (code != None) and (tlv["code"] == code):
@@ -526,8 +527,14 @@ class oC2CTransaction(C2CTransaction):
                         ret_tlv = self._get_unavailable_response(received_tlv)
                         tlvs_to_send.append(ret_tlv)
                     else:
-                        error = True
-                        break
+                        if self._check_tlv2(received_tlv, group=["rloc", "payload"]):
+                            self._logger.info(" A required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
+                            ret_tlv = self._get_unavailable_response(received_tlv)
+                            tlvs_to_send.append(ret_tlv)
+                        else:                            
+                            self._logger.info(" A mandatory required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
+                            error = True
+                            break
 
             #A CETP response message is processed for: Policy Matching and TLV Verification. The message can have: 1) Less than required TLVs; 2) TLVs with wrong value; 3) a notAvailable TLV; OR 4) a terminate TLV.
             elif self._check_tlv(received_tlv, ope="info"):
@@ -544,13 +551,18 @@ class oC2CTransaction(C2CTransaction):
                         if not self.ces_policy.is_mandatory_required(received_tlv):
                             satisfied_requriements += 1
                         else:
-                            self._logger.info(" TLV {}.{} failed verification".format(received_tlv['group'], received_tlv['code']))
-                            tlvs_to_send =  []
-                            tlvs_to_send.append(self._get_terminate_tlv(err_tlv=received_tlv))
-                            error=True
-                            break
+                            if self._check_tlv2(received_tlv, group=["rloc", "payload"]) and (self._check_tlv(received_tlv, cmp="notAvailable")):
+                                self._logger.info(" A required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
+                                error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
+                                satisfied_requriements += 1                                 # Work around for iterating on received RLOC TLVs to find a matching RLOC.
+                            else:
+                                self._logger.info("TLV {}.{} failed verification".format(received_tlv['group'], received_tlv['code']))
+                                tlvs_to_send = [self._get_terminate_tlv(err_tlv=received_tlv)]
+                                error = True
+                                break
+
                 elif not self.ces_policy.has_required(received_tlv):
-                    self._logger.info("Unrequrested TLV is received")
+                    self._logger.info("Unrequrested offer is received")
                     pass
         
         if error:
@@ -572,9 +584,9 @@ class oC2CTransaction(C2CTransaction):
                 return (negotiation_status, cetp_packet)
 
         else:
-            if (satisfied_requriements == len(self.ces_policy.required)) and (self.dstag!=0):
-                self._logger.info(" C2C policy negotiation succeeded in {} RTT.. Continue H2H transactions".format(self.rtt))
+            if (satisfied_requriements == len(self.ces_policy.required)) and (self.dstag!=0) and (self._create_connection()):
                 self._logger.info("{}".format(42*'*') )
+                self._logger.info(" C2C policy negotiation succeeded in {} RTT.. Continue H2H transactions".format(self.rtt))
                 self._cetp_established()
                 negotiation_status = True
                 return (negotiation_status, "")
@@ -621,16 +633,20 @@ class oC2CTransaction(C2CTransaction):
         self.cetpstate_mgr.remove_initiated_transaction((self.sstag, 0))
         self.cetpstate_mgr.add_established_transaction((self.sstag, self.dstag), self)
         self.c2c_handler.cancel()
-        self._create_connection()
         self.trigger_negotiated_functionality()
         
     def _create_connection(self):
         """ Extract the negotiated parameters to create a connection state """
-        self.lrloc, self.rrloc          = self._get_connection_rlocs()
-        self.lpayload, self.rpayload    = self._get_connection_payloads()
-        self._logger.info("Negotiated params: {}".format(self.negotiated_parameters()))
-        self.conn = ConnectionTable.C2CConnection(self.l_cesid, self.r_cesid, self.lrloc, self.rrloc, self.lpayload, self.rpayload)
-        self.conn_table.add(self.conn)
+        try:
+            self.lrloc, self.rrloc          = self._get_connection_rlocs()
+            self.lpayload, self.rpayload    = self._get_connection_payloads()
+            self._logger.info("Negotiated params: {}".format(self.negotiated_parameters()))
+            self.conn = ConnectionTable.C2CConnection(self.l_cesid, self.r_cesid, self.lrloc, self.rrloc, self.lpayload, self.rpayload)
+            self.conn_table.add(self.conn)
+            return True
+        except Exception as ex:
+            self._logger.error(ex)
+            return False
     
     def trigger_negotiated_functionality(self):
         """ Trigger the functionality negotiated with remote end """
@@ -989,10 +1005,15 @@ class iC2CTransaction(C2CTransaction):
                         if not self.ices_policy.is_mandatory_required(received_tlv):
                             satisfied_requriements += 1
                         else:
-                            self._logger.info("TLV {}.{} failed verification".format(received_tlv['group'], received_tlv['code']))
-                            error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
-                            error = True
-                            break
+                            if self._check_tlv2(received_tlv, group=["rloc", "payload"]) and (self._check_tlv(received_tlv, cmp="notAvailable")):
+                                self._logger.info(" A required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
+                                error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
+                                satisfied_requriements += 1                                 # Work around for iterating on received RLOC TLVs to find a matching RLOC.
+                            else:
+                                self._logger.info("TLV {}.{} failed verification".format(received_tlv['group'], received_tlv['code']))
+                                error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
+                                error = True
+                                break
                 else:
                     self._logger.debug("Non-requested TLV {} is received: ".format(received_tlv))
 
@@ -1013,10 +1034,15 @@ class iC2CTransaction(C2CTransaction):
                         ret_tlv = self._get_unavailable_response(received_tlv)
                         tlvs_to_send.append(ret_tlv)
                     else:
-                        self._logger.info(" A mandatory required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
-                        error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
-                        error = True
-                        break
+                        if self._check_tlv2(received_tlv, group=["rloc", "payload"]):
+                            self._logger.info(" A required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
+                            ret_tlv = self._get_unavailable_response(received_tlv)
+                            tlvs_to_send.append(ret_tlv)
+                        else:                            
+                            self._logger.info(" A mandatory required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
+                            error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
+                            error = True
+                            break
 
         if error:
             cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=error_tlvs)
@@ -1028,19 +1054,33 @@ class iC2CTransaction(C2CTransaction):
         else:
             if (satisfied_requriements == len(self.ices_policy.required)):
                 #All the  requirements of remote-CES are also met -> Now Accept/Create CETP connection (i.e. by assigning 'SST') and Export to stateful (for post-negotiation CETP flow etc.)
-                self.sstag = self.generate_session_tags(self.dstag)
-                self._create_connection()
-                stateful_transansaction = self._export_to_stateful()
-                self._logger.info("C2C-policy negotiation succeeded -> Create stateful transaction (SST={}, DST={})".format(self.sstag, self.dstag))
-                self._logger.info("{}".format(42*'*') )
-                negotiation_status = True
-
-                cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
-                self.pprint(cetp_message)
-                #self._logger.info(" Negotiated params: {}".format(self.negotiated_parameters()))
-                cetp_packet = json.dumps(cetp_message)
-                self.last_packet_sent = cetp_packet
-                return (negotiation_status, cetp_packet)
+                if self._create_connection():
+                    self.sstag = self.generate_session_tags(self.dstag)
+                    stateful_transansaction = self._export_to_stateful()
+                    self._logger.info("C2C-policy negotiation succeeded -> Create stateful transaction (SST={}, DST={})".format(self.sstag, self.dstag))
+                    self._logger.info("{}".format(42*'*') )
+                    negotiation_status = True
+    
+                    cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
+                    self.pprint(cetp_message)
+                    #self._logger.info(" Negotiated params: {}".format(self.negotiated_parameters()))
+                    cetp_packet = json.dumps(cetp_message)
+                    self.last_packet_sent = cetp_packet
+                    return (negotiation_status, cetp_packet)
+                else:
+                    if len(error_tlvs)!=0:
+                        cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=error_tlvs)
+                        self.pprint(cetp_message)
+                        cetp_packet = json.dumps(cetp_message)
+                        negotiation_status = False
+                        return (negotiation_status, cetp_packet)
+                    else:
+                        error_tlvs = [self._get_terminate_tlv()]
+                        cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=error_tlvs)
+                        cetp_packet = json.dumps(cetp_message)
+                        negotiation_status = False
+                        return (negotiation_status, cetp_packet)                    
+                    
             else:
                 self._logger.info(" {} unsatisfied iCES requirements: ".format( len(self.ices_policy.required)-satisfied_requriements) )
                 # Generating Full Query message
@@ -1058,11 +1098,16 @@ class iC2CTransaction(C2CTransaction):
 
 
     def _create_connection(self):
-        self.lrloc, self.rrloc          = self._get_connection_rlocs()
-        self.lpayload, self.rpayload    = self._get_connection_payloads()
-        self._logger.info(" Negotiated params: {}".format(self.negotiated_parameters()))
-        self.conn = ConnectionTable.C2CConnection(self.l_cesid, self.r_cesid, self.lrloc, self.rrloc, self.lpayload, self.rpayload)
-        self.conn_table.add(self.conn)
+        try:
+            self.lrloc, self.rrloc          = self._get_connection_rlocs()
+            self.lpayload, self.rpayload    = self._get_connection_payloads()
+            self._logger.info(" Negotiated params: {}".format(self.negotiated_parameters()))
+            self.conn = ConnectionTable.C2CConnection(self.l_cesid, self.r_cesid, self.lrloc, self.rrloc, self.lpayload, self.rpayload)
+            self.conn_table.add(self.conn)
+            return True
+        except Exception as ex:
+            self._logger.error("Failure in connection creation.")
+            return False
 
     def _export_to_stateful(self):
         new_transaction = oC2CTransaction(self._loop, l_cesid=self.l_cesid, r_cesid=self.r_cesid, c_sstag=self.sstag, c_dstag=self.dstag, policy_mgr= self.policy_mgr, \

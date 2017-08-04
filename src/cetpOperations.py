@@ -778,9 +778,11 @@ def verify_rloc(**kwargs):
         #    return False
         if code=="ipv4":
             if not CETP.is_IPv4(r_rloc):
+                print(" Address provided is not IPv4")
                 return False
         elif code=="ipv6":
             if not CETP.is_IPv6(r_rloc):
+                print(" Address provided is not IPv6")
                 return False
         elif code=="eth":
             pass

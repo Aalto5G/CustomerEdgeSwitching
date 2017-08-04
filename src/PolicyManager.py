@@ -51,7 +51,7 @@ class Interfaces(object):
         #r  = pref, order, rloc_type, rloc, iface
         r1 = 100, 80, "ipv4", "10.0.3.101",         "ISP"
         r2 = 100, 60, "ipv4", "10.0.3.121",         "ISP"
-        r3 = 100, 60, "ipv6", "11:22:33:44:55:66", "IXP"
+        r3 = 100, 60, "ipv6", "11:22:33:44:55:66:77:88", "IXP"
         self._interfaces.append(r1)
         self._interfaces.append(r2)
         self._interfaces.append(r3)
