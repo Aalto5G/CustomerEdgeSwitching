@@ -14,7 +14,10 @@
         { "ope":"query", "group": "ces", "code": "keepalive"},
         { "ope":"query", "group": "ces", "code": "pow"},
         { "ope":"query", "group": "ces", "code": "session_limit", "value": "300"},
-        { "ope":"query", "group": "ces", "code": "evidence_format", "value":["IETF-IOC1", "IETF-IOC2"]}
+        { "ope":"query", "group": "ces", "code": "evidence_format", "value":["IETF-IOC1", "IETF-IOC2"]},
+        { "ope":"query", "group": "rloc", "code": "ipv4"},
+        { "ope":"query", "group": "rloc", "code": "ipv6" },
+        { "ope":"query", "group": "payload", "code": "eth" }
     ],
     "offer": [
         { "ope":"info", "group": "ces", "code": "cesid", "value":"cesa.lte."},
@@ -24,7 +27,10 @@
         { "ope":"info", "group": "ces", "code": "keepalive_cycle", "value":"60"},
         { "ope":"info", "group": "ces", "code": "keepalive", "value":""},
         { "ope":"info", "group": "ces", "code": "session_limit", "value": "200"},
-        { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"}
+        { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"},
+        { "ope":"info", "group": "rloc", "code": "ipv4", "value":"10.0.3.101" },
+        { "ope":"info", "group": "rloc", "code": "ipv6", "value":"11:22:33:44:55:66:77:88" },
+        { "ope":"info", "group": "payload", "code": "eth" }
     ],
     "available": [
         { "ope":"info", "group": "ces", "code": "cesid", "value":"cesa.lte."},
@@ -35,7 +41,10 @@
         { "ope":"info", "group": "ces", "code": "keepalive_cycle", "value":"60"},
         { "ope":"info", "group": "ces", "code": "keepalive", "value":""},
         { "ope":"info", "group": "ces", "code": "session_limit", "value": "200"},
-        { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"}
+        { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"},
+        { "ope":"info", "group": "rloc", "code": "ipv4", "value":"10.0.3.101" },
+        { "ope":"info", "group": "rloc", "code": "ipv6", "value":"11:22:33:44:55:66:77:88" },
+        { "ope":"info", "group": "payload", "code": "eth" }
     ]                
     }
 },
@@ -53,7 +62,10 @@
         { "ope":"query", "group": "ces", "code": "keepalive_cycle", "value":"60"},
         { "ope":"query", "group": "ces", "code": "keepalive"},
         { "ope":"query", "group": "ces", "code": "session_limit", "value": "300"},
-        { "ope":"query", "group": "ces", "code": "evidence_format", "value":["IETF-IOC1", "IETF-IOC2"]}
+        { "ope":"query", "group": "ces", "code": "evidence_format", "value":["IETF-IOC1", "IETF-IOC2"]},
+        { "ope":"query", "group": "rloc", "code": "ipv4" },
+        { "ope":"query", "group": "rloc", "code": "ipv6" },
+        { "ope":"query", "group": "payload", "code": "eth" }
     ],
     "offer": [
         { "ope":"info", "group": "ces", "code": "cesid", "value":"cesa.lte."},
@@ -63,7 +75,10 @@
         { "ope":"info", "group": "ces", "code": "keepalive_cycle", "value":"60"},
         { "ope":"info", "group": "ces", "code": "keepalive", "value":""},
         { "ope":"info", "group": "ces", "code": "session_limit", "value": "200"},
-        { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"}
+        { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"},
+        { "ope":"info", "group": "rloc", "code": "ipv4", "value":"10.0.3.101" },
+        { "ope":"info", "group": "rloc", "code": "ipv6", "value":"11:22:33:44:55:66:77:88" },
+        { "ope":"info", "group": "payload", "code": "eth" }
     ],
     "available": [
         { "ope":"info", "group": "ces", "code": "cesid", "value":"cesa.lte."},
@@ -74,7 +89,10 @@
         { "ope":"info", "group": "ces", "code": "keepalive_cycle", "value":"60"},
         { "ope":"info", "group": "ces", "code": "keepalive", "value":""},
         { "ope":"info", "group": "ces", "code": "session_limit", "value": "200"},
-        { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"}
+        { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"},
+        { "ope":"info", "group": "rloc", "code": "ipv4", "value":"10.0.3.101" },
+        { "ope":"info", "group": "rloc", "code": "ipv6", "value":"11:22:33:44:55:66:77:88" },
+        { "ope":"info", "group": "payload", "code": "eth" }
     ]                
     }
 },
