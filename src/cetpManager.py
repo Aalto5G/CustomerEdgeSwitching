@@ -55,8 +55,7 @@ class CETPManager:
         self._logger.setLevel(LOGLEVEL_CETPManager)
         self.local_cetp             = CETPH2H.CETPH2HLocal(cetpstate_mgr=self.cetpstate_mgr, policy_mgr=self.policy_mgr, cetp_mgr=self, \
                                                            cetp_security=self.cetp_security, host_register=self.host_register, conn_table=self.conn_table)
-        #self._loop.call_later(13, self.test_func)
-        #self._loop.call_later(13.5, self.test_func)
+        self._loop.call_later(13, self.test_func)
 
     def test_func(self):
         #self.terminate_local_host_sessions(l_hostid="hosta1.cesa.lte.")
@@ -282,20 +281,6 @@ class CETPManager:
                 self.conn_table.delete(r_conn)                                              # Deleting the pair of local connection
 
     
-    def filter_malicious_remote_host(self, r_cesid="", r_hostid=""):
-        """ Initiates a message requesting remote CES not to forward connection from a particular host/domain, or to a host/domain. """
-        try:
-            if (len(r_cesid)==0) or (len(r_hostid)==0):
-                return
-            
-        # Local CES shall not accept connection from this remote host.       
-        # [Store this state in CETPSecurity module]
-        # Before accepting a connection towards this host-id. Check with CETPSecurity module.
-        
-        except Exception as ex:
-            self._logger.info("Exception '{}' ".format(ex))
-
-
     def blacklist_the_remote_hosts(self, r_hostid):
         """ Blacklists a remote-hosts """
         self.cetp_security.add_filtered_domains(CETPSecurity.KEY_BlacklistedRHosts, r_hostid)
