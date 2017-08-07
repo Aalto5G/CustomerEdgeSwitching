@@ -300,7 +300,7 @@ def response_ces_host_filtering(**kwargs):
         elif "local_domain" in filtering_msg:
             l_domain = filtering_msg["local_domain"]
             value = l_domain
-            keytype = CETPSecurity.KEY_Unreachable_destinations
+            keytype = CETPSecurity.KEY_Unreachable_remote_destinations
             cetp_security.add_filtered_domains(keytype, value, key=r_cesid)
             
         new_tlv['ope'] = "info"

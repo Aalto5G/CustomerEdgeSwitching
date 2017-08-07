@@ -213,6 +213,8 @@ class H2HTransaction(object):
             return False
         if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlockedHostsByRCES, hostid, key=self.r_cesid):
             return False
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_Unreachable_local_destinations, hostid, key=self.r_cesid):
+            return False
         return True
 
     def is_remote_host_allowed(self, hostid):
@@ -221,7 +223,7 @@ class H2HTransaction(object):
             return False
         if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlockedHostsOfRCES, hostid, key=self.r_cesid):
             return False
-        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_Unreachable_destinations, hostid, key=self.r_cesid):
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_Unreachable_remote_destinations, hostid, key=self.r_cesid):
             return False
         return True
     
