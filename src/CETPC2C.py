@@ -21,12 +21,13 @@ LOGLEVEL_CETPC2CLayer          = logging.INFO
 
 class CETPC2CLayer:
     """
-    For outbound C2C:
-        Instantiates client CETP Transports towards remote CES, based on the NAPTR records.
-        Manages, registers/unregisters the CETP Transports, AND performs resource cleanup on CES-to-CES connectivity loss.
-        Timely negotiation of the CES-to-CES policies, AND forwards C2C-level CETP message to corresponding C2CTransaction, in post-c2c-negotiation phase.
-        After CES-to-CES is negotiated, it forwards H2H-CETP Transactions to/from the upper layer. 
-        Management of CETPTransport failover, seemless to H2H-layer.
+    Instantiates client CETP Transports towards remote CES, based on the NAPTR records.
+    Manages, registers/unregisters the CETP Transports
+        - Management of CETPTransport failover, seamless to H2H-layer.
+        - Performs resource cleanup upon CES-to-CES connectivity loss.
+    
+    Ensures timely negotiation of the CES-to-CES policies, AND forwards C2C-level CETP message to corresponding C2CTransaction, in post-c2c-negotiation phase.
+    Provides an API to forward messages to/from H2H Layer, once CES-to-CES is negotiated
     """
     def __init__(self, loop, naptr_list=[], cetp_h2h=None, l_cesid=None, r_cesid=None, cetpstate_mgr=None, policy_mgr=None, policy_client=None, ces_params=None, \
                  cetp_security=None, cetp_mgr=None, conn_table=None, interfaces=None, name="CETPC2CLayer"):
@@ -64,9 +65,9 @@ class CETPC2CLayer:
             for naptr_rr in naptr_rrs:
                 dst_id, r_cesid, r_ip, r_port, r_transport = naptr_rr                   # Assumption: All NAPTRs point towards one 'r_cesid'.    (Destination domain is reachable via one CES only)
                 if (r_ip, r_port, r_transport) not in self.remote_ces_eps:
-                    self._logger.info(" Initiating a new CETPTransport")
+                    self._logger.info(" Initiating a new CETPTransport.")
                     if not self.remote_endpoint_malicious_history(r_cesid, r_ip):
-                        asyncio.ensure_future(self.initiate_transport(r_transport, r_ip, r_port, delay=0.1))        # Delay parameter prevents H2H negotiation from suffering delay due to triggering of transport/C2C-negotiation
+                        asyncio.ensure_future(self.initiate_transport(r_transport, r_ip, r_port, delay=0.01))        # Delay parameter prevents H2H negotiation from suffering delay due to triggering of transport/C2C-negotiation
                         
             return dst_id
         except Exception as ex:
@@ -237,6 +238,7 @@ class CETPC2CLayer:
     def register_connected_transports(self, transport):
         """ Registers the connected CETP Transport """
         self._add_connected_transport(transport)
+        print("Number of connected transports: ", len(self.connected_transports))
         if transport in self.initiated_transports:
             self.initiated_transports.remove(transport)                     # Removing the connected transport from list of initiated transports.
             
@@ -405,7 +407,6 @@ class CETPC2CLayer:
             self.transport_lastseen[transport] = last_seen
         
 
-
     def select_transport(self):
         """ Selects the outgoing CETP-transport based on: 
             (A) good health indicator - measured by timely arrival of C2C-keepalive response. (B) Lowest-RTT (measured by timing the C2C-keepalive)              
@@ -427,3 +428,16 @@ class CETPC2CLayer:
         elif len(self.transport_rtt) == len(self.connected_transports):
             return self.active_transport
 
+
+    def ready_to_send(self):
+        """ returns True, if atleast one C2C-transport link to remote CES is active """
+        try:
+            for transport in self.connected_transports:
+                oc2c = self.get_c2c_transaction(transport)
+                if oc2c.health_report:
+                    return True
+            return False
+        except Exception as ex:
+            self._logger.error(ex)
+            return False
+    

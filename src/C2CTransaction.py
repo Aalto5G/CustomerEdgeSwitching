@@ -1102,9 +1102,14 @@ class iC2CTransaction(C2CTransaction):
             self.lrloc, self.rrloc          = self._get_connection_rlocs()
             self.lpayload, self.rpayload    = self._get_connection_payloads()
             self._logger.info(" Negotiated params: {}".format(self.negotiated_parameters()))
-            self.conn = ConnectionTable.C2CConnection(self.l_cesid, self.r_cesid, self.lrloc, self.rrloc, self.lpayload, self.rpayload)
-            self.conn_table.add(self.conn)
+            
+            keytype = ConnectionTable.KEY_MAP_RCESID_C2C
+            key = self.r_cesid
+            if not self.conn_table.has(keytype, key):
+                self.conn = ConnectionTable.C2CConnection(self.l_cesid, self.r_cesid, self.lrloc, self.rrloc, self.lpayload, self.rpayload)
+                self.conn_table.add(self.conn)                
             return True
+        
         except Exception as ex:
             self._logger.error("Failure in connection creation.")
             return False

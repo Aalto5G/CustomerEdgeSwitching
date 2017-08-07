@@ -67,13 +67,14 @@ class CETPH2H:
             try:
                 queued_data = yield from self.h2h_q.get()
                 (naptr_rr, cb) = queued_data
-                dst_id = self.c2c.add_naptr_records(naptr_rr)                      # TBD: Use NAPTR records as trigger for re-connecting to a terminated endpoint, or a new transport-endpoint. 
-                                                                                   # If already connected, discard naptr records.
-                if dst_id !=None:
-                    if self.ongoing_h2h_transactions < self.max_session_limit:
-                        asyncio.ensure_future(self.h2h_transaction_start(cb, dst_id))     # Enable "try, except" within task to locally consume a task-raised exception
-                    else:
-                        self._logger.info(" Number of Ongoing transactions have exceeded the C2C limit.")
+                dst_id = self.c2c.add_naptr_records(naptr_rr)
+                
+                if self.c2c.ready_to_send():
+                    if (dst_id!=None) and (self.ongoing_h2h_transactions < self.max_session_limit):      # Number of simultaneous H2H-transactions are below the upper limit  
+                        asyncio.ensure_future(self.h2h_transaction_start(cb, dst_id))                    # "try, except" within task can consume a task-related exception
+                else:
+                    self._logger.error(" C2C layer to remote CES '<%s>' is not connected.".format(self.r_cesid))
+                    self.execute_dns_callback(cb, success=False)
                 
                 self.h2h_q.task_done()
 
@@ -157,7 +158,12 @@ class CETPH2H:
 
     def set_closure_signal(self):
         self._closure_signal = True
-        
+    
+    def execute_dns_callback(self, cb, success= False):
+        cb_func, cb_args = cb
+        dns_q, addr = cb_args
+        cb_func(dns_q, addr, "", success=False)
+    
     def resource_cleanup(self):
         """ Deletes the CETPH2H instance towards r_cesid, cancels the pending tasks, and handles the pending <H2H DNS-NAPTR responses. """
         pending_dns_queries = self.h2h_q.qsize()
