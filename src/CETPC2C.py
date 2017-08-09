@@ -49,16 +49,19 @@ class CETPC2CLayer:
         self.initiated_transports       = []
         self.connected_transports       = []
         self.remote_ces_eps             = []                     # Registers ip, port, and protocol info of remote ep.
+        self.trusted_rces_eps           = []
         self.transport_c2c_binding      = {}
         self.c2c_transaction_list       = []
         self.transport_rtt              = {}
         self.transport_lastseen         = {}
         self.c2c_negotiated             = False
         self._closure_signal            = False
+        self.c2c_connectivity           = False
         self.active_transport           = None
         self._logger                    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPC2CLayer)
         self._logger.info("Initiating outbound CES2CESLayer towards cesid '{}'".format(r_cesid) )
+
 
     def add_naptr_records(self, naptr_rrs):
         try:
@@ -69,7 +72,6 @@ class CETPC2CLayer:
                     if not self.remote_endpoint_malicious_history(r_cesid, r_ip):
                         asyncio.ensure_future(self.initiate_transport(r_transport, r_ip, r_port, delay=0.01))        # Delay parameter prevents H2H negotiation from suffering delay due to triggering of transport/C2C-negotiation
                         
-            return dst_id
         except Exception as ex:
             self._logger.warning("Exception in parsing the NAPTR records: '{}'".format(ex))
             return None
@@ -135,6 +137,62 @@ class CETPC2CLayer:
                 return True
         return False
 
+
+    def _add_c2c_transactions(self, c2c_transaction):
+        self.c2c_transaction_list.append(c2c_transaction)
+    
+    def _remove_c2c_transactions(self, c2c_transaction):
+        if c2c_transaction in self.c2c_transaction_list:
+            self.c2c_transaction_list.remove(c2c_transaction)
+        
+    def get_c2c_transaction(self, transport):
+        if transport in self.transport_c2c_binding:
+            return self.transport_c2c_binding[transport]
+    
+    def _add_c2c_transport_binding(self, c2c_transaction, transport):
+        self.transport_c2c_binding[transport] = c2c_transaction
+    
+    def _remove_c2c_transport_binding(self, transport):
+        if transport in self.transport_c2c_binding:
+            del self.transport_c2c_binding[transport]
+
+    def register_c2c_transport(self, transport, c2c_transaction):
+        """ Registers the C2C-Transaction established on a CETPTransport, AND their binding """
+        self._add_c2c_transactions(c2c_transaction)
+        self._add_connected_transport(transport)
+        self._add_c2c_transport_binding(c2c_transaction, transport)
+        (ip_addr, port), proto = transport.remotepeer, transport.proto
+        self.remote_ces_eps.append( (ip_addr, port, proto))
+        
+    def unregister_c2c_transport(self, transport):
+        """ Removes the C2C-Transaction established on a CETPTransport, AND their binding """
+        if transport in self.transport_c2c_binding:
+            c2c_transaction = self.get_c2c_transaction(transport)
+            self._remove_c2c_transactions(c2c_transaction)
+            self._remove_connected_transport(transport)
+            self._remove_c2c_transport_binding(transport)
+            (ip_addr, port), proto = transport.remotepeer, transport.proto
+            self.remote_ces_eps.append( (ip_addr, port, proto))
+            c2c_transaction.set_terminated()                            # To terminate the tasks scheduled within c2c-transaction.
+
+    def assign_cetp_h2h_layer(self, cetp_h2h):
+        """ Assigns the CETP-H2H layer to a pre-established C2C layer """
+        self.cetp_h2h = cetp_h2h
+        t1=asyncio.ensure_future(self.cetp_h2h.consume_h2h_requests())                       # For consuming DNS NAPTR-responses triggered by private hosts
+        self.pending_tasks.append(t1)
+
+    def _record_transport(self, status, transport):
+        """ Records the transport connection information to which the C2C negotiation succeeded """
+        (ip_addr, port), proto = transport.remotepeer, transport.proto
+        self.trusted_rces_eps.append(ip_addr, port, proto)
+        transport.report_c2c_negotiation(status)
+    
+    def _trigger_cetp_h2h(self, c2c_negotiated=True):
+        """ Activates the CETP-H2H layer upon completion of C2C negotiation with remote CES """
+        if (not self.c2c_connectivity) and c2c_negotiated:
+            self.c2c_connectivity = True                        # Indicates that atleast one active transport link towards remote CES exists.
+            self._start_h2h_cetp()
+            self.cetp_h2h.c2c_negotiation_status()
     
     def process_c2c(self, sstag, dstag, cetp_msg, transport):
         """ Calls corresponding C2CTransaction method, depending on whether its an ongoing or completed C2C Transaction. """
@@ -148,8 +206,8 @@ class CETPC2CLayer:
             
             if status == True:
                 self.c2c_negotiated = True
-                transport.report_c2c_negotiation(status)
-                self.cetp_h2h.c2c_negotiation_status(status=True)
+                self._record_transport(status, transport)
+                self._trigger_cetp_h2h()
                 
             elif status == False:
                 if len(cetp_resp) > 0:  transport.send_cetp(cetp_resp)
@@ -171,6 +229,78 @@ class CETPC2CLayer:
     def update_transport(self, transport):
         c2c_transaction = self.get_c2c_transaction(transport)
         c2c_transaction.update_last_seen()
+
+    @asyncio.coroutine
+    def initiate_c2c_transaction(self, transport_obj):
+        """ Initiates/Continues CES-to-CES negotiation """
+        c2c_transaction  = C2CTransaction.oC2CTransaction(self._loop, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetpstate_mgr=self.cetpstate_mgr, transport=transport_obj, \
+                                                          policy_mgr=self.policy_mgr, proto=transport_obj.proto, ces_params=self.ces_params, cetp_security=self.cetp_security, \
+                                                          interfaces=self.interfaces, c2c_layer=self, conn_table=self.conn_table)
+        self._add_c2c_transport_binding(c2c_transaction, transport_obj)
+        self._add_c2c_transactions(c2c_transaction)
+        cetp_resp = yield from c2c_transaction.initiate_c2c_negotiation()          # Shall be a coroutine.
+        
+        if cetp_resp!=None:
+            transport_obj.send_cetp(cetp_resp)
+        
+
+    def remote_endpoint_malicious_history(self, r_cesid, ip_addr):
+        """ Function emulating the check whether 'r_cesid' & 'ip-address' have history of misbehavior """
+        return False
+
+    def send_cetp(self, msg):
+        transport = self.select_transport()
+        if transport!=None:
+            transport.send_cetp(msg)
+
+    def report_rtt(self, transport, rtt=None, last_seen=None):
+        """ Method called upon reception of C2C keepalive response """
+        if rtt != None:
+            self.transport_rtt[transport] = rtt
+            rtt_list = []
+            for trans, rtt_value in self.transport_rtt.items():
+                rtt_list.append(rtt_value)
+            
+            rtt_list.sort()
+            smallest_rtt = rtt_list[0]
+            #self.last_rtt_evaluation = time.time()
+            #self.smallest_rtt = smallest_rtt
+            if smallest_rtt == 2**32:
+                self._logger.info("All the links have bad health ")
+                return
+            
+            for trans, rtt_value in self.transport_rtt.items():
+                if rtt_value==smallest_rtt:
+                    self.active_transport = trans
+                    return
+        else:
+            self.transport_lastseen[transport] = last_seen
+        
+
+    def select_transport(self):
+        """ Selects the outgoing CETP-transport based on: 
+            (A) good health indicator - measured by timely arrival of C2C-keepalive response. (B) Lowest-RTT (measured by timing the C2C-keepalive)              
+            Other possibilities: Selection based on: 1) load balancing b/w transports; OR 2) priority field in the inbound NAPTR
+        """
+        if len(self.transport_rtt) < len(self.connected_transports):
+            # Packet sending before first keepalive & when local CES doesn't have to send keepalive
+            selected = None
+            for transport in self.connected_transports:
+                oc2c = self.get_c2c_transaction(transport)
+                if oc2c.health_report:
+                    selected = transport
+                    return selected
+                
+            if selected == None:
+                self._logger.info("All the links have bad health ")
+                # TBD:  Case where all transports have bad health           # What to do?
+
+        elif len(self.transport_rtt) == len(self.connected_transports):
+            return self.active_transport
+
+    """ *************  *************  *************  *****************
+    ********* Some functionalities exposed by the CETP-C2C API *******
+    *************  *************  ************* ********* ******** """
 
     def close_all_transport_connections(self):
         """ Closes all connected transports to remote CES """
@@ -203,126 +333,11 @@ class CETPC2CLayer:
         c2c_transaction = self.get_c2c_transaction(trans)
         return c2c_transaction
 
-    @asyncio.coroutine
-    def initiate_c2c_transaction(self, transport_obj):
-        """ Initiates/Continues CES-to-CES negotiation """
-        c2c_transaction  = C2CTransaction.oC2CTransaction(self._loop, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetpstate_mgr=self.cetpstate_mgr, transport=transport_obj, \
-                                                          policy_mgr=self.policy_mgr, proto=transport_obj.proto, ces_params=self.ces_params, cetp_security=self.cetp_security, \
-                                                          interfaces=self.interfaces, c2c_layer=self, conn_table=self.conn_table)
-        self._add_c2c_transport_binding(c2c_transaction, transport_obj)
-        self._add_c2c_transactions(c2c_transaction)
-        cetp_resp = yield from c2c_transaction.initiate_c2c_negotiation()          # Shall be a coroutine.
-        
-        if cetp_resp!=None:
-            transport_obj.send_cetp(cetp_resp)
-        
+
+    """  ***************    ***************    ***************    *************** ************
+    ******  Functions to handle transport-layer connection establishment (& termination) *****
+    ***************    ***************  ***************  ******************* ************* """
     
-    def report_connectivity(self, transport, status=True):
-        """ Triggers next function (on transport connection success) OR resouce-cleanup (on transport connection termination) """ 
-        if status == True:
-            self._logger.debug(" CETP Transport is connected -> Exchange C2C policies.")
-            self.register_connected_transports(transport)
-            asyncio.ensure_future(self.initiate_c2c_transaction(transport))
-        else:
-            self._logger.info(" CETP Transport is disconnected.")
-            self.unregister_c2c_transport(transport)
-            self.unregister_transport(transport)
-
-    def _add_connected_transport(self, transport):
-        self.connected_transports.append(transport)
-        
-    def _remove_connected_transport(self, transport):
-        if transport in self.connected_transports:
-            self.connected_transports.remove(transport)
-            
-    def register_connected_transports(self, transport):
-        """ Registers the connected CETP Transport """
-        self._add_connected_transport(transport)
-        print("Number of connected transports: ", len(self.connected_transports))
-        if transport in self.initiated_transports:
-            self.initiated_transports.remove(transport)                     # Removing the connected transport from list of initiated transports.
-            
-    def unregister_transport(self, transport):
-        """ Unregisters the CETP Transport AND launches resource cleanup if all CETPtransport are down """
-        (ip_addr, port), proto = transport.remotepeer, transport.proto
-        key = (ip_addr, port, proto)
-        if key in self.remote_ces_eps:
-            self.remote_ces_eps.remove((ip_addr, port, proto))
-
-        self._remove_connected_transport(transport)                         # Removing the transport from list of connected transports
-        if transport in self.initiated_transports:
-            self.initiated_transports.remove(transport)                     # Removing the transport from list of initiated transports
-        
-        if (len(self.initiated_transports) ==0) & (len(self.connected_transports) ==0):
-            self._logger.info(" No ongoing or in-progress CETP transport -- Close CETP-H2H and C2C layer towards {}".format(self.r_cesid))
-            self.cetp_mgr.remove_c2c_layer(self.r_cesid)
-            self.cetp_mgr.remove_cetp_endpoint(self.r_cesid)
-            self.resource_cleanup()
-
-    def _add_c2c_transactions(self, c2c_transaction):
-        self.c2c_transaction_list.append(c2c_transaction)
-    
-    def _remove_c2c_transactions(self, c2c_transaction):
-        if c2c_transaction in self.c2c_transaction_list:
-            self.c2c_transaction_list.remove(c2c_transaction)
-        
-    def _add_c2c_transport_binding(self, c2c_transaction, transport):
-        self.transport_c2c_binding[transport] = c2c_transaction
-    
-    def _remove_c2c_transport_binding(self, transport):
-        if transport in self.transport_c2c_binding:
-            del self.transport_c2c_binding[transport]
-        
-    def get_c2c_transaction(self, transport):
-        if transport in self.transport_c2c_binding:
-            return self.transport_c2c_binding[transport]
-
-    def register_c2c_transport(self, transport, c2c_transaction):
-        """ Registers the C2C-Transaction established on a CETPTransport, AND their binding """
-        self._add_c2c_transactions(c2c_transaction)
-        self._add_connected_transport(transport)
-        self._add_c2c_transport_binding(c2c_transaction, transport)
-        (ip_addr, port), proto = transport.remotepeer, transport.proto
-        self.remote_ces_eps.append( (ip_addr, port, proto))
-        
-    def unregister_c2c_transport(self, transport):
-        """ Removes the C2C-Transaction established on a CETPTransport, AND their binding """
-        if transport in self.transport_c2c_binding:
-            c2c_transaction = self.get_c2c_transaction(transport)
-            self._remove_c2c_transactions(c2c_transaction)
-            self._remove_connected_transport(transport)
-            self._remove_c2c_transport_binding(transport)
-            (ip_addr, port), proto = transport.remotepeer, transport.proto
-            self.remote_ces_eps.append( (ip_addr, port, proto))
-            c2c_transaction.set_terminated()                            # To terminate the tasks scheduled within c2c-transaction.
-
-    def set_closure_signal(self):
-        self._closure_signal = True
-        
-    def resource_cleanup(self):
-        """ Cancels the pending tasks and deletes the object """
-        self.handle_interrupt()
-        self.cetp_h2h.resource_cleanup()
-        del(self)
-
-    def handle_interrupt(self):
-        self.set_closure_signal()
-        self.cetp_h2h.set_closure_signal()
-        self.cancel_pending_tasks()
-
-    def cancel_pending_tasks(self):
-        """ Terminates asyncio-tasks in c2c-layer towards remote CES """
-        for tsk in self.pending_tasks:
-            if not tsk.cancelled():
-                self._logger.info("Terminating asyncio-task in c2c-layer towards remote CES '{}'".format(self.r_cesid))            
-                tsk.cancel()
-    
-    def trigger_cetp_h2h(self, cetp_h2h):
-        """ Creates the CETP-H2H layer """
-        self.cetp_h2h = cetp_h2h
-        t1=asyncio.ensure_future(self.cetp_h2h.consume_h2h_requests())                       # For consuming DNS NAPTR-responses triggered by private hosts
-        self.pending_tasks.append(t1)
-
     def initiate_cetp_transport(self, naptr_list):
         """ Intiates CETP Transports towards remote endpoints (for each 'naptr' record in the naptr_list) """
         for naptr_rec in naptr_list:
@@ -375,59 +390,71 @@ class CETPC2CLayer:
 
 
 
-    def remote_endpoint_malicious_history(self, r_cesid, ip_addr):
-        """ Function emulating the check whether 'r_cesid' & 'ip-address' have history of misbehavior """
-        return False
-
-    def send_cetp(self, msg):
-        transport = self.select_transport()
-        if transport!=None:
-            transport.send_cetp(msg)
-
-    def report_rtt(self, transport, rtt=None, last_seen=None):
-        if rtt != None:
-            self.transport_rtt[transport] = rtt
-            rtt_list = []
-            for trans, rtt_value in self.transport_rtt.items():
-                rtt_list.append(rtt_value)
-            
-            rtt_list.sort()
-            smallest_rtt = rtt_list[0]
-            #self.last_rtt_evaluation = time.time()
-            #self.smallest_rtt = smallest_rtt
-            if smallest_rtt == 2**32:
-                self._logger.info("All the links have bad health ")
-                return
-            
-            for trans, rtt_value in self.transport_rtt.items():
-                if rtt_value==smallest_rtt:
-                    self.active_transport = trans
-                    return
+    def report_connectivity(self, transport, status=True):
+        """ Triggers next function (on transport connection success) OR resouce-cleanup (on transport connection termination) """ 
+        if status == True:
+            self._logger.debug(" CETP Transport is connected -> Exchange C2C policies.")
+            self.register_connected_transport(transport)
+            asyncio.ensure_future(self.initiate_c2c_transaction(transport))
         else:
-            self.transport_lastseen[transport] = last_seen
+            self._logger.info(" CETP Transport is disconnected.")
+            self.unregister_c2c_transport(transport)
+            self.unregister_connected_transport(transport)
+
+    def _add_connected_transport(self, transport):
+        self.connected_transports.append(transport)
         
+    def _remove_connected_transport(self, transport):
+        if transport in self.connected_transports:
+            self.connected_transports.remove(transport)
+            
+    def register_connected_transport(self, transport):
+        """ Registers the connected CETP Transport """
+        self._add_connected_transport(transport)
+        print("Number of connected transports: ", len(self.connected_transports))
+        if transport in self.initiated_transports:
+            self.initiated_transports.remove(transport)                     # Removing the connected transport from list of initiated transports.
+            
+    def unregister_connected_transport(self, transport):
+        """ Unregisters the CETP Transport AND launches resource cleanup if all CETPtransport are down """
+        (ip_addr, port), proto = transport.remotepeer, transport.proto
+        key = (ip_addr, port, proto)
+        if key in self.remote_ces_eps:
+            self.remote_ces_eps.remove((ip_addr, port, proto))
 
-    def select_transport(self):
-        """ Selects the outgoing CETP-transport based on: 
-            (A) good health indicator - measured by timely arrival of C2C-keepalive response. (B) Lowest-RTT (measured by timing the C2C-keepalive)              
-            Other possibilities: Selection based on: 1) load balancing b/w transports; OR 2) priority field in the inbound NAPTR
-        """
-        if len(self.transport_rtt) < len(self.connected_transports):
-            # Packet sending before first keepalive & when local CES doesn't have to send keepalive
-            selected = None
-            for transport in self.connected_transports:
-                oc2c = self.get_c2c_transaction(transport)
-                if oc2c.health_report:
-                    selected = transport
-                    return selected
-                
-            if selected == None:
-                self._logger.info("All the links have bad health ")
-                # TBD:  Case where all transports have bad health           # What to do?
+        self._remove_connected_transport(transport)                         # Removing the transport from list of connected transports
+        if transport in self.initiated_transports:
+            self.initiated_transports.remove(transport)                     # Removing the transport from list of initiated transports
+        
+        if (len(self.initiated_transports) ==0) & (len(self.connected_transports) ==0):
+            self._logger.info(" No ongoing or in-progress CETP transport -- Close CETP-H2H and C2C layer towards {}".format(self.r_cesid))
+            self.cetp_mgr.remove_c2c_layer(self.r_cesid)
+            self.cetp_mgr.remove_cetp_endpoint(self.r_cesid)
+            self.resource_cleanup()
 
-        elif len(self.transport_rtt) == len(self.connected_transports):
-            return self.active_transport
 
+    
+    """ ***********************   **********************************************
+    ****     Functions to handle transport-layer failover     ***** *****
+    *********************** *********************** *********************** """
+    
+    def report_transport_health(self, transport, status=True):
+        """ Method called upon reception of C2C keepalive response """
+        if not self.c2c_connectivity and (status==True):
+            self.c2c_connectivity =True
+            self._start_h2h_cetp()                                      # Triggers the H2H queue consumption
+            
+        elif self.c2c_connectivity and (status==False):
+            self.c2c_connectivity = self.ready_to_send()
+            if not self.c2c_connectivity:                                   # No transport link to remote CES is active
+                self._suspend_h2h_cetp()                                # Suspends the H2H queue consumption
+                self._reconnect_transport_eps()                         # Reconnects to the remote transport endpoints. 
+
+    def _start_h2h_cetp(self):
+        self.cetp_h2h.start_h2h_consumption()
+        
+    def _suspend_h2h_cetp(self):
+        self.cetp_h2h.suspend_h2h_consumption()
 
     def ready_to_send(self):
         """ returns True, if atleast one C2C-transport link to remote CES is active """
@@ -436,8 +463,47 @@ class CETPC2CLayer:
                 oc2c = self.get_c2c_transaction(transport)
                 if oc2c.health_report:
                     return True
-            return False
         except Exception as ex:
             self._logger.error(ex)
-            return False
+        return False
+
+    def _reconnect_transport_eps(self):
+        """ Reconnects to the previously established transport enpoints """
+        for (r_ip, r_port, r_transport) in self.trusted_rces_eps:
+            try:
+                self._logger.info(" Initiating a new transport endpoint.")
+                if not self.remote_endpoint_malicious_history(self.r_cesid, r_ip):
+                    asyncio.ensure_future(self.initiate_transport(r_transport, r_ip, r_port))
+            except Exception as ex:
+                self._logger.warning("Exception in initiating the transport endpoint: '{}'".format(ex))
+
+    def is_connected(self):
+        """ Returns Boolean True/False, indicating presence of atleast one transport connection towards remote CES """
+        return self.c2c_connectivity
+    
+
+    """ ***********************    ***********************    ***********************
+    ******* Functions to handle interrupt (Ctrl+C) and C2C-relation closure.  *******
+    ***********************    ***********************   ***********************  """
+    
+    def set_closure_signal(self):
+        self._closure_signal = True
+        
+    def resource_cleanup(self):
+        """ Cancels the pending tasks and deletes the object """
+        self.handle_interrupt()
+        self.cetp_h2h.resource_cleanup()
+        del(self)
+
+    def handle_interrupt(self):
+        self.set_closure_signal()
+        self.cetp_h2h.set_closure_signal()
+        self.cancel_pending_tasks()
+
+    def cancel_pending_tasks(self):
+        """ Terminates asyncio-tasks in c2c-layer towards remote CES """
+        for tsk in self.pending_tasks:
+            if not tsk.cancelled():
+                self._logger.info("Terminating asyncio-task in c2c-layer towards remote CES '{}'".format(self.r_cesid))            
+                tsk.cancel()
     

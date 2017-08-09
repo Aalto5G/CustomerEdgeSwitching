@@ -39,7 +39,7 @@ class CETPH2H:
         self.max_session_limit          = 20                        # Dummy value for now, In reality the value shall come from C2C negotiation with remote CES.
         self.h2h_q                      = asyncio.Queue()           # Enqueues the NAPTR responses triggered by the private hosts.
         self.DNS_Cleanup_Threshold      = 5                         # No. of pending DNS queries gracefully handled in case of C2C termination. 
-        self.c2c_negotiated              = c2c_negotiated
+        self.c2c_connectivity           = c2c_negotiated
         self.pending_tasks              = []
         self._logger                    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPH2H)
@@ -51,14 +51,28 @@ class CETPH2H:
         self.c2c = self.cetp_mgr.create_c2c_layer(cetp_h2h=self, r_cesid=self.r_cesid)
         self.c2c.initiate_cetp_transport(naptr_list)
         
-    def enqueue_h2h_requests_nowait(self, naptr_records, cb):
+    def enqueue_h2h_requests_nowait(self, dst_id, naptr_records, cb):
         """ This method enqueues the naptr responses triggered by private hosts. """
-        queue_msg = (naptr_records, cb)
+        queue_msg = (dst_id, naptr_records, cb)
         self.h2h_q.put_nowait(queue_msg)               # Possible exception: If the queue is full, [It will simply drop the message (without waiting for space to be available in the queue]
-
+        self.c2c.add_naptr_records(naptr_records)
+        
     @asyncio.coroutine
-    def enqueue_h2h_requests(self, msg):
+    def enqueue_h2h_requests(self, dst_id, naptr_records, cb):
         yield from self.h2h_q.put(msg)                 # More safe enqueuing, if the queue is full, the call doesn't return until the queue has space to store this message - can be triggered via asyncio.ensure_future(enqueue) 
+
+    def start_h2h_consumption(self):
+        """ Triggers the task for consuming naptr responses from queue """
+        self._logger.info(" Starting the task for consuming H2H requests.")
+        self.h2h_cetp_task = asyncio.ensure_future(self.consume_h2h_requests())                       # Task for consuming naptr-response records triggered by private hosts
+        self.pending_tasks.append(self.h2h_cetp_task)
+    
+    def suspend_h2h_consumption(self):
+        """ Suspends the task for consuming naptr responses from queue """
+        if not self.h2h_cetp_task.cancelled():
+            self._logger.warning("Closing the task of consuming H2H requests.")
+            self.pending_tasks.remove(self.h2h_cetp_task)
+            self.h2h_cetp_task.cancel()
 
     @asyncio.coroutine
     def consume_h2h_requests(self):
@@ -66,14 +80,12 @@ class CETPH2H:
         while True:
             try:
                 queued_data = yield from self.h2h_q.get()
-                (naptr_rr, cb) = queued_data
-                dst_id = self.c2c.add_naptr_records(naptr_rr)
+                (dst_id, naptr_rr, cb) = queued_data
                 
-                if self.c2c.ready_to_send():
-                    if (dst_id!=None) and (self.ongoing_h2h_transactions < self.max_session_limit):      # Number of simultaneous H2H-transactions are below the upper limit  
-                        asyncio.ensure_future(self.h2h_transaction_start(cb, dst_id))                    # "try, except" within task can consume a task-related exception
+                if self.ongoing_h2h_transactions < self.max_session_limit:              # Number of simultaneous H2H-transactions are below the upper limit  
+                    asyncio.ensure_future(self.h2h_transaction_start(cb, dst_id))       # "try, except" within task can consume a task-related exception
                 else:
-                    self._logger.error(" C2C layer to remote CES '<%s>' is not connected.".format(self.r_cesid))
+                    self._logger.error(" Number of simultaneous connections to remote CES '<%s>' exceeded limit.".format(self.r_cesid))
                     self.execute_dns_callback(cb, success=False)
                 
                 self.h2h_q.task_done()
@@ -84,11 +96,8 @@ class CETPH2H:
                 self.h2h_q.task_done()
             
     def c2c_negotiation_status(self, status=True):
-        """ Reports that c2c-negotiation completed and whether it Succeeded/Failed """
-        if (self.c2c_negotiated == False) and (status == True):
-            self.c2c_negotiated  = status
-            t1=asyncio.ensure_future(self.consume_h2h_requests())                       # Task for consuming naptr-response records triggered by private hosts
-            self.pending_tasks.append(t1)
+        """ Reports that success/failure of C2C-negotiation """
+        self.c2c_connectivity = status
             
     def close_pending_tasks(self):
         for tsk in self.pending_tasks:
@@ -142,7 +151,7 @@ class CETPH2H:
     def consume_message_from_c2c(self, cetp_msg, transport):
         """ Consumes the message from C2CLayer for H2H processing """
         try:
-            if self.c2c_negotiated:
+            if self.c2c_connectivity:
                 self.process_h2h_transaction(cetp_msg, transport)        
 
         except Exception as ex:

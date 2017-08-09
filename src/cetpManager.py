@@ -146,7 +146,7 @@ class CETPManager:
                 ep = self.create_cetp_endpoint(r_cesid)
                 ep.create_cetp_c2c_layer(naptr_list)
     
-            ep.enqueue_h2h_requests_nowait(naptr_list, (dns_cb, cb_args))                                # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
+            ep.enqueue_h2h_requests_nowait(dst_id, naptr_list, (dns_cb, cb_args))                                # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
         except Exception as ex:
             self._logger.info("Exception in '{}'".format(ex))
             return
@@ -517,8 +517,8 @@ class CETPManager:
             if not self.has_c2c_layer(r_cesid): 
                 self._logger.info("Create CETP-H2H and CETP-C2C layer")
                 c2c_layer = self.create_c2c_layer(r_cesid)
-                cetp_ep = self.create_cetp_endpoint(r_cesid, c2c_layer=c2c_layer, c2c_negotiated=True)
-                c2c_layer.trigger_cetp_h2h(cetp_ep)    # Top layer to handle inbound H2H
+                h2h_layer = self.create_cetp_endpoint(r_cesid, c2c_layer=c2c_layer, c2c_negotiated=True)
+                c2c_layer.assign_cetp_h2h_layer(h2h_layer)    # Top layer to handle inbound H2H
                 c2c_layer.c2c_negotiated = True
             else:
                 c2c_layer = self.get_c2c_layer(r_cesid)                 # Gets existing c2c-layer for remote ’cesid’
