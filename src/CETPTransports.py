@@ -46,7 +46,7 @@ class oCESTCPTransport(asyncio.Protocol):
         time_lapsed  = current_time - self._start_time
         
         if (time_lapsed) > self.c2c_negotiation_threshold:
-            self._logger.info(" CETPTransport connection established in > (To={})".format(str(self.c2c_negotiation_threshold)))
+            self._logger.info(" Transport connection established in > (To={})".format(str(self.c2c_negotiation_threshold)))
             self.close()
         else:
             self.transport = transport

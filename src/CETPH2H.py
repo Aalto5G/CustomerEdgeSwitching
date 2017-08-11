@@ -49,7 +49,6 @@ class CETPH2H:
     def create_cetp_c2c_layer(self, naptr_list):
         """ Initiates CETPc2clayer between two CES nodes """
         self.c2c = self.cetp_mgr.create_c2c_layer(cetp_h2h=self, r_cesid=self.r_cesid)
-        self.c2c.initiate_cetp_transport(naptr_list)
         
     def enqueue_h2h_requests_nowait(self, dst_id, naptr_records, cb):
         """ This method enqueues the naptr responses triggered by private hosts. """
@@ -63,7 +62,7 @@ class CETPH2H:
 
     def start_h2h_consumption(self):
         """ Triggers the task for consuming naptr responses from queue """
-        self._logger.info(" Starting the task for consuming H2H requests.")
+        self._logger.info(" \nStarting the task for consuming H2H requests.")
         self.h2h_cetp_task = asyncio.ensure_future(self.consume_h2h_requests())                       # Task for consuming naptr-response records triggered by private hosts
         self.pending_tasks.append(self.h2h_cetp_task)
     
@@ -80,20 +79,27 @@ class CETPH2H:
         while True:
             try:
                 queued_data = yield from self.h2h_q.get()
+            except Exception as ex:
+                if not self._closure_signal:
+                    self._logger.info(" Exception '{}' in asyncio H2H-queue towards '{}'".format(ex, self.r_cesid))
+                break
+            
+            try:
                 (dst_id, naptr_rr, cb) = queued_data
-                
                 if self.ongoing_h2h_transactions < self.max_session_limit:              # Number of simultaneous H2H-transactions are below the upper limit  
                     asyncio.ensure_future(self.h2h_transaction_start(cb, dst_id))       # "try, except" within task can consume a task-related exception
+                    self.h2h_q.task_done()
                 else:
                     self._logger.error(" Number of simultaneous connections to remote CES '<%s>' exceeded limit.".format(self.r_cesid))
                     self.execute_dns_callback(cb, success=False)
-                
-                self.h2h_q.task_done()
+                    self.h2h_q.task_done()
 
             except Exception as ex:
                 if self._closure_signal: break
                 self._logger.info(" Exception '{}' in consuming H2H request towards {}".format(ex, self.r_cesid))
                 self.h2h_q.task_done()
+            
+
             
     def c2c_negotiation_status(self, status=True):
         """ Reports that success/failure of C2C-negotiation """

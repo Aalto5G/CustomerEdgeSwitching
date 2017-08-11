@@ -55,7 +55,7 @@ class CETPManager:
         self._logger.setLevel(LOGLEVEL_CETPManager)
         self.local_cetp             = CETPH2H.CETPH2HLocal(cetpstate_mgr=self.cetpstate_mgr, policy_mgr=self.policy_mgr, cetp_mgr=self, \
                                                            cetp_security=self.cetp_security, host_register=self.host_register, conn_table=self.conn_table)
-        self._loop.call_later(13, self.test_func)
+        #self._loop.call_later(13, self.test_func)
 
     def test_func(self):
         #self.terminate_local_host_sessions(l_hostid="hosta1.cesa.lte.")

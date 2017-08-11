@@ -188,7 +188,6 @@ def send_ces_pow(**kwargs):
 
 def send_ces_terminate(**kwargs):
     tlv, code, ces_params, query = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["query"] 
-    policy_code = CETP.CES_CODE_TO_POLICY[code]
     if query==True:
         tlv['value'] = ""
     else:

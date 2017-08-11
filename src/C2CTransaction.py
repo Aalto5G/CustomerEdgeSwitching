@@ -88,7 +88,7 @@ class C2CTransaction(object):
                            cetp_security=self.cetp_security, policy = self.ces_policy, interfaces=self.interfaces, query=False)
             return tlv
         except Exception as ex:
-            self._logger.error(ex)
+            self._logger.error("Exception in _create_offer_tlv(): '{}'".format(ex))
             return None
                     
     def _create_offer_tlv2(self, group=None, code=None, value=None):
@@ -104,10 +104,11 @@ class C2CTransaction(object):
                 func = CETP.SEND_TLV_GROUP[group][code]
                 tlv = func(tlv=tlv, code=code, ces_params=self.ces_params, cesid=self.l_cesid, r_cesid=self.r_cesid, r_addr=self.remote_addr, \
                            cetp_security=self.cetp_security, policy = self.ces_policy, interfaces=self.interfaces, query=False)
+                
             return tlv
         
         except Exception as ex:
-            self._logger.error(ex)
+            self._logger.error("Exception in _create_offer_tlv2() '{}'".format(ex))
             return None
 
     def _create_request_tlv(self, tlv):
@@ -119,7 +120,7 @@ class C2CTransaction(object):
                             cetp_security=self.cetp_security, policy = self.ces_policy, interfaces=self.interfaces, query=True)
             return tlv
         except Exception as ex:
-            self._logger.error(ex)
+            self._logger.error("Exception in _create_request_tlv() '{}'".format(ex))
             return None
         
     def _create_request_tlv2(self, group=None, code=None):
@@ -132,7 +133,7 @@ class C2CTransaction(object):
                             cetp_security=self.cetp_security, policy = self.ces_policy, interfaces=self.interfaces, query=True)
                 return tlv
         except Exception as ex:
-            self._logger.error(ex)
+            self._logger.error("Exception in _create_request_tlv2() '{}'".format(ex))
             return None
     
     def _create_response_tlv(self, tlv):
@@ -144,7 +145,7 @@ class C2CTransaction(object):
                             cetp_security=self.cetp_security, policy = self.ces_policy, transaction=self, interfaces=self.interfaces, packet=self.packet)
             return tlv
         except Exception as ex:
-            self._logger.error(ex)
+            self._logger.error("Exception in _create_response_tlv() '{}'".format(ex))
             return None
         
     def _verify_tlv(self, tlv):
@@ -156,7 +157,7 @@ class C2CTransaction(object):
                               cetp_security=self.cetp_security, policy = self.ces_policy, transaction=self, interfaces=self.interfaces, session_established=self.c2c_negotiation_status)
                 return result
         except Exception as ex:
-            self._logger.error(ex)
+            self._logger.error("Exception in _verify_tlv() '{}'".format(ex))
             return False
 
     def _check_tlv(self, tlv, ope=None, cmp=None, group=None, code=None):
@@ -446,6 +447,10 @@ class oC2CTransaction(C2CTransaction):
         # At some point, we gotta use report_host():  OR enforce_ratelimits():        # Invoking these methods to report a misbehaving host to remote CES.
         """
         pass
+    
+    def is_transport_active(self):
+        """ Indicates whether the transport link corresponding to this transaction is active. """
+        return self.health_report
 
     def _pre_process(self, cetp_msg):
         """ Pre-processing check for the version field, session tags & format of TLVs in the inbound packet.
@@ -468,8 +473,8 @@ class oC2CTransaction(C2CTransaction):
                     break
             return True
         
-        except:
-            self._logger.error(" Pre-processing the CETP packet failed.")
+        except Exception as ex:
+            self._logger.error(" Exception in pre-processing the packet. '{}'".format(ex))
             return False
          
 
@@ -645,7 +650,7 @@ class oC2CTransaction(C2CTransaction):
             self.conn_table.add(self.conn)
             return True
         except Exception as ex:
-            self._logger.error(ex)
+            self._logger.error("Exception in connection creation: '{}'".format(ex))
             return False
     
     def trigger_negotiated_functionality(self):
@@ -959,8 +964,8 @@ class iC2CTransaction(C2CTransaction):
                 self._logger.info(" CES-ID is not correct")
                 return False
             
-        except:
-            self._logger.error(" Pre-processing the CETP packet failed.")
+        except Exception as ex:
+            self._logger.error(" Exception in pre-processing the CETP packet: '{}'".format(ex))
             return False
         
         try:
@@ -1114,7 +1119,7 @@ class iC2CTransaction(C2CTransaction):
             return True
         
         except Exception as ex:
-            self._logger.error("Failure in connection creation.")
+            self._logger.error("Failure in connection creation. '{}'".format(ex))
             return False
 
     def _export_to_stateful(self):
