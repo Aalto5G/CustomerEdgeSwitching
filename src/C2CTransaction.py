@@ -768,7 +768,7 @@ class oC2CTransaction(C2CTransaction):
             self.health_report = False
             self.missed_keepalives += 1
             self.c2c_layer.report_rtt(self.transport, rtt=2**32)
-            self.c2c_layer.report_transport_health(self.transport, status=False)
+            self.c2c_layer.report_transport_health(self.transport, healthy=False)
             
             if self.missed_keepalives <3:
                 self.keepalive_handler  = self._loop.call_later(3.0, self.initiate_keepalive)          # Sending next keepalive-request
@@ -782,7 +782,7 @@ class oC2CTransaction(C2CTransaction):
             self.keepalive_scheduled = False
             rtt = self.keepalive_response_time - self.keepalive_trigger_time
             self.c2c_layer.report_rtt(self.transport, rtt=rtt)                                         # Report RTT
-            self.c2c_layer.report_transport_health(self.transport, status=True)
+            self.c2c_layer.report_transport_health(self.transport, healthy=True)
             
     
     def post_c2c_negotiation(self, packet, transport):

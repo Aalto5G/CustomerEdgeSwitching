@@ -81,7 +81,7 @@ class DNSServer(asyncio.DatagramProtocol):
                 self._cetpManager.process_dns_message(cb, cb_args, dst_domain, r_cesid, naptr_list=naptr_response_list)
             
 
-    def dns_query_callback(self, dns_query, addr, r_addr, success=True):
+    def dns_query_callback(self, dns_query, addr, r_addr="", success=True):
         """ Sending DNS Response """
         qtype      = dns_query.question[0].rdtype
         domain     = dns_query.question[0].name.to_text().lower()

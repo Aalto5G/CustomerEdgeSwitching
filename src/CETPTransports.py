@@ -42,18 +42,21 @@ class oCESTCPTransport(asyncio.Protocol):
         self._loop.call_later(self.c2c_negotiation_threshold, self.is_c2c_negotiated)
 
     def connection_made(self, transport):
-        current_time = self._loop.time()
-        time_lapsed  = current_time - self._start_time
-        
-        if (time_lapsed) > self.c2c_negotiation_threshold:
-            self._logger.info(" Transport connection established in > (To={})".format(str(self.c2c_negotiation_threshold)))
-            self.close()
-        else:
+        try:
+            current_time = self._loop.time()
+            time_lapsed  = current_time - self._start_time
             self.transport = transport
             self.peername = transport.get_extra_info('peername')
-            self._logger.info('Connected to {}'.format(self.peername))
             self.is_connected = True
-            self.ces_layer.report_connectivity(self)                 # Reporting the connectivity to upper layer.
+            
+            if (time_lapsed) > self.c2c_negotiation_threshold:
+                self._logger.info(" Transport connection established in > (To={})".format(str(self.c2c_negotiation_threshold)))
+                self.close()
+            else:
+                self._logger.info('Connected to {}'.format(self.peername))
+                self.ces_layer.report_connectivity(self)                 # Reporting the connectivity to upper layer.
+        except Exception as ex:
+            self._logger.error( "Exception in connection_made() '{}'".format(ex))
             
     def report_c2c_negotiation(self, status):
         """ Used by the C2C layer to notify if the c2c-negotiation succeeded """

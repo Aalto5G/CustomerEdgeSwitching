@@ -519,7 +519,7 @@ class CETPManager:
                 c2c_layer = self.create_c2c_layer(r_cesid)
                 h2h_layer = self.create_cetp_endpoint(r_cesid, c2c_layer=c2c_layer, c2c_negotiated=True)
                 c2c_layer.assign_cetp_h2h_layer(h2h_layer)    # Top layer to handle inbound H2H
-                c2c_layer.c2c_negotiated = True
+                c2c_layer.set_connectivity_params()
             else:
                 c2c_layer = self.get_c2c_layer(r_cesid)                 # Gets existing c2c-layer for remote ’cesid’
             

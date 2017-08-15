@@ -35,6 +35,7 @@ class CETPH2H:
         self.interfaces                 = interfaces
         self.conn_table                 = conn_table
         self._closure_signal            = False
+        self.h2h_cetp_task              = None
         self.ongoing_h2h_transactions   = 0
         self.max_session_limit          = 20                        # Dummy value for now, In reality the value shall come from C2C negotiation with remote CES.
         self.h2h_q                      = asyncio.Queue()           # Enqueues the NAPTR responses triggered by the private hosts.
@@ -70,9 +71,9 @@ class CETPH2H:
         """ Suspends the task for consuming naptr responses from queue """
         if not self.h2h_cetp_task.cancelled():
             self._logger.warning("Closing the task of consuming H2H requests.")
-            self.pending_tasks.remove(self.h2h_cetp_task)
             self.h2h_cetp_task.cancel()
-
+            self.pending_tasks.remove(self.h2h_cetp_task)
+            
     @asyncio.coroutine
     def consume_h2h_requests(self):
         """ To consume NAPTR-response triggered by the private hosts """
@@ -177,7 +178,7 @@ class CETPH2H:
     def execute_dns_callback(self, cb, success= False):
         cb_func, cb_args = cb
         dns_q, addr = cb_args
-        cb_func(dns_q, addr, "", success=False)
+        cb_func(dns_q, addr, success=False)
     
     def resource_cleanup(self):
         """ Deletes the CETPH2H instance towards r_cesid, cancels the pending tasks, and handles the pending <H2H DNS-NAPTR responses. """
@@ -185,7 +186,7 @@ class CETPH2H:
         if (pending_dns_queries>0) and (pending_dns_queries < self.DNS_Cleanup_Threshold):          # Issues DNS NXDOMAIN (if pending H2H-DNS queries < N in size)
             try:
                 queued_data = self.h2h_q.get_nowait()
-                (naptr_rr, cb) = queued_data
+                (dst_id, naptr_rr, cb) = queued_data
                 (cb_func, cb_args) = cb
                 (dns_q, addr) = cb_args
                 cb_func(dns_q, addr, success=False)

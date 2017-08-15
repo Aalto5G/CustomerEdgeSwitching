@@ -593,7 +593,7 @@ class H2HTransactionOutbound(H2HTransaction):
         """ Executes DNS callback towards host """
         (cb_func, cb_args) = self.cb
         dns_q, addr = cb_args
-        cb_func(dns_q, addr, r_addr, success=resolution)
+        cb_func(dns_q, addr, r_addr=r_addr, success=resolution)
 
     def _create_terminate_message(self):
         terminate_tlv = self._create_offer_tlv2(group="control", code="terminate")
@@ -955,7 +955,7 @@ class H2HTransactionLocal(H2HTransaction):
         """ Executes DNS callback towards host """
         (cb_func, cb_args) = self.cb
         dns_q, addr = cb_args
-        cb_func(dns_q, addr, r_addr, success=resolution)
+        cb_func(dns_q, addr, r_addr=r_addr, success=resolution)
     
     def _create_local_connection(self):
         lip, rip        = self.host_ip, "10.0.3.103"                            # Get from host-register (IPv4 or IPv6 address depending on sender address type)
