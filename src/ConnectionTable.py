@@ -99,8 +99,8 @@ class ConnectionTable:
                     conn_lst = self.connection_dict[keytype][key]
                     conn_lst.remove(connection)
                     if len(conn_lst)==0:
-                        print(self.connection_dict[keytype])
                         del self.connection_dict[keytype][key]
+                        #print("self.connection_dict[keytype]={}, keytype={}, key={}: ".format(self.connection_dict[keytype], keytype, key))
             else:
                 del self.connection_dict[keytype][key]
         

@@ -66,18 +66,15 @@ class CETPManager:
         #self.make_local_host_unreachable(local_domain="srv2.hostb1.cesb.lte.")
         #self.block_host_of_rces(r_cesid="cesb.lte.", r_hostid="srv1.hostb1.cesb.lte.")
         #self.block_host_of_rces(r_cesid="cesb.lte.", r_hostid="hostb1.cesb.lte.")
-        self.drop_connection_to_local_domain(r_cesid="cesb.lte.", l_domain="srv1.hosta1.cesa.lte.")
         print(self.cetp_security.domains_to_filter)
 
         """
         self.terminate_cetp_c2c_signalling(r_cesid="cesb.lte.", terminate_h2h=True)
-        print("self.has_cetp_endpoint(r_cesid): ", self.has_cetp_endpoint(r_cesid))
-        print("self.has_c2c_layer(r_cesid): ", self.has_c2c_layer(r_cesid))
         print("CETP states: ", self.cetpstate_mgr.cetp_transactions[ConnectionTable.KEY_ESTABLISHED_CETP])
         """
         pass
 
-    def drop_connection_to_local_domain(self, r_cesid="", l_domain=""):
+    def block_connections_to_local_domain(self, r_cesid="", l_domain=""):
         """ Informs remote CES to block (future) connections towards the local domain of this CES """
         try:
             if (len(r_cesid)==0) and (len(l_domain)==0):
@@ -102,7 +99,7 @@ class CETPManager:
             return
 
 
-    def drop_connection_from_local_domain(self, r_cesid="", l_domain=""):
+    def block_connections_from_local_domain(self, r_cesid="", l_domain=""):
         """ Informs remote CES to block (future) connections towards the local domain of this CES """
         try:
             if (len(r_cesid)==0) and (len(l_domain)==0):
@@ -110,10 +107,9 @@ class CETPManager:
             
             #Store locally to detect non-compliance by remote CES
             if len(r_cesid)!=0:
-                #Report malicious-host to remote CES
+                #Records a host that acted as malicious towards a remote CES
                 keytype = CETPSecurity.KEY_LCES_FilteredSourcesTowardsRCES
                 self.cetp_security.add_filtered_domains(keytype, l_domain, key=r_cesid)
-                    
             else:
                 keytype = CETPSecurity.KEY_LocalHosts_Outbound_Disabled
                 self.cetp_security.add_filtered_domains(keytype, l_domain)
@@ -646,7 +642,10 @@ def test_drop_connection(cetp_mgr):
     yield from asyncio.sleep(1)
     
     #cetp_mgr.drop_connection_from_local_domain(l_domain=l_hostid)
-    cetp_mgr.drop_connection_from_local_domain(l_domain=l_hostid, r_cesid=r_cesid)
+    #cetp_mgr.block_connections_from_local_domain(l_domain=l_hostid, r_cesid=r_cesid)
+    l_domain = "srv1.hosta1.cesa.lte."
+    cetp_mgr.block_connections_to_local_domain(r_cesid=r_cesid, l_domain=l_domain)
+    #cetp_mgr.block_connections_to_local_domain(l_domain=l_domain)
     yield from asyncio.sleep(1)
     
     print("\nInitiating second H2H query")
@@ -656,6 +655,7 @@ def test_drop_connection(cetp_mgr):
         
     cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
     #yield from asyncio.sleep(2)
+    
     
     
     
