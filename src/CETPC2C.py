@@ -68,6 +68,7 @@ class CETPC2CLayer:
             for naptr_rr in naptr_rrs:
                 dst_id, r_cesid, r_ip, r_port, r_transport = naptr_rr                   # Assumption: All NAPTRs point towards one 'r_cesid'.    (Destination domain is reachable via one CES only)
                 if (r_ip, r_port, r_transport) not in self.remote_ces_eps:
+                    self.remote_ces_eps.append( (r_ip, r_port, r_transport) )
                     self._logger.info(" Initiating a new CETPTransport.")
                     if not self.remote_endpoint_malicious_history(r_cesid, r_ip):
                         asyncio.ensure_future(self.initiate_transport(r_transport, r_ip, r_port, delay=0))        # Delay parameter prevents H2H negotiation from suffering delay due to triggering of transport/C2C-negotiation
@@ -368,7 +369,6 @@ class CETPC2CLayer:
                 #sc.check_hostname = True
             
                 try:
-                    self.remote_ces_eps.append( (ip_addr, port, proto) )
                     coro = self._loop.create_connection(lambda: transport_instance, ip_addr, port, ssl=sc)
                     self.initiated_transports.append(transport_instance)
                     yield from asyncio.ensure_future(coro)
@@ -379,7 +379,6 @@ class CETPC2CLayer:
 
             elif proto == "tcp":
                 try:
-                    self.remote_ces_eps.append( (ip_addr, port, proto) )
                     coro = self._loop.create_connection(lambda: transport_instance, ip_addr, port)
                     self.initiated_transports.append(transport_instance)
                     connect_task = asyncio.ensure_future(coro)

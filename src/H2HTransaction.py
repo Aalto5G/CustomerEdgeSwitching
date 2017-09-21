@@ -205,25 +205,14 @@ class H2HTransaction(object):
         proxy_ip = "10.1.3.103"
         return proxy_ip
 
-    def is_local_host_allowed(self, hostid):
-        """ Checks in the CETPSecurity module if the traffic from the sender is permitted (towards remote CES).. OR  whether the host is blacklisted """
-        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlacklistedLHosts, hostid):
-            return False
-        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_DisabledLHosts, hostid):
-            return False
-        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlockedHostsByRCES, hostid, key=self.r_cesid):
-            return False
-        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_Unreachable_local_destinations, hostid, key=self.r_cesid):
-            return False
-        return True
 
     def is_remote_host_allowed(self, hostid):
         """ Determines whether the traffic to destination is permitted """
         if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlacklistedRHosts, hostid):
             return False
-        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlockedHostsOfRCES, hostid, key=self.r_cesid):
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_LCES_BlockedHostsOfRCES, hostid, key=self.r_cesid):
             return False
-        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_Unreachable_remote_destinations, hostid, key=self.r_cesid):
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_RCES_UnreachableRCESDestinations, hostid, key=self.r_cesid):
             return False
         return True
     
@@ -571,6 +560,32 @@ class H2HTransactionOutbound(H2HTransaction):
         return self.proxy_ip
     
 
+    def is_local_host_allowed(self, hostid):
+        """ Checks in the CETPSecurity module if the traffic from the sender is permitted (towards remote CES).. OR  whether the host is blacklisted """
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlacklistedLHosts, hostid):
+            return False
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_DisabledLHosts, hostid):
+            return False
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_LocalHosts_Outbound_Disabled, hostid):
+            return False
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_RCES_BlockedHostsByRCES, hostid, key=self.r_cesid):
+            return False
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_LCES_FilteredSourcesTowardsRCES, hostid, key=self.r_cesid):
+            return False
+        return True
+
+
+    def is_remote_host_allowed(self, hostid):
+        """ Determines whether the traffic to destination is permitted """
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlacklistedRHosts, hostid):
+            return False
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_LCES_BlockedHostsOfRCES, hostid, key=self.r_cesid):
+            return False
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_RCES_UnreachableRCESDestinations, hostid, key=self.r_cesid):
+            return False
+        return True
+
+
         #conn = CES_CONF.state_creator.createconnection(CONNECTION_CETP,direction='O',sstag=self.sstag, dstag=self.dstag,lip=lip,lpip=lpip,lid=lid,rid=rid,lfqdn=lfqdn,\
         #rfqdn=rfqdn,lrloc=lrloc,rrloc=rrloc,lpayload=lpayload,rpayload=rpayload)
 
@@ -591,9 +606,12 @@ class H2HTransactionOutbound(H2HTransaction):
         
     def _execute_dns_callback(self, r_addr="", resolution=True):
         """ Executes DNS callback towards host """
-        (cb_func, cb_args) = self.cb
-        dns_q, addr = cb_args
-        cb_func(dns_q, addr, r_addr=r_addr, success=resolution)
+        try:
+            (cb_func, cb_args) = self.cb
+            dns_q, addr = cb_args
+            cb_func(dns_q, addr, r_addr=r_addr, success=resolution)
+        except Exception as ex:
+            self._logger.error("Exception in _execute_dns_callback {}".format(ex))
 
     def _create_terminate_message(self):
         terminate_tlv = self._create_offer_tlv2(group="control", code="terminate")
@@ -711,6 +729,29 @@ class H2HTransactionInbound(H2HTransaction):
         except Exception as ex:
             self._logger.error(" Pre-processing the inbound CETP packet failed: '{}'".format(ex))
             return False
+
+
+    def is_local_host_allowed(self, hostid):
+        """ Checks in the CETPSecurity module if the traffic from the sender host is permitted.. OR  whether the host is blacklisted """
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlacklistedLHosts, hostid):
+            return False
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_DisabledLHosts, hostid):
+            return False
+        #if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlockedHostsByRCES, hostid, key=self.r_cesid):
+        #    return False
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_LCES_UnreachableDestinationsForRCES, hostid, key=self.r_cesid):
+            return False
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_LocalHosts_Inbound_Disabled, hostid):
+            return False
+        return True
+
+    def is_remote_host_allowed(self, hostid):
+        """ Determines whether the traffic to destination is permitted """
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlacklistedRHosts, hostid):
+            return False
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_LCES_BlockedHostsOfRCES, hostid, key=self.r_cesid):
+            return False
+        return True
 
     
     def get_tlv(self, recv_tlv_lst, group=None, code=None):

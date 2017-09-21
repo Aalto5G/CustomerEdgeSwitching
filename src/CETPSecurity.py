@@ -25,17 +25,27 @@ import ConnectionTable
 LOGLEVEL_CETPSecurity       = logging.INFO
 
 #Local record
-KEY_BlacklistedLHosts               = 0
-KEY_BlacklistedRHosts               = 1
-KEY_DisabledLHosts                  = 2
+KEY_BlacklistedLHosts                       = 0
+KEY_BlacklistedRHosts                       = 1
+KEY_DisabledLHosts                          = 2
+
+KEY_LocalHosts_Inbound_Disabled             = 10
+KEY_LocalHosts_Outbound_Disabled            = 11
+
+KEY_RemoteHosts_inbound_Disabled            = 12
+KEY_RemoteHosts_outbound_Disabled           = 13
+
 
 #Remote CES specific record    (Local-view)
-KEY_BlockedHostsOfRCES              = 3
-KEY_Unreachable_local_destinations  = 4
+KEY_LCES_BlockedHostsOfRCES                 = 3
+KEY_LCES_UnreachableDestinationsForRCES     = 4
+KEY_LCES_FilteredSourcesTowardsRCES         = 14
 
-# Remote CES specific record   (Remote view)
-KEY_BlockedHostsByRCES              = 5
-KEY_Unreachable_remote_destinations = 6
+#Remote CES specific record   (Remote view)
+KEY_RCES_BlockedHostsByRCES                 = 5
+KEY_RCES_UnreachableRCESDestinations        = 6
+KEY_RCES_FilteredSourcesFromRCES            = 15
+
 
 
 class CETPSecurity:
@@ -55,7 +65,7 @@ class CETPSecurity:
 
 
     def add_filtered_domains(self, keytype, value, key=None):
-        if keytype in [KEY_BlockedHostsByRCES, KEY_BlockedHostsOfRCES, KEY_Unreachable_remote_destinations, KEY_Unreachable_local_destinations]:                
+        if keytype in [KEY_RCES_BlockedHostsByRCES, KEY_LCES_BlockedHostsOfRCES, KEY_RCES_UnreachableRCESDestinations, KEY_LCES_UnreachableDestinationsForRCES, KEY_LCES_FilteredSourcesTowardsRCES]:                
             if keytype not in self.domains_to_filter:
                 self.domains_to_filter[keytype] = {}
                 self.domains_to_filter[keytype][key]=[value]

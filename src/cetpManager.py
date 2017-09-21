@@ -9,6 +9,7 @@ import random
 import time
 import traceback
 import json
+import yaml
 import ssl
 import functools
 
@@ -22,6 +23,7 @@ import CETPTransports
 import PolicyManager
 import CETPSecurity
 import ConnectionTable
+from asyncio.tasks import async
 
 LOGLEVEL_CETPManager    = logging.DEBUG            # Any message above this level will be printed.    WARNING > INFO > DEBUG
 
@@ -58,11 +60,6 @@ class CETPManager:
         #self._loop.call_later(13, self.test_func)
 
     def test_func(self):
-        #self.terminate_local_host_sessions(l_hostid="hosta1.cesa.lte.")
-        #self.terminate_local_host_sessions(lip="10.0.3.118")
-        #self.terminate_session_by_tags(200, 100)
-        #self.terminate_remote_host_sessions("srv1.hostb1.cesb.lte.")
-        #self.terminate_session_by_fqdns(l_hostid="hosta1.cesa.lte.", r_hostid="srv1.hostb1.cesb.lte.")
         #self.send_evidence(sstag=200, dstag=100, evidence="FSecureMalware")
         #self.terminate_cetp_c2c_signalling(r_cesid="cesb.lte.")
         
@@ -70,13 +67,8 @@ class CETPManager:
         #self.block_host_of_rces(r_cesid="cesb.lte.", r_hostid="srv1.hostb1.cesb.lte.")
         #self.block_host_of_rces(r_cesid="cesb.lte.", r_hostid="hostb1.cesb.lte.")
         self.drop_connection_to_local_domain(r_cesid="cesb.lte.", l_domain="srv1.hosta1.cesa.lte.")
-        self._loop.call_later(1, self.test_func2)
-        
-        # Checks for verifying the test execution
-        #print("\nPost deletion check")
-        #print("CETP session states:\n", self.cetpstate_mgr.cetp_transactions[ConnectionTable.KEY_ESTABLISHED_CETP])
-        #print("Connection Table:\n", self.conn_table.connection_dict)
-        
+        print(self.cetp_security.domains_to_filter)
+
         """
         self.terminate_cetp_c2c_signalling(r_cesid="cesb.lte.", terminate_h2h=True)
         print("self.has_cetp_endpoint(r_cesid): ", self.has_cetp_endpoint(r_cesid))
@@ -97,9 +89,34 @@ class CETPManager:
                 if self.has_c2c_layer(r_cesid):
                     c2c_layer = self.get_c2c_layer(r_cesid)
                     c2c_layer.drop_connection_to_local_domain(l_domain)
+                else:
+                    keytype = CETPSecurity.KEY_LCES_UnreachableDestinationsForRCES
+                    self.cetp_security.add_filtered_domains(keytype, l_domain, key=r_cesid)
+                    
             else:
-                keytype = CETPSecurity.KEY_Unreachable_local_destinations
+                keytype = CETPSecurity.KEY_LocalHosts_Inbound_Disabled
+                self.cetp_security.add_filtered_domains(keytype, l_domain)
+            
+        except Exception as ex:
+            self._logger.info("Exception '{}'".format(ex))
+            return
+
+
+    def drop_connection_from_local_domain(self, r_cesid="", l_domain=""):
+        """ Informs remote CES to block (future) connections towards the local domain of this CES """
+        try:
+            if (len(r_cesid)==0) and (len(l_domain)==0):
+                return
+            
+            #Store locally to detect non-compliance by remote CES
+            if len(r_cesid)!=0:
+                #Report malicious-host to remote CES
+                keytype = CETPSecurity.KEY_LCES_FilteredSourcesTowardsRCES
                 self.cetp_security.add_filtered_domains(keytype, l_domain, key=r_cesid)
+                    
+            else:
+                keytype = CETPSecurity.KEY_LocalHosts_Outbound_Disabled
+                self.cetp_security.add_filtered_domains(keytype, l_domain)
             
         except Exception as ex:
             self._logger.info("Exception '{}'".format(ex))
@@ -112,7 +129,7 @@ class CETPManager:
                 return
             
             #Stores the domains to be filtered in the security module.         # Also used in detecting non-compliance of remote CES
-            self.cetp_security.add_filtered_domains(CETPSecurity.KEY_BlockedHostsOfRCES, r_hostid, key=r_cesid)
+            self.cetp_security.add_filtered_domains(CETPSecurity.KEY_LCES_BlockedHostsOfRCES, r_hostid, key=r_cesid)
             
             #Report malicious-host to remote CES
             if self.has_c2c_layer(r_cesid):
@@ -121,11 +138,6 @@ class CETPManager:
         except Exception as ex:
             self._logger.info("Exception '{}'".format(ex))
 
-    
-    def test_func2(self):
-        print(self.cetp_security.domains_to_filter)
-           
-        
     def process_dns_message(self, dns_cb, cb_args, dst_id, r_cesid="", naptr_list=[]):
         if len(naptr_list)!=0:
             self.process_outbound_cetp(dns_cb, cb_args, dst_id, r_cesid, naptr_list)
@@ -545,3 +557,140 @@ class CETPManager:
             response = ic2c_transaction.process_c2c_transaction(cetp_msg)
             return response
 
+
+def test_cetp_ep_creation(cetp_mgr):
+    """ Testing the addition of a new cetp_endpoint """
+    r_cesid = "random_ces.lte."
+    cetp_ep = cetp_mgr.create_cetp_endpoint(r_cesid)
+    assert cetp_mgr.has_cetp_endpoint(r_cesid)==True
+
+def test_cetp_layering(cetp_mgr):
+    """ Testing the establishment of CETP-H2H, CETP-C2C layer and CETPTransport(s) upon getting list of NAPTR records for a new remote CESID."""
+    #naptr_list = [('srv1.hostb1.cesb.lte.', 'cesb.lte.', '10.0.3.103', '49001', 'tcp')]
+    naptr_list = [('srv1.hostb1.cesb.lte.', 'cesb.lte.', '10.0.3.103', '49001', 'tcp'), ('srv1.hostb1.cesb.lte.', 'cesb.lte.', '10.0.3.103', '49002', 'tcp')]
+    dst_id, r_cesid, r_ip, r_port, r_proto = ('srv1.hostb1.cesb.lte.', 'cesb.lte.', '10.0.3.103', '49001', 'tcp')
+    print("Initiating a connection towards: ", r_cesid)
+    sender_info = ("10.0.3.118", 43333)
+    cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
+    
+def test3(cetp_mgr):
+    pass
+
+def test4(cetp_mgr):
+    pass
+
+def test5(cetp_mgr):
+    pass
+
+@asyncio.coroutine    
+def test_h2h_session_termination(cetp_mgr):
+    """ Tests termination of H2H-CETP sessions based on different parameters: Local host-ID, Local host-IP, remote host-ID and (sender-ID, dst-ID) pair. """
+    sender_info = ("10.0.3.118", 43333)
+    dst_id, r_cesid, r_ip, r_port, r_proto = "", "", "", "", ""
+    naptr_records = {}
+    naptr_records['srv1.hostb1.cesb.lte.']         = [('srv1.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49001', 'tcp')]
+    naptr_records['srv2.hostb1.cesb.lte.']         = [('srv2.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49002', 'tcp')]
+    
+    print("\nInitiating first H2H query")
+    for naptr_rr in naptr_records['srv1.hostb1.cesb.lte.']:
+        dst_id, r_cesid, r_ip, r_port, r_proto = naptr_rr
+        naptr_list = naptr_records['srv1.hostb1.cesb.lte.']
+        
+    cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
+    yield from asyncio.sleep(1)
+    
+    print("\nInitiating second H2H query")
+    for naptr_rr in naptr_records['srv2.hostb1.cesb.lte.']:
+        dst_id, r_cesid, r_ip, r_port, r_proto = naptr_rr
+        naptr_list = naptr_records['srv2.hostb1.cesb.lte.']
+        
+    cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
+    yield from asyncio.sleep(2)
+    
+    
+    # Tests termination of H2H-CETP sessions involving a particular local-host, based on host-ID or host-IP
+    l_hostid = "hosta1.cesa.lte."
+    l_hostip = sender_info[0]
+    #print("Request to terminate H2H-CETP sessions involving the host-id <{}>.".format(l_hostid))         # Does it close all session initiated by a host-id or all sessions involving a hostid?
+    #cetp_mgr.terminate_local_host_sessions(l_hostid=l_hostid)
+    #cetp_mgr.terminate_local_host_sessions(lip=l_hostip)
+    
+    # Tests termination of session with a remote host
+    r_hostid = "srv1.hostb1.cesb.lte."
+    #cetp_mgr.terminate_remote_host_sessions(r_hostid)
+    #cetp_mgr.terminate_session_by_fqdns(l_hostid=l_hostid, r_hostid=r_hostid)
+
+    # Checks for verifying the test execution
+    #print("\nPost deletion check")
+    #print("CETP session states:\n", cetp_mgr.cetpstate_mgr.cetp_transactions[ConnectionTable.KEY_ESTABLISHED_CETP])
+    #print("Connection Table:\n", cetp_mgr.conn_table.connection_dict)
+
+@asyncio.coroutine
+def test_drop_connection(cetp_mgr):
+    """ Tests whether CETPSecurity module can block connection requests to/from undesired parties. """
+    sender_info = ("10.0.3.118", 43333)
+    dst_id, r_cesid, r_ip, r_port, r_proto = "", "", "", "", ""
+    naptr_records = {}
+    naptr_records['srv1.hostb1.cesb.lte.']         = [('srv1.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49001', 'tcp')]
+    naptr_records['srv2.hostb1.cesb.lte.']         = [('srv2.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49002', 'tcp')]
+    
+    l_hostid = "hosta1.cesa.lte."
+    l_hostip = sender_info[0]
+
+    print("\nInitiating first H2H query")
+    for naptr_rr in naptr_records['srv1.hostb1.cesb.lte.']:
+        dst_id, r_cesid, r_ip, r_port, r_proto = naptr_rr
+        naptr_list = naptr_records['srv1.hostb1.cesb.lte.']
+        
+    cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
+    yield from asyncio.sleep(1)
+    
+    #cetp_mgr.drop_connection_from_local_domain(l_domain=l_hostid)
+    cetp_mgr.drop_connection_from_local_domain(l_domain=l_hostid, r_cesid=r_cesid)
+    yield from asyncio.sleep(1)
+    
+    print("\nInitiating second H2H query")
+    for naptr_rr in naptr_records['srv2.hostb1.cesb.lte.']:
+        dst_id, r_cesid, r_ip, r_port, r_proto = naptr_rr
+        naptr_list = naptr_records['srv2.hostb1.cesb.lte.']
+        
+    cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
+    #yield from asyncio.sleep(2)
+    
+    
+    
+    
+def test_func(loop):
+    filename = "config_cesa/config_cesa_container2.yaml"
+    config_file = open(filename)
+    ces_conf = yaml.load(config_file)
+    logging.basicConfig(level=logging.DEBUG)
+    
+    ces_params      = ces_conf['CESParameters']
+    cesid           = ces_params['cesid']
+    cetp_policies   = ces_conf["cetp_policy_file"]
+    print("Local CESID: ", cesid)
+    cetp_mgr = CETPManager(cetp_policies, cesid, ces_params, loop=loop)
+    #test_cetp_layering(cetp_mgr)
+    #asyncio.ensure_future(test_h2h_session_termination(cetp_mgr))
+    asyncio.ensure_future(test_drop_connection(cetp_mgr))
+    
+    """
+    naptr_records['srv1.hostb1.cesb.lte.']         = [('srv1.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49001', 'tcp'), ('srv1.hostb1.cesb.lte.', 'cesb.lte.', '10.0.3.103', '49002', 'tcp')]
+    test3(cetp_mgr, naptr_list)
+    naptr_records['hostc1.cesb.lte.']              = [('hostb1.cesb.lte.',          'cesc.lte.', '10.0.3.103', '49001', 'tcp')]
+    naptr_records['hostd1.cesb.lte.']              = [('hostb1.cesb.lte.',          'cesd.lte.', '10.0.3.103', '49001', 'tcp')]
+    naptr_records['hoste1.cesb.lte.']              = [('hostb1.cesb.lte.',          'cese.lte.', '10.0.3.103', '49001', 'tcp')]
+    """
+
+
+
+if __name__ == "__main__":
+    loop = asyncio.get_event_loop()
+    test_func(loop)
+    try:
+        loop.run_forever()
+    except KeyboardInterrupt:
+        print("Ctrl+C Handled")
+    finally:
+        loop.close()
