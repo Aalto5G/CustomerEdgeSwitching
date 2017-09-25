@@ -46,17 +46,23 @@ KEY_RCES_BlockedHostsByRCES                 = 5
 KEY_RCES_UnreachableRCESDestinations        = 6
 KEY_RCES_FilteredSourcesFromRCES            = 15
 
+KEY_Evidence_against_RCES                   = 1
+KEY_Evidence_against_RCES_Host              = 2
+KEY_Evidence_Reported_by_RCES               = 3
+KEY_Evidence_Reported_against_host          = 4
 
 
 class CETPSecurity:
-    def __init__(self, conn_table, ces_params, name="CETPSecurity"):
+    def __init__(self, loop, conn_table, ces_params, name="CETPSecurity"):
         self.evidences_against_localhosts    = {}                            # {host-fqdn: [evidence]}
         self.evidences_against_remotehosts   = {}
         self.evidences_against_remoteces     = {}
+        self.misbehavior_record = {}
         self.reporting_ces                   = {}
         self.domains_to_filter               = {}
         self.conn_table                      = conn_table
         self.ces_params                      = ces_params
+        self._loop                           = loop
         self._logger                         = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPSecurity)
         self._initialize_pow()
@@ -64,6 +70,16 @@ class CETPSecurity:
     # CETPSecurity shall have specific 'CES-to-CES' view & aggregated view of all 'CES-to-CES' interactions
 
 
+    def register_filtered_domains(self, keytype, value, key=None, timeout=None):
+        try:
+            self.add_filtered_domains(keytype, value, key)
+            if timeout!=None:
+                self._loop.call_later(timeout, self.remove_filtered_domains, keytype, value, key)
+
+        except Exception as ex:
+            self._logger.error("Exception '{}' in 'register_filtered_domains()' ".format(ex))
+
+    
     def add_filtered_domains(self, keytype, value, key=None):
         if keytype in [KEY_RCES_BlockedHostsByRCES, KEY_LCES_BlockedHostsOfRCES, KEY_RCES_UnreachableRCESDestinations, KEY_LCES_UnreachableDestinationsForRCES, KEY_LCES_FilteredSourcesTowardsRCES]:                
             if keytype not in self.domains_to_filter:
@@ -83,14 +99,25 @@ class CETPSecurity:
         if keytype in self.domains_to_filter:
             if key==None:
                 filtered_domains = self.domains_to_filter[keytype]
+                
                 if value in filtered_domains:
                     filtered_domains.remove(value)
+                    if len(filtered_domains)==0:
+                        del self.domains_to_filter[keytype]
+                    
             else:
                 if key in self.domains_to_filter[keytype]:
                     filtered_domains = self.domains_to_filter[keytype][key]
                     if value in filtered_domains:
                         filtered_domains.remove(value)
-                
+                        
+                        if len(filtered_domains)==0:
+                            del self.domains_to_filter[keytype][key]
+                            
+                        if len(self.domains_to_filter[keytype])==0:
+                            del self.domains_to_filter[keytype]
+            
+            print("After deletion: ", self.domains_to_filter)
 
 
     def has_filtered_domain(self, keytype, value, key=None):
@@ -118,15 +145,31 @@ class CETPSecurity:
         except Exception as ex:
             self._logger.info("Exception '{}'".format(ex))
             return None
-            
-
-    def register_local_host_filtered_by_rCES(self, r_cesid, l_hostid):
-        keytype = KEY_BlockedHostsFromRCES
-        key = r_cesid
-        value = hostid
-        self.add_filtered_domains(keytype, value, key=key)
-
     
+    def record_evidence(self, keytype, key_ces, key_host, evidence):
+        """ Record misbehavior evidences """
+        if keytype in [KEY_Evidence_against_RCES_Host, KEY_Evidence_Reported_by_RCES_against_host]:
+            if keytype not in self.misbehavior_record:
+                self.misbehavior_record[keytype] = {}
+                self.misbehavior_record[keytype][key_ces]
+                self.misbehavior_record[keytype][key_ces][key_host]
+                self.misbehavior_record[keytype][key_ces][key_host] = [evidence]
+            else:
+                filtered_domains = self.domains_to_filter[keytype][key_ces]
+                filtered_domains.append(value)
+        else:
+            if keytype not in self.domains_to_filter:
+                self.domains_to_filter[keytype] = [value]
+            else:
+                filtered_domains = self.domains_to_filter[keytype]
+                filtered_domains.append(value)
+
+    KEY_Evidence_against_RCES
+    KEY_Evidence_against_RCES_Host
+    KEY_Evidence_Reported_by_RCES_against_host
+    KEY_Evidence_Reported_against_local_host
+    
+
     def process_inbound_evidence(self, r_cesid, evidence):
         """ Processes the evidence received from 'r_cesid' """
         try:
@@ -166,6 +209,9 @@ class CETPSecurity:
         else:
             self.reporting_ces[r_cesid] = [evidence]
         #print(self.reporting_ces)            
+        
+        
+
     
     def check_format_compliance(self, evidence):
         """ Checks whether the provided evidence complies to negotiated format, e.g. IOC evidence exchange format. """

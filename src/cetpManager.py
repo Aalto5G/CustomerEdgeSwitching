@@ -47,7 +47,7 @@ class CETPManager:
         self.ca_certificate_path    = self.ces_params['ca_certificate']                                       # Path of X.509 certificate of trusted CA, for validating the remote node's certificate.
         self.cetpstate_mgr          = ConnectionTable.CETPStateTable()                                        # Records the established CETP transactions (both H2H & C2C). Required for preventing the re-allocation already in-use SST & DST (in CETP transaction).
         self.conn_table             = ConnectionTable.ConnectionTable()
-        self.cetp_security          = CETPSecurity.CETPSecurity(self.conn_table, ces_params)
+        self.cetp_security          = CETPSecurity.CETPSecurity(loop, self.conn_table, ces_params)
         self.interfaces             = PolicyManager.Interfaces()
         self.policy_mgr             = PolicyManager.PolicyManager(self.cesid, policy_file= cetp_policies)     # Shall ideally fetch the policies from Policy Management System (of Hassaan)    - And will be called, policy_sys_agent
         self.host_register          = PolicyManager.HostRegister()
@@ -57,107 +57,6 @@ class CETPManager:
         self._logger.setLevel(LOGLEVEL_CETPManager)
         self.local_cetp             = CETPH2H.CETPH2HLocal(cetpstate_mgr=self.cetpstate_mgr, policy_mgr=self.policy_mgr, cetp_mgr=self, \
                                                            cetp_security=self.cetp_security, host_register=self.host_register, conn_table=self.conn_table)
-        #self._loop.call_later(13, self.test_func)
-
-    def test_func(self):
-        #self.send_evidence(sstag=200, dstag=100, evidence="FSecureMalware")
-        #self.terminate_cetp_c2c_signalling(r_cesid="cesb.lte.")
-        
-        #self.make_local_host_unreachable(local_domain="srv2.hostb1.cesb.lte.")
-        #self.block_host_of_rces(r_cesid="cesb.lte.", r_hostid="srv1.hostb1.cesb.lte.")
-        #self.block_host_of_rces(r_cesid="cesb.lte.", r_hostid="hostb1.cesb.lte.")
-        print(self.cetp_security.domains_to_filter)
-
-        """
-        self.terminate_cetp_c2c_signalling(r_cesid="cesb.lte.", terminate_h2h=True)
-        print("CETP states: ", self.cetpstate_mgr.cetp_transactions[ConnectionTable.KEY_ESTABLISHED_CETP])
-        """
-        pass
-
-    def block_connections_to_local_domain(self, r_cesid="", l_domain=""):
-        """ Informs remote CES to block (future) connections towards the local domain of this CES """
-        try:
-            if (len(r_cesid)==0) and (len(l_domain)==0):
-                return
-            
-            #Store locally to detect non-compliance by remote CES
-            if len(r_cesid)!=0:
-                #Report malicious-host to remote CES
-                if self.has_c2c_layer(r_cesid):
-                    c2c_layer = self.get_c2c_layer(r_cesid)
-                    c2c_layer.drop_connection_to_local_domain(l_domain)
-                else:
-                    keytype = CETPSecurity.KEY_LCES_UnreachableDestinationsForRCES
-                    self.cetp_security.add_filtered_domains(keytype, l_domain, key=r_cesid)
-                    
-            else:
-                keytype = CETPSecurity.KEY_LocalHosts_Inbound_Disabled
-                self.cetp_security.add_filtered_domains(keytype, l_domain)
-            
-        except Exception as ex:
-            self._logger.info("Exception '{}'".format(ex))
-            return
-
-
-    def block_connections_from_local_domain(self, r_cesid="", l_domain=""):
-        """ Informs remote CES to block (future) connections towards the local domain of this CES """
-        try:
-            if (len(r_cesid)==0) and (len(l_domain)==0):
-                return
-            
-            #Store locally to detect non-compliance by remote CES
-            if len(r_cesid)!=0:
-                #Records a host that acted as malicious towards a remote CES
-                keytype = CETPSecurity.KEY_LCES_FilteredSourcesTowardsRCES
-                self.cetp_security.add_filtered_domains(keytype, l_domain, key=r_cesid)
-            else:
-                keytype = CETPSecurity.KEY_LocalHosts_Outbound_Disabled
-                self.cetp_security.add_filtered_domains(keytype, l_domain)
-            
-        except Exception as ex:
-            self._logger.info("Exception '{}'".format(ex))
-            return
-    
-    def block_host_of_rces(self, r_cesid="", r_hostid=""):
-        """ Reports (to block future connections) from a remote-host served by a remote CES-ID """
-        try:
-            if (len(r_cesid)==0) and (len(r_hostid)==0):
-                return
-            
-            #Stores the domains to be filtered in the security module.         # Also used in detecting non-compliance of remote CES
-            self.cetp_security.add_filtered_domains(CETPSecurity.KEY_LCES_BlockedHostsOfRCES, r_hostid, key=r_cesid)
-            
-            #Report malicious-host to remote CES
-            if self.has_c2c_layer(r_cesid):
-                c2c_layer = self.get_c2c_layer(r_cesid)
-                c2c_layer.block_malicious_remote_host(r_hostid)
-        except Exception as ex:
-            self._logger.info("Exception '{}'".format(ex))
-
-    def process_dns_message(self, dns_cb, cb_args, dst_id, r_cesid="", naptr_list=[]):
-        if len(naptr_list)!=0:
-            self.process_outbound_cetp(dns_cb, cb_args, dst_id, r_cesid, naptr_list)
-        else:
-            self.process_local_cetp(dns_cb, cb_args, dst_id)
-
-    def process_local_cetp(self, dns_cb, cb_args, dst_id):
-        cb = (dns_cb, cb_args)
-        self.local_cetp.consume_h2h_requests(dst_id, cb)
-
-    def process_outbound_cetp(self, dns_cb, cb_args, dst_id, r_cesid, naptr_list):
-        """ Gets/Creates the CETPH2H instance AND enqueues the NAPTR response for handling the H2H transactions """
-        try:
-            if self.has_cetp_endpoint(r_cesid):
-                ep = self.get_cetp_endpoint(r_cesid)
-            else:
-                self._logger.info("Initiating a CETP-Endpoint towards cesid='{}': ".format(r_cesid))
-                ep = self.create_cetp_endpoint(r_cesid)
-                ep.create_cetp_c2c_layer(naptr_list)
-    
-            ep.enqueue_h2h_requests_nowait(dst_id, naptr_list, (dns_cb, cb_args))                                # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
-        except Exception as ex:
-            self._logger.info("Exception in '{}'".format(ex))
-            return
 
 
     def create_cetp_endpoint(self, r_cesid, c2c_layer=None, c2c_negotiated=False):
@@ -202,8 +101,128 @@ class CETPManager:
         for cesid, cetp_ep in self._cetp_endpoints.items():
             cetp_ep.handle_interrupt()
 
+
+    def block_connections_to_local_domain(self, l_domain="", r_cesid=""):
+        """ Informs remote CES to block (future) connections towards the local domain of this CES """
+        try:
+            if (len(r_cesid)==0) and (len(l_domain)==0):
+                return
+            
+            timeout = int(self.ces_params["host_filtering_timeout"])
+            #Store locally to detect non-compliance by remote CES
+            if len(r_cesid)!=0:
+                keytype = CETPSecurity.KEY_LCES_UnreachableDestinationsForRCES
+                self.cetp_security.register_filtered_domains(keytype, l_domain, key=r_cesid, timeout=timeout)
+                
+                #Reports remote CES to stop sending connection requests to a 'l_domain' destination
+                if self.has_c2c_layer(r_cesid):
+                    c2c_layer = self.get_c2c_layer(r_cesid)
+                    c2c_layer.drop_connection_to_local_domain(l_domain)
+                    
+            else:
+                keytype = CETPSecurity.KEY_LocalHosts_Inbound_Disabled
+                self.cetp_security.register_filtered_domains(keytype, l_domain, timeout=timeout)
+            
+        except Exception as ex:
+            self._logger.info("Exception '{}'".format(ex))
+            return
+
+
+    def block_connections_from_local_domain(self, l_domain="", r_cesid=""):
+        """ Informs remote CES to block (future) connections towards the local domain of this CES """
+        try:
+            if (len(r_cesid)==0) and (len(l_domain)==0):
+                return
+            
+            timeout = int(self.ces_params["host_filtering_timeout"])
+            #Store locally to detect non-compliance by remote CES
+            if len(r_cesid)!=0:
+                #Records a host that acted as malicious towards a remote CES
+                keytype = CETPSecurity.KEY_LCES_FilteredSourcesTowardsRCES
+                self.cetp_security.register_filtered_domains(keytype, l_domain, key=r_cesid, timeout=timeout)
+            else:
+                keytype = CETPSecurity.KEY_LocalHosts_Outbound_Disabled
+                self.cetp_security.register_filtered_domains(keytype, l_domain, timeout=timeout)
+            
+        except Exception as ex:
+            self._logger.info("Exception '{}'".format(ex))
+            return
+    
+    def block_connections_from_remote_ces_host(self, r_hostid="", r_cesid=""):
+        """ Reports (to block future connections) from a remote-host served by a remote CES-ID """
+        try:
+            if (len(r_cesid)==0) and (len(r_hostid)==0):
+                return
+            
+            timeout = int(self.ces_params["host_filtering_timeout"])
+            
+            if len(r_cesid)!=0:
+                #Stores the remote-host to be filtered in the security module.         # to detect non-compliance from remote CES
+                keytype = CETPSecurity.KEY_LCES_BlockedHostsOfRCES
+                self.cetp_security.register_filtered_domains(keytype, r_hostid, key=r_cesid, timeout=timeout)
+            
+                #Report malicious-host to remote CES
+                if self.has_c2c_layer(r_cesid):
+                    c2c_layer = self.get_c2c_layer(r_cesid)
+                    c2c_layer.block_malicious_remote_host(r_hostid)
+                
+            else:
+                keytype = CETPSecurity.KEY_BlacklistedRHosts
+                self.cetp_security.register_filtered_domains(keytype, r_hostid, timeout=timeout)
+                
+        except Exception as ex:
+            self._logger.info("Exception '{}'".format(ex))
+
+
+    def block_connections_to_remote_ces_host(self, r_hostid="", r_cesid=""):
+        """ Reports (to block future connections) from a remote-host served by a remote CES-ID """
+        try:
+            if (len(r_cesid)==0) and (len(r_hostid)==0):
+                return
+            
+            timeout = int(self.ces_params["host_filtering_timeout"])
+            
+            if len(r_cesid)!=0:
+                #Stores the remote-host to be filtered in the security module.         # to detect non-compliance from remote CES
+                keytype = CETPSecurity.KEY_RCES_UnreachableRCESDestinations
+                self.cetp_security.register_filtered_domains(keytype, r_hostid, key=r_cesid, timeout=timeout)
+                
+            else:
+                keytype = CETPSecurity.KEY_RemoteHosts_inbound_Disabled
+                self.cetp_security.register_filtered_domains(keytype, r_hostid, timeout=timeout)
+                
+        except Exception as ex:
+            self._logger.info("Exception '{}'".format(ex))
+
+
+    def process_dns_message(self, dns_cb, cb_args, dst_id, r_cesid="", naptr_list=[]):
+        if len(naptr_list)!=0:
+            self.process_outbound_cetp(dns_cb, cb_args, dst_id, r_cesid, naptr_list)
+        else:
+            self.process_local_cetp(dns_cb, cb_args, dst_id)
+
+    def process_local_cetp(self, dns_cb, cb_args, dst_id):
+        cb = (dns_cb, cb_args)
+        self.local_cetp.consume_h2h_requests(dst_id, cb)
+
+    def process_outbound_cetp(self, dns_cb, cb_args, dst_id, r_cesid, naptr_list):
+        """ Gets/Creates the CETPH2H instance AND enqueues the NAPTR response for handling the H2H transactions """
+        try:
+            if self.has_cetp_endpoint(r_cesid):
+                ep = self.get_cetp_endpoint(r_cesid)
+            else:
+                self._logger.info("Initiating a CETP-Endpoint towards cesid='{}': ".format(r_cesid))
+                ep = self.create_cetp_endpoint(r_cesid)
+                ep.create_cetp_c2c_layer(naptr_list)
+    
+            ep.enqueue_h2h_requests_nowait(dst_id, naptr_list, (dns_cb, cb_args))                                # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
+        except Exception as ex:
+            self._logger.info("Exception in '{}'".format(ex))
+            return
+
+
     def terminate_cetp_c2c_signalling(self, r_cesid="", terminate_h2h=False):
-        """ Terminates the CETP signalling session with remote-CESID """
+        """ Terminates the CETP signalling channel with remote-CESID """
         try:
             if len(r_cesid)==0:
                 return
@@ -220,6 +239,10 @@ class CETPManager:
             self._logger.info("Exception '{}' in terminating cetp signalling channel to '{}'".format(ex))
 
     
+    def test_func(self):
+        #self.send_evidence(sstag=200, dstag=100, evidence="FSecureMalware")
+        pass
+    
     def send_evidence(self, sstag=0, dstag=0, lip="", lpip="", evidence=""):
         """ The method is used to send misbehavior evidence observed by the dataplane to a remote CES 
         @params sstag & dstag:     CETP session tags of Host-to-host session for which misbehavior is observed.
@@ -227,19 +250,30 @@ class CETPManager:
         @params evidence:          Evidence of misbehavior/attack observed at data-plane 
         """
         try:
-            if (evidence=="") or ((sstag==0) and (dstag==0)):
+            r_cesid, r_hostid = None, None
+            if (evidence=="") and ( ((sstag<=0) and (dstag<=0)) or ((lip=="")and(lpip=="")) ):
+                self._logger.info("Insufficient information to associate misbehavior to a remote host.")
                 return
+
+            if (sstag>0) and (dstag>0):
+                key     = (sstag, dstag)
+                keytype = ConnectionTable.KEY_MAP_CES_TO_CES
+                conn    = self.conn_table.get(keytype, key)
+                r_cesid, r_hostid = conn.r_cesid, conn.remoteFQDN
+                self.cetp_security.record_misbehavior_evidence(r_cesid, r_hostid, evidence)
             
-            keytype = ConnectionTable.KEY_MAP_CES_TO_CES
-            key     = (sstag, dstag)
-            conn    = self.conn_table.get(keytype, key)
-            r_cesid = conn.r_cesid
-            r_hostid = conn.remoteFQDN
-            self.cetp_security.record_misbehavior_evidence(r_cesid, r_hostid, evidence)
+            elif (len(lip)>0) and (len(lpip)>0):
+                key = (lip, lpip)
+                keytype = ConnectionTable.KEY_MAP_CETP_PRIVATE_NW
+                conn = self.conn_table.get(keytype, key)
+                r_cesid, r_hostid = conn.r_cesid, conn.remoteFQDN
+                self.cetp_security.record_misbehavior_evidence(r_cesid, r_hostid, evidence)
             
-            if self.has_c2c_layer(r_cesid):                 # Checks if C2C-signalling channel is present.
+            if self.has_c2c_layer(r_cesid):                 # if C2C-signalling channel is present, it forwards evidence to remote CES
                 c2c_layer = self.get_c2c_layer(r_cesid)
                 c2c_layer.report_evidence(sstag, dstag, r_hostid, r_cesid, evidence)
+            
+            
         
         except Exception as ex:
             self._logger.info("Exception '{}' in terminating session".format(ex))
@@ -291,15 +325,14 @@ class CETPManager:
     
     def blacklist_the_remote_hosts(self, r_hostid):
         """ Blacklists a remote-hosts """
-        self.cetp_security.add_filtered_domains(CETPSecurity.KEY_BlacklistedRHosts, r_hostid)
+        self.cetp_security.register_filtered_domains(CETPSecurity.KEY_BlacklistedRHosts, r_hostid)
 
-    def make_local_host_unreachable(self, local_domain=""):
+    def disable_local_host(self, local_domain=""):
         """ Allows to disable connection initiations towards a local_domain """
         try:
-            if len(local_domain)==0:    
-                return
-            #Store the domain-name to filter
-            self.cetp_security.add_filtered_domains(CETPSecurity.KEY_DisabledLHosts, local_domain)
+            if len(local_domain)!=0:
+                timeout = self.ces_params["host_filtering_timeout"]
+                self.cetp_security.register_filtered_domains(CETPSecurity.KEY_DisabledLHosts, local_domain, timeout)                 #Store the domain-name to filter
             
         except Exception as ex:
             self._logger.info("Exception '{}'".format(ex))
@@ -575,8 +608,42 @@ def test3(cetp_mgr):
 def test4(cetp_mgr):
     pass
 
-def test5(cetp_mgr):
-    pass
+def test_terminate_cetp_c2c_signalling(cetp_mgr):
+    sender_info = ("10.0.3.118", 43333)
+    dst_id, r_cesid, r_ip, r_port, r_proto = "", "", "", "", ""
+    naptr_records = {}
+    naptr_records['srv1.hostb1.cesb.lte.']         = [('srv1.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49001', 'tcp')]
+    naptr_records['srv2.hostb1.cesb.lte.']         = [('srv2.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49002', 'tcp')]
+    
+    l_hostid = "hosta1.cesa.lte."
+    l_hostip = sender_info[0]
+
+    print("\nInitiating first H2H query")
+    for naptr_rr in naptr_records['srv1.hostb1.cesb.lte.']:
+        dst_id, r_cesid, r_ip, r_port, r_proto = naptr_rr
+        naptr_list = naptr_records['srv1.hostb1.cesb.lte.']
+        
+    cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
+    
+    print("\nInitiating second H2H query")
+    for naptr_rr in naptr_records['srv2.hostb1.cesb.lte.']:
+        dst_id, r_cesid, r_ip, r_port, r_proto = naptr_rr
+        naptr_list = naptr_records['srv2.hostb1.cesb.lte.']
+        
+    cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
+    
+    yield from asyncio.sleep(2)
+    
+    r_cesid = "cesb.lte."
+    #r_cesid = "cesc.lte."
+    #cetp_mgr.terminate_cetp_c2c_signalling(r_cesid, terminate_h2h=False)
+    cetp_mgr.terminate_cetp_c2c_signalling(r_cesid, terminate_h2h=True)
+    asyncio.sleep(1)
+    print("\n\nTesting results:")
+    print("cetp_mgr.has_cetp_endpoint(r_cesid)", cetp_mgr.has_cetp_endpoint(r_cesid))
+    print("cetp_mgr.has_c2c_layer", cetp_mgr.has_c2c_layer(r_cesid))
+    print("CETP states: ", cetp_mgr.cetpstate_mgr.cetp_transactions[ConnectionTable.KEY_ESTABLISHED_CETP])
+
 
 @asyncio.coroutine    
 def test_h2h_session_termination(cetp_mgr):
@@ -641,11 +708,21 @@ def test_drop_connection(cetp_mgr):
     cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
     yield from asyncio.sleep(1)
     
-    #cetp_mgr.drop_connection_from_local_domain(l_domain=l_hostid)
+    #cetp_mgr.block_connections_from_local_domain(l_domain=l_hostid)
     #cetp_mgr.block_connections_from_local_domain(l_domain=l_hostid, r_cesid=r_cesid)
     l_domain = "srv1.hosta1.cesa.lte."
-    cetp_mgr.block_connections_to_local_domain(r_cesid=r_cesid, l_domain=l_domain)
+    #cetp_mgr.block_connections_to_local_domain(l_domain=l_domain, r_cesid=r_cesid)
     #cetp_mgr.block_connections_to_local_domain(l_domain=l_domain)
+    
+    r_hostid ="hostb1.cesb.lte."
+    r_cesid  = "cesb.lte."
+    #cetp_mgr.block_connections_from_remote_ces_host(r_hostid=r_hostid)
+    #cetp_mgr.block_connections_from_remote_ces_host(r_hostid=r_hostid, r_cesid=r_cesid)
+    
+    #cetp_mgr.block_connections_to_remote_ces_host(r_hostid="srv2.hostb1.cesb.lte.")
+    #cetp_mgr.block_connections_to_remote_ces_host(r_hostid="srv2.hostb1.cesb.lte.", r_cesid="cesb.lte.")
+    #cetp_mgr.disable_local_host(local_domain="hosta1.cesa.lte.")
+    
     yield from asyncio.sleep(1)
     
     print("\nInitiating second H2H query")
@@ -674,6 +751,7 @@ def test_func(loop):
     #test_cetp_layering(cetp_mgr)
     #asyncio.ensure_future(test_h2h_session_termination(cetp_mgr))
     asyncio.ensure_future(test_drop_connection(cetp_mgr))
+    #asyncio.ensure_future(test_terminate_cetp_c2c_signalling(cetp_mgr))
     
     """
     naptr_records['srv1.hostb1.cesb.lte.']         = [('srv1.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49001', 'tcp'), ('srv1.hostb1.cesb.lte.', 'cesb.lte.', '10.0.3.103', '49002', 'tcp')]

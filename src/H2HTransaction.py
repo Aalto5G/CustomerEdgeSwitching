@@ -579,6 +579,8 @@ class H2HTransactionOutbound(H2HTransaction):
         """ Determines whether the traffic to destination is permitted """
         if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlacklistedRHosts, hostid):
             return False
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_RemoteHosts_inbound_Disabled, hostid):
+            return False
         if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_LCES_BlockedHostsOfRCES, hostid, key=self.r_cesid):
             return False
         if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_RCES_UnreachableRCESDestinations, hostid, key=self.r_cesid):

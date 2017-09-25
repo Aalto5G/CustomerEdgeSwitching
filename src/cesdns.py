@@ -158,7 +158,14 @@ class DNSServer(asyncio.DatagramProtocol):
         self.naptr_records['raimo2.cesb.lte.']              = ('raimo2.cesb.lte.',          'cesb.lte.', '10.0.3.103', '49002', 'tcp')
         self.naptr_records['www.google.com.']               = ('www.google.com.',           'cesd.lte.', '10.0.3.103', '49001', 'tcp')
         self.naptr_records['www.aalto.fi.']                 = ('www.aalto.fi.',             'cese.lte.', '10.0.3.101', '48001', 'tcp')
-        self.naptr_records['test.']                         = ('test.',                     'cesa.lte.', '10.0.3.101', '48001', 'tcp')        
+        self.naptr_records['test.']                         = ('test.',                     'cesa.lte.', '10.0.3.101', '48001', 'tcp')
+        #
+        # Just for the sake of testing
+        self.naptr_records['hostc1.cesb.lte.']              = ('hostb1.cesb.lte.',          'cesc.lte.', '10.0.3.103', '49001', 'tcp')
+        self.naptr_records['hostd1.cesb.lte.']              = ('hostb1.cesb.lte.',          'cesd.lte.', '10.0.3.103', '49001', 'tcp')
+        self.naptr_records['hoste1.cesb.lte.']              = ('hostb1.cesb.lte.',          'cese.lte.', '10.0.3.103', '49001', 'tcp')
+        
+        
         
     def resolve_naptr(self, domain):
         """ Resolves a domain name, and returns a list of NAPTR record parsed in format: ('host-id', 'ces-id', 'ip', 'port', 'protocol') """
