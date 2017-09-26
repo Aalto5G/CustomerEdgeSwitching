@@ -205,16 +205,6 @@ class H2HTransaction(object):
         proxy_ip = "10.1.3.103"
         return proxy_ip
 
-
-    def is_remote_host_allowed(self, hostid):
-        """ Determines whether the traffic to destination is permitted """
-        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlacklistedRHosts, hostid):
-            return False
-        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_LCES_BlockedHostsOfRCES, hostid, key=self.r_cesid):
-            return False
-        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_RCES_UnreachableRCESDestinations, hostid, key=self.r_cesid):
-            return False
-        return True
     
     def generate_session_tags(self, dstag=0):
         """ Returns a session-tag of 4-byte length, if sstag is not part of an connecting or ongoing transaction """
@@ -431,13 +421,13 @@ class H2HTransactionOutbound(H2HTransaction):
                     if self.opolicy.has_available(received_tlv):
                         ret_tlv = self._create_response_tlv(received_tlv)
                         if ret_tlv !=None:
-                            tlvs_to_send.append(ret_tlv)
+                            tlvs_to_send +=ret_tlv
                             continue
                                                 
                     if self._check_tlv(received_tlv, cmp="optional"):
                         self._logger.info(" An optional requirement {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
                         ret_tlv = self._get_unavailable_response(received_tlv)
-                        tlvs_to_send.append(ret_tlv)
+                        tlvs_to_send +=ret_tlv
                     else:
                         error = True
                         break
@@ -785,13 +775,13 @@ class H2HTransactionInbound(H2HTransaction):
                 if self.ipolicy.has_available(received_tlv):
                     ret_tlv = self._create_response_tlv(received_tlv)
                     if ret_tlv !=None:
-                        tlvs_to_send.append(ret_tlv)
+                        tlvs_to_send +=ret_tlv
                         continue
                     
                 if self._check_tlv(received_tlv, cmp="optional"):
                     self._logger.info(" An optional requirement TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
                     ret_tlv = self._get_unavailable_response(received_tlv)
-                    tlvs_to_send.append(ret_tlv)
+                    tlvs_to_send +=ret_tlv
                 else:
                     self._logger.info(" A required TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
                     error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
