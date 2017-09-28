@@ -239,12 +239,7 @@ class C2CTransaction(object):
         #print("rrlocs: ", rrloc_tlvs)
         for rrloc_tlv in rrloc_tlvs:
             lrloc_tlv = self.get_local_rloc(rrloc_tlv, self.ces_policy)
-            if lrloc_tlv!=None:
-                if type(lrloc_tlv) == type(list()):
-                    for p in lrloc_tlv:
-                        lrloc_tlvs.append(p)
-                else:
-                    lrloc_tlvs.append(lrloc_tlv)
+            lrloc_tlvs += lrloc_tlv
                 
         l_rlocs, r_rlocs = self._filter_rlocs_list(lrloc_tlvs, rrloc_tlvs)       # Matches & Verifies the payload in the TLVs, and Removes duplicate RLOCs (on sender and receiver side)
         return (l_rlocs, r_rlocs)
@@ -309,8 +304,9 @@ class C2CTransaction(object):
         
         for rpayload in r_payloads:
             if self.ces_policy.has_available(rpayload):
-                lpayload = self._create_offer_tlv(rpayload)
-                l_payloads.append(lpayload)
+                group, code = rpayload["group"], rpayload["code"]
+                lpayload = self._create_offer_tlv2(group=group, code=code)
+                l_payloads += lpayload
         
         lpayloads, rpayloads = self._filter_payload_list(l_payloads, r_payloads)
         return (lpayloads, rpayloads)
@@ -323,7 +319,6 @@ class C2CTransaction(object):
             """ Build a list based on the code field of the payload TLV: "ipv4", "ipv6", "ether" """
             retlist = []
             for p in tlvlist:
-                print(p)
                 if 'cmp' in p:
                     if p['cmp']=="notAvailable":
                         continue
@@ -501,17 +496,13 @@ class oC2CTransaction(C2CTransaction):
             for otlv in self.ces_policy.get_offer():
                 ret_tlv = self._create_offer_tlv(otlv)
                 if ret_tlv!=None:
-                    if type(ret_tlv)==type(list()):
-                        for p in ret_tlv:
-                            tlvs_to_send.append(p)
-                    else:
-                        tlvs_to_send.append(ret_tlv)
-    
+                    tlvs_to_send +=  ret_tlv
+                
             # The required TLVs
             for rtlv in self.ces_policy.get_required():
                 ret_tlv = self._create_request_tlv(rtlv)
                 if ret_tlv!=None:
-                    tlvs_to_send.append(ret_tlv)
+                    tlvs_to_send +=  ret_tlv
             
             # Signing the CETP header, if required by policy    - Depends on the type of transport layer.
             # self.attach_cetp_signature(tlv_to_send)
@@ -617,14 +608,8 @@ class oC2CTransaction(C2CTransaction):
                     self.r_ces_requirements.append(received_tlv)
                     if self.ces_policy.has_available(received_tlv):
                         ret_tlv = self._create_response_tlv(received_tlv)
-                        
-                        if ret_tlv != None:
-                            if type(ret_tlv) == type(list()):
-                                for p in ret_tlv:
-                                    tlvs_to_send.append(p)
-                            else:
-                                tlvs_to_send.append(ret_tlv)
-                            continue
+                        tlvs_to_send += ret_tlv
+                        continue
                         
                     if self._check_tlv(received_tlv, cmp="optional"):
                         self._logger.info(" A remote-CES required optional TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
@@ -716,7 +701,7 @@ class oC2CTransaction(C2CTransaction):
                 for rtlv in self.ces_policy.get_required():
                     ret_tlv = self._create_request_tlv(rtlv)
                     if ret_tlv!=None:
-                        tlvs_to_send.append(ret_tlv)
+                        tlvs_to_send += ret_tlv
 
                 negotiation_status = None
                 cetp_msg = self.get_cetp_packet(sstag=self.sstag, dstag=0, tlvs=tlvs_to_send)           # Sending 'response' as 'info'
@@ -939,7 +924,7 @@ class oC2CTransaction(C2CTransaction):
                     self._logger.info(" Misbehavior evidence from remote CES '{}'".format(self.r_cesid))
                     ret_tlv = self._create_response_tlv(received_tlv)
                     if ret_tlv != None:
-                        tlvs_to_send.append(ret_tlv)
+                        tlvs_to_send += ret_tlv
                     else:
                         self._logger.warning("Couldn't respond to TLV. Send some kinda warning-TLV indicating mismatch to remote CES?")
 
@@ -956,7 +941,7 @@ class oC2CTransaction(C2CTransaction):
                 elif self.ces_policy.has_available(received_tlv):
                     ret_tlv = self._create_response_tlv(received_tlv)
                     if ret_tlv !=None:
-                        tlvs_to_send.append(ret_tlv)
+                        tlvs_to_send += ret_tlv
                     else:
                         self._logger.info("Invalid TLV received in post-c2c negotiation")
                 else:
@@ -965,6 +950,7 @@ class oC2CTransaction(C2CTransaction):
                         continue
                     else:
                         self._get_unavailable_response(received_tlv)
+                        #tlvs_to_send += ret_tlv
                         tlvs_to_send.append(received_tlv)
                         
             elif (self._check_tlv(received_tlv, ope="info")) and (self._check_tlv(received_tlv, group="ces")):
@@ -1155,14 +1141,8 @@ class iC2CTransaction(C2CTransaction):
                         
                     if self.ices_policy.has_available(received_tlv):
                         ret_tlv = self._create_response_tlv(received_tlv)
-                        
-                        if ret_tlv != None:
-                            if type(ret_tlv) == type(list()):
-                                for p in ret_tlv:
-                                    tlvs_to_send.append(p)
-                            else:
-                                tlvs_to_send.append(ret_tlv)
-                            continue
+                        tlvs_to_send += ret_tlv
+                        continue
                         
                     if self._check_tlv(received_tlv, cmp="optional"):
                         self._logger.info(" A remote-CES required optional TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
@@ -1223,7 +1203,7 @@ class iC2CTransaction(C2CTransaction):
                 for rtlv in self.ices_policy.get_required():            
                     ret_tlv = self._create_request_tlv(rtlv)
                     if ret_tlv!=None:
-                        tlvs_to_send.append(ret_tlv)
+                        tlvs_to_send +=ret_tlv
                 
                 negotiation_status = None
                 cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)

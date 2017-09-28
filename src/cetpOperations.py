@@ -23,7 +23,7 @@ def send_ces_cesid(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
     
 def send_ces_ttl(**kwargs):
@@ -37,7 +37,7 @@ def send_ces_ttl(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 
 def send_ces_certificate(**kwargs):
@@ -56,7 +56,7 @@ def send_ces_certificate(**kwargs):
             f = open(certificate_path, 'r')
             crt = f.read()
             new_tlv["value"] = crt
-    return new_tlv
+    return [new_tlv]
 
 
 def send_ces_keepalive(**kwargs):
@@ -68,7 +68,7 @@ def send_ces_keepalive(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 
 def send_ces_keepalive_cycle(**kwargs):
@@ -81,7 +81,7 @@ def send_ces_keepalive_cycle(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 
 def send_ces_fw_version(**kwargs):
@@ -94,7 +94,7 @@ def send_ces_fw_version(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 
 def send_ces_session_limit(**kwargs):
@@ -108,7 +108,7 @@ def send_ces_session_limit(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 
 def send_ces_host_sessions(**kwargs):
@@ -121,7 +121,7 @@ def send_ces_host_sessions(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 
 def send_ces_evidence_format(**kwargs):
@@ -135,7 +135,7 @@ def send_ces_evidence_format(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 
 def send_ces_evidence(**kwargs):
@@ -148,7 +148,7 @@ def send_ces_evidence(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 
 def send_ces_caces(**kwargs):
@@ -161,7 +161,7 @@ def send_ces_caces(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 
 def send_ces_headersignature(**kwargs):
@@ -171,7 +171,7 @@ def send_ces_headersignature(**kwargs):
         tlv['value'] = ""
     else:
         tlv["value"] = ces_params[policy_code]
-    return tlv
+    return [tlv]
 
 
 def send_ces_pow(**kwargs):
@@ -184,7 +184,7 @@ def send_ces_pow(**kwargs):
         tlv['value'] = challenge_token
     else:
         tlv['value'] = ""
-    return tlv
+    return [tlv]
 
 def send_ces_terminate(**kwargs):
     tlv, code, ces_params, query = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["query"] 
@@ -192,7 +192,7 @@ def send_ces_terminate(**kwargs):
         tlv['value'] = ""
     else:
         pass
-    return tlv
+    return [tlv]
 
 def send_ces_port_filtering(**kwargs):
     tlv, code, ces_params, query = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["query"] 
@@ -201,7 +201,7 @@ def send_ces_port_filtering(**kwargs):
         tlv['value'] = ""
     else:
         pass
-    return tlv
+    return [tlv]
 
 def send_ces_host_filtering(**kwargs):
     tlv, code, ces_params, query = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["query"] 
@@ -210,15 +210,8 @@ def send_ces_host_filtering(**kwargs):
         tlv['value'] = ""
     else:
         pass
-    return tlv
+    return [tlv]
 
-
-def response_to_wrong_query(tlv):
-    try:
-        tlv["code"] = "terminate"
-        return tlv
-    except:
-        return None
 
 def response_ces_cesid(**kwargs):
     try:
@@ -228,7 +221,7 @@ def response_ces_cesid(**kwargs):
         ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
         new_tlv['ope'] = "info"
         new_tlv["value"] = response_value
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ces_cesid()", ex)
         return None
@@ -264,7 +257,7 @@ def response_ces_ttl(**kwargs):
             tlv["value"] = negotiated_ttl
     
         new_tlv['ope'] = "info"
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ces_ttl()", ex)
         return None
@@ -278,7 +271,7 @@ def response_ces_keepalive(**kwargs):
         transaction.last_seen = time.time()
         new_tlv['ope'] = "info"
         new_tlv['value'] = ""
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ces_keepalive()", ex)
         return None
@@ -306,7 +299,7 @@ def response_ces_host_filtering(**kwargs):
             
         new_tlv['ope'] = "info"
         new_tlv['value'] = "ACKED"
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ces_host_filtering()", ex)
         return None
@@ -320,7 +313,7 @@ def response_ces_keepalive_cycle(**kwargs):
         ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
         new_tlv['ope'] = "info"
         new_tlv["value"] = response_value
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ces_keepalive_cycle()", ex)
         return None
@@ -338,7 +331,7 @@ def response_ces_certificate(**kwargs):
         f = open(certificate_path, 'r')
         crt = f.read()
         new_tlv["value"] = crt
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ces_certificate()", ex)
         return None
@@ -351,7 +344,7 @@ def response_ces_fw_version(**kwargs):
         ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
         new_tlv['ope'] = "info"
         new_tlv["value"] = response_value
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ces_fw_version()", ex)
         return None
@@ -364,7 +357,7 @@ def response_ces_session_limit(**kwargs):
         ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
         new_tlv['ope'] = "info"
         new_tlv["value"] = response_value
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ces_session_limit()", ex)
         return None
@@ -377,7 +370,7 @@ def response_ces_host_sessions(**kwargs):
         ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
         new_tlv['ope'] = "info"
         new_tlv["value"] = response_value
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ces_host_sessions()", ex)
         return None
@@ -390,7 +383,7 @@ def response_ces_caces(**kwargs):
         ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
         new_tlv['ope'] = "info"
         new_tlv["value"] = response_value
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ces_caces()", ex)
         return None
@@ -403,7 +396,7 @@ def response_ces_evidence_format(**kwargs):
         ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
         new_tlv['ope'] = "info"
         new_tlv["value"] = response_value
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ces_evidence_format()", ex)
         return None
@@ -419,7 +412,7 @@ def response_ces_evidence(**kwargs):
             
         new_tlv['ope'] = "info"
         new_tlv["value"] = "ACKED"                   # ACK the receipt of evidence -- Could be an ACKnowledgment/Error to provided evidence
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ces_evidence()", ex)
         return None
@@ -431,7 +424,7 @@ def response_ces_headersignature(**kwargs):
         new_tlv = copy.copy(tlv)
         new_tlv['ope'] = "info"
         new_tlv["value"] = "Not defined yet"
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ces_headersignature()", ex)
         return None
@@ -448,7 +441,7 @@ def response_ces_pow(**kwargs):
         new_tlv = copy.copy(tlv)
         new_tlv['ope'] = "info"
         new_tlv["value"] = pow_resp
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print(" Exception in responding to POW challenge. {}".format(ex))
         return None
@@ -718,7 +711,7 @@ def send_rloc(**kwargs):
     if query==True:
         if 'value' in tlv:
             tlv["value"] = ""
-        return tlv
+        return [tlv]
     else:
         #Create an offer TLV
         group, code = tlv["group"], tlv["code"]
@@ -739,7 +732,7 @@ def send_payload(**kwargs):
     else:
         if 'value' not in tlv:
             tlv["value"] = ""
-    return tlv
+    return [tlv]
 
 def response_rloc(**kwargs):
     try:
@@ -779,7 +772,7 @@ def response_payload(**kwargs):
         new_tlv["cmp"]=="notAvailable"
     else:
         new_tlv["value"] = response_value
-    return new_tlv
+    return [new_tlv]
 
 
 def verify_rloc(**kwargs):

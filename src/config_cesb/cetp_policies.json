@@ -17,6 +17,7 @@
         { "ope":"query", "group": "ces", "code": "evidence_format", "value":["IETF-IOC1", "IETF-IOC2"]},
         { "ope":"query", "group": "rloc", "code": "ipv4" },
         { "ope":"query", "group": "rloc", "code": "ipv6" },
+        { "ope":"query", "group": "payload", "code": "gre" },
         { "ope":"query", "group": "payload", "code": "eth" }
     ],
     "offer": [
@@ -30,6 +31,7 @@
         { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"},
         { "ope":"info", "group": "rloc", "code": "ipv4", "value":"10.0.3.103" },
         { "ope":"info", "group": "rloc", "code": "ipv6", "value":"11:22:33:44:55:66:77:89" },
+        { "ope":"info", "group": "payload", "code": "gre" },
         { "ope":"info", "group": "payload", "code": "eth" }
     ],
     "available": [
@@ -44,6 +46,7 @@
         { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"},
         { "ope":"info", "group": "rloc", "code": "ipv4", "value":"10.0.3.103" },
         { "ope":"info", "group": "rloc", "code": "ipv6", "value":"11:22:33:44:55:66:77:89" },
+        { "ope":"info", "group": "payload", "code": "gre" },
         { "ope":"info", "group": "payload", "code": "eth" }
     ]                
     }
