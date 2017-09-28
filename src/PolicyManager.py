@@ -220,6 +220,7 @@ class PolicyCETP(object):
             if (rtlv["group"] == tlv["group"]) and (rtlv["code"]==tlv["code"]):
                 ope, cmp, group, code, value = self.get_tlv_details(rtlv)
                 return ope, cmp, group, code, value
+        return (ope, cmp, group, code, value)
 
     def get_policy_to_enforce(self, tlv):
         ope, cmp, group, code, value = self.get_tlv_details(tlv)

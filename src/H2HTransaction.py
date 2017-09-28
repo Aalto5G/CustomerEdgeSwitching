@@ -46,7 +46,7 @@ class H2HTransaction(object):
 
     def _get_unavailable_response(self, tlv):
         resp_tlv = copy.copy(tlv)
-        resp_tlv['cmp'] = 'NotAvailable'
+        resp_tlv['cmp'] = 'notAvailable'
         resp_tlv['ope'] = "info"
         return resp_tlv
     

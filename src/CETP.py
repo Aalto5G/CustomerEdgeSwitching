@@ -113,14 +113,18 @@ VERIFY_TLV_RLOC_CODE      = {"ipv4":cetpOperations.verify_rloc,
 VERIFY_TLV_PAYLOAD_CODE   = {#"all"cetpOperations.verify_payload,
                              "ipv4":cetpOperations.verify_payload,
                              "ipv6":cetpOperations.verify_payload,
-                             "eth":cetpOperations.verify_payload}
-
-
+                             "eth":cetpOperations.verify_payload,
+                              "vxlan":cetpOperations.verify_payload,
+                              "gre":cetpOperations.verify_payload,
+                              "geneve":cetpOperations.verify_payload}
 
 SEND_TLV_PAYLOAD_CODE   = {#"all"cetpOperations.send_payload,
                           "ipv4":cetpOperations.send_payload,
                           "ipv6":cetpOperations.send_payload,
-                          "eth":cetpOperations.send_payload}
+                          "eth":cetpOperations.send_payload,
+                          "vxlan":cetpOperations.send_payload,
+                          "gre":cetpOperations.send_payload,
+                          "geneve":cetpOperations.send_payload}
 
 SEND_TLV_RLOC_CODE      = {#"all"cetpOperations.send_rloc,
                            "ipv4":cetpOperations.send_rloc,
@@ -130,7 +134,10 @@ SEND_TLV_RLOC_CODE      = {#"all"cetpOperations.send_rloc,
 RESPONSE_TLV_PAYLOAD_CODE = {#"all"cetpOperations.response_payload,
                              "ipv4":cetpOperations.response_payload,
                              "ipv6":cetpOperations.response_payload,
-                             "eth":cetpOperations.response_payload}
+                             "eth":cetpOperations.response_payload,
+                              "vxlan":cetpOperations.response_payload,
+                              "gre":cetpOperations.response_payload,
+                              "geneve":cetpOperations.response_payload}
 
 RESPONSE_TLV_RLOC_CODE = {#"all"cetpOperations.response_rloc,
                           "ipv4":cetpOperations.response_rloc,
@@ -292,20 +299,20 @@ VERIFY_TLV_CONTROl_CODE = {"dstep":cetpOperations.verify_ctrl_dstep,
 
 
 VERIFY_TLV_CES_CODE     = { "cesid":cetpOperations.verify_ces_cesid,
-                              "ttl":cetpOperations.verify_ces_ttl,
-                              "certificate":cetpOperations.verify_ces_certificate,
-                              "keepalive":cetpOperations.verify_ces_keepalive,
-                              "keepalive_cycle":cetpOperations.verify_ces_keepalive_cycle,
-                              "fw_version":cetpOperations.verify_ces_fw_version,
-                              "session_limit":cetpOperations.verify_ces_session_limit,
-                              "host_sessions":cetpOperations.verify_ces_host_sessions,
-                              "host_filtering":cetpOperations.verify_ces_host_filtering,                      
-                              "caces":cetpOperations.verify_ces_caces,
-                              "headersignature":cetpOperations.verify_ces_headersignature,
-                              "pow":cetpOperations.verify_ces_pow,
-                              "evidence_format":cetpOperations.verify_ces_evidence_format,
-                              "evidence":cetpOperations.verify_ces_evidence
-                              }
+                          "ttl":cetpOperations.verify_ces_ttl,
+                          "certificate":cetpOperations.verify_ces_certificate,
+                          "keepalive":cetpOperations.verify_ces_keepalive,
+                          "keepalive_cycle":cetpOperations.verify_ces_keepalive_cycle,
+                          "fw_version":cetpOperations.verify_ces_fw_version,
+                          "session_limit":cetpOperations.verify_ces_session_limit,
+                          "host_sessions":cetpOperations.verify_ces_host_sessions,
+                          "host_filtering":cetpOperations.verify_ces_host_filtering,                      
+                          "caces":cetpOperations.verify_ces_caces,
+                          "headersignature":cetpOperations.verify_ces_headersignature,
+                          "pow":cetpOperations.verify_ces_pow,
+                          "evidence_format":cetpOperations.verify_ces_evidence_format,
+                          "evidence":cetpOperations.verify_ces_evidence
+                          }
 
 
 VERIFY_TLV_GROUP = {TLV_GROUP["id"]:VERIFY_TLV_ID_CODE,

@@ -459,7 +459,7 @@ def verify_ces_cesid(**kwargs):
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         ope, cmp, group, code, value = policy.get_tlv_details(tlv)
         
-        if cmp =="NotAvailable":
+        if cmp =="notAvailable":
             return False
         
         inbound_cesid = value
@@ -480,7 +480,7 @@ def verify_ces_ttl(**kwargs):
         tlv, code, ces_params, transaction, session_established, policy, cetp_packet = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["transaction"], kwargs["session_established"], kwargs['policy'], kwargs['packet']
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         ope, cmp, group, code, value = policy.get_tlv_details(tlv)
-        if cmp =="NotAvailable":
+        if cmp =="notAvailable":
             return False
         
         remote_default_dp_ttl = int(value)                                                      # Gets remote-CES ttl
@@ -511,7 +511,7 @@ def verify_ces_certificate(**kwargs):
         tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         if 'cmp' in tlv:
-            if tlv['cmp'] == "NotAvailable":
+            if tlv['cmp'] == "notAvailable":
                 return False
         return True
 
@@ -525,7 +525,7 @@ def verify_ces_keepalive(**kwargs):
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         ope, cmp, group, code, value = policy.get_tlv_details(tlv)
         
-        if cmp =="NotAvailable":
+        if cmp =="notAvailable":
             return False
         
         value = tlv["value"]
@@ -545,7 +545,7 @@ def verify_ces_keepalive_cycle(**kwargs):
         tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs['policy']
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         ope, cmp, group, code, value = policy.get_tlv_details(tlv)
-        if cmp =="NotAvailable":
+        if cmp =="notAvailable":
             return False
         
         keepalive_cycle = int(value)
@@ -563,7 +563,7 @@ def verify_ces_certificate(**kwargs):
     tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
     if 'cmp' in tlv:
-        if tlv['cmp'] == "NotAvailable":
+        if tlv['cmp'] == "notAvailable":
             return False
     return True
  
@@ -573,7 +573,7 @@ def verify_ces_session_limit(**kwargs):
     ope, cmp, group, code, value = policy.get_tlv_details(tlv)
     
     try:
-        if cmp =="NotAvailable":
+        if cmp =="notAvailable":
             return False
         
         remote_ces_session_count = int(value)
@@ -596,7 +596,7 @@ def verify_ces_host_sessions(**kwargs):
         tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["policy"]
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         ope, cmp, group, code, value = policy.get_tlv_details(tlv)
-        if cmp =="NotAvailable":
+        if cmp =="notAvailable":
             return False
         return True
     
@@ -618,7 +618,7 @@ def verify_ces_fw_version(**kwargs):
         tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["policy"]
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         ope, cmp, group, code, value = policy.get_tlv_details(tlv)
-        if cmp =="NotAvailable":
+        if cmp =="notAvailable":
             return False
         
         remote_fw_version = value
@@ -638,7 +638,7 @@ def verify_ces_evidence(**kwargs):
         tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["policy"]
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         ope, cmp, group, code, value = policy.get_tlv_details(tlv)
-        if cmp =="NotAvailable":
+        if cmp =="notAvailable":
             return False
         evidence = value
         #TBD     - handling of evidence by CETP security module
@@ -653,7 +653,7 @@ def verify_ces_evidence_format(**kwargs):
         tlv, code, ces_params, policy, transaction = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["policy"], kwargs["transaction"]
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         ope, cmp, group, code, value = policy.get_tlv_details(tlv)
-        if cmp =="NotAvailable":
+        if cmp =="notAvailable":
             return False
         
         remote_evidence_format = value
@@ -676,7 +676,7 @@ def verify_ces_caces(**kwargs):
         tlv, code, ces_params, policy = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["policy"]
         policy_code = CETP.CES_CODE_TO_POLICY[code]
         ope, cmp, group, code, value = policy.get_tlv_details(tlv)
-        if cmp =="NotAvailable":
+        if cmp =="notAvailable":
             return False
         
         return True
@@ -688,7 +688,7 @@ def verify_ces_headersignature(**kwargs):
     tlv, code, ces_params = kwargs["tlv"], kwargs["code"], kwargs["ces_params"]
     policy_code = CETP.CES_CODE_TO_POLICY[code]
     if 'cmp' in tlv:
-        if tlv['cmp'] == "NotAvailable":
+        if tlv['cmp'] == "notAvailable":
             return False
     return True
 
@@ -699,7 +699,7 @@ def verify_ces_pow(**kwargs):
         r_ip, r_port = r_addr
     
         if 'cmp' in tlv:
-            if tlv['cmp'] == "NotAvailable":
+            if tlv['cmp'] == "notAvailable":
                 return False
             
         value = tlv['value']
@@ -749,11 +749,17 @@ def response_rloc(**kwargs):
         ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
         ret_list = interfaces.get_interface(rloc_type=code)             # Value comes from dataplane/interface definitions
         
-        for p in range(0, len(ret_list)):
+        if len(ret_list)==0:
             new_tlv = copy.deepcopy(tlv)
-            new_tlv["value"] = ret_list[p]      # pref, order, rloc, iface_alias
+            new_tlv["cmp"] = "notAvailable"      # pref, order, rloc, iface_alias
             new_tlv['ope'] = 'info'
             ret_tlvs.append(new_tlv)
+        else:
+            for p in range(0, len(ret_list)):
+                new_tlv = copy.deepcopy(tlv)
+                new_tlv["value"] = ret_list[p]      # pref, order, rloc, iface_alias
+                new_tlv['ope'] = 'info'
+                ret_tlvs.append(new_tlv)
             
         return ret_tlvs
         
@@ -767,8 +773,10 @@ def response_payload(**kwargs):
     ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
     new_tlv['ope'] = 'info'
     
-    if response_value==None:
-        new_tlv["value"] = ""
+    #print("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nresponse_value: ", response_value)
+    
+    if (ope, cmp, group, code, response_value) ==(None, None, None, None, None) or (cmp=="notAvailable"):
+        new_tlv["cmp"]=="notAvailable"
     else:
         new_tlv["value"] = response_value
     return new_tlv
@@ -853,7 +861,7 @@ def verify_id(**kwargs):
         tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
         ope, cmp, group, code, value = policy.get_tlv_details(tlv)
         
-        if cmp =="NotAvailable":    return False
+        if cmp =="notAvailable":    return False
         inbound_id = value
         group, code, cmp, ext, allowed_value = policy.get_policy_to_enforce(tlv)
         #print(allowed_value)
@@ -1290,7 +1298,7 @@ def verify_ctrl_dstep(**kwargs):
     tlv, code = kwargs["tlv"], kwargs["code"]
     #policy_code = CETP.CONTROL_CODES[code]
     if 'cmp' in tlv:
-        if tlv['cmp'] == "NotAvailable":
+        if tlv['cmp'] == "notAvailable":
             return False
     return True
 
@@ -1298,7 +1306,7 @@ def verify_ctrl_fqdn(**kwargs):
     tlv, code = kwargs["tlv"], kwargs["code"]
     #policy_code = CETP.CONTROL_CODES[code]
     if 'cmp' in tlv:
-        if tlv['cmp'] == "NotAvailable":
+        if tlv['cmp'] == "notAvailable":
             return False
     return True
 
@@ -1306,7 +1314,7 @@ def verify_ctrl_certificate(**kwargs):
     tlv, code = kwargs["tlv"], kwargs["code"]
     #policy_code = CETP.CONTROL_CODES[code]
     if 'cmp' in tlv:
-        if tlv['cmp'] == "NotAvailable":
+        if tlv['cmp'] == "notAvailable":
             return False
     return True
 
@@ -1314,7 +1322,7 @@ def verify_ctrl_caep(**kwargs):
     tlv, code = kwargs["tlv"], kwargs["code"]
     #policy_code = CETP.CONTROL_CODES[code]
     if 'cmp' in tlv:
-        if tlv['cmp'] == "NotAvailable":
+        if tlv['cmp'] == "notAvailable":
             return False
     
     return True
@@ -1323,7 +1331,7 @@ def verify_ctrl_dp_rlocs(**kwargs):
     tlv, code = kwargs["tlv"], kwargs["code"]
     #policy_code = CETP.CONTROL_CODES[code]
     if 'cmp' in tlv:
-        if tlv['cmp'] == "NotAvailable":
+        if tlv['cmp'] == "notAvailable":
             return False
     return True
 
@@ -1331,7 +1339,7 @@ def verify_ctrl_dp_ttl(**kwargs):
     tlv, code = kwargs["tlv"], kwargs["code"]
     #policy_code = CETP.CONTROL_CODES[code]
     if 'cmp' in tlv:
-        if tlv['cmp'] == "NotAvailable":
+        if tlv['cmp'] == "notAvailable":
             return False
     return True
 
@@ -1339,7 +1347,7 @@ def verify_ctrl_dp_keepalive_cycle(**kwargs):
     tlv, code = kwargs["tlv"], kwargs["code"]
     #policy_code = CETP.CONTROL_CODES[code]
     if 'cmp' in tlv:
-        if tlv['cmp'] == "NotAvailable":
+        if tlv['cmp'] == "notAvailable":
             return False
     return True
 
@@ -1347,7 +1355,7 @@ def verify_ctrl_qos(**kwargs):
     tlv, code = kwargs["tlv"], kwargs["code"]
     #policy_code = CETP.CONTROL_CODES[code]
     if 'cmp' in tlv:
-        if tlv['cmp'] == "NotAvailable":
+        if tlv['cmp'] == "notAvailable":
             return False
     return True
 
@@ -1355,7 +1363,7 @@ def verify_ctrl_ack(**kwargs):
     tlv, code = kwargs["tlv"], kwargs["code"]
     #policy_code = CETP.CONTROL_CODES[code]
     if 'cmp' in tlv:
-        if tlv['cmp'] == "NotAvailable":
+        if tlv['cmp'] == "notAvailable":
             return False
     return True
 
@@ -1363,7 +1371,7 @@ def verify_ctrl_os_version(**kwargs):
     tlv, code = kwargs["tlv"], kwargs["code"]
     #policy_code = CETP.CES_CODE_TO_POLICY[code]
     if 'cmp' in tlv:
-        if tlv['cmp'] == "NotAvailable":
+        if tlv['cmp'] == "notAvailable":
             return False
     return True
 
@@ -1371,7 +1379,7 @@ def verify_ctrl_policy_caching(**kwargs):
     tlv, code = kwargs["tlv"], kwargs["code"]
     #policy_code = CETP.CONTROL_CODES[code]
     if 'cmp' in tlv:
-        if tlv['cmp'] == "NotAvailable":
+        if tlv['cmp'] == "notAvailable":
             return False
     return True
 
@@ -1379,7 +1387,7 @@ def verify_ctrl_dp_proto(**kwargs):
     tlv, code = kwargs["tlv"], kwargs["code"]
     #policy_code = CETP.CONTROL_CODES[code]
     if 'cmp' in tlv:
-        if tlv['cmp'] == "NotAvailable":
+        if tlv['cmp'] == "notAvailable":
             return False
     return True
 
@@ -1387,7 +1395,7 @@ def verify_ctrl_dp_port(**kwargs):
     tlv, code = kwargs["tlv"], kwargs["code"]
     #policy_code = CETP.CONTROL_CODES[code]
     if 'cmp' in tlv:
-        if tlv['cmp'] == "NotAvailable":
+        if tlv['cmp'] == "notAvailable":
             return False
     return True
 
@@ -1395,7 +1403,7 @@ def verify_ctrl_dp_ratelimit(**kwargs):
     tlv, code = kwargs["tlv"], kwargs["code"]
     #policy_code = CETP.CONTROL_CODES[code]
     if 'cmp' in tlv:
-        if tlv['cmp'] == "NotAvailable":
+        if tlv['cmp'] == "notAvailable":
             return False
     return True
 
@@ -1404,7 +1412,7 @@ def verify_ctrl_terminate(**kwargs):
     tlv, code = kwargs["tlv"], kwargs["code"]
     #policy_code = CETP.CONTROL_CODES[code]
     if 'cmp' in tlv:
-        if tlv['cmp'] == "NotAvailable":
+        if tlv['cmp'] == "notAvailable":
             return False
     return True
 
@@ -1412,7 +1420,7 @@ def verify_ctrl_warning(**kwargs):
     tlv, code = kwargs["tlv"], kwargs["code"]
     #policy_code = CETP.CONTROL_CODES[code]
     if 'cmp' in tlv:
-        if tlv['cmp'] == "NotAvailable":
+        if tlv['cmp'] == "notAvailable":
             return False
     return True
 

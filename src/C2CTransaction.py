@@ -68,7 +68,7 @@ class C2CTransaction(object):
 
     def _get_unavailable_response(self, tlv):
         resp_tlv = copy.copy(tlv)
-        resp_tlv['cmp'] = 'NotAvailable'
+        resp_tlv['cmp'] = 'notAvailable'
         resp_tlv['ope'] = "info"
         return resp_tlv
         
@@ -235,7 +235,6 @@ class C2CTransaction(object):
         ope, group = "info", "rloc"
         rrloc_tlvs = self._get_from_tlvlist(self.received_tlvs, group, ope=ope)
         lrloc_tlvs = []
-        print("Ithay")
         
         #print("rrlocs: ", rrloc_tlvs)
         for rrloc_tlv in rrloc_tlvs:
@@ -261,10 +260,16 @@ class C2CTransaction(object):
                 if 'cmp' in p:
                     if p['cmp']=="notAvailable":
                         continue
-                else:
-                    pref, order, addr, alias = p["value"]
-                    addrtype = p["code"]
-                    retlist.append((order, pref, addrtype, addr, alias))
+                    
+                pref, order, addr, alias = p["value"]
+                addrtype = p["code"]
+                if addrtype == "ipv4":
+                    if CETP.is_IPv4(addr):
+                        retlist.append((order, pref, addrtype, addr, alias))
+                elif addrtype == "ipv6":
+                    if CETP.is_IPv6(addr):
+                        retlist.append((order, pref, addrtype, addr, alias))
+
             return retlist
     
 
@@ -280,13 +285,12 @@ class C2CTransaction(object):
                     q_addrtype, q_alias = qrloc[2], qrloc[4]
                     #self.logger.debug(">>> Evaluating q rloc: %s" % (str(qrloc)))
                     if p_addrtype == q_addrtype and p_alias == q_alias:
-                        #self.logger.debug(">>> Found a match!")
                         lrlocs.append(prloc)
                         rrlocs.append(qrloc)
-                        
+                    
             return (lrlocs, rrlocs)
-                
-        
+
+
         lrlocs_list = _build_list(lrlocs_list)
         rrlocs_list = _build_list(rrlocs_list)
         lrlocs_list = list(set(lrlocs_list))        # Removes the duplicated RLOCs information in a list
@@ -298,25 +302,56 @@ class C2CTransaction(object):
         return (lrlocs, rrlocs)
 
 
-
-    def get_payload(self, rpayload_tlv, policy):
-        if policy.has_available(rpayload_tlv):
-            lpayload_tlv = policy.get_available(rpayload_tlv)
-            self._create_offer_tlv(lpayload_tlv)
-            lpayload = lpayload_tlv["code"]
-            rpayload = rpayload_tlv["code"]
-        return (lpayload, rpayload)
-
     def _get_dp_connection_payloads(self):
         l_payloads, r_payloads = [], []
-        rpayloads = self._get_from_tlvlist(self.received_tlvs, "payload", ope="info", code=None)
-        for rpayload in rpayloads:
-            lpayload, rpayload = self.get_payload(rpayload, self.ces_policy)
-            l_payloads.append(lpayload)
-            r_payloads.append(rpayload)
-        return (lpayload, rpayload)
+        group, ope = "payload", "info"
+        r_payloads = self._get_from_tlvlist(self.received_tlvs, group, ope=ope)
+        
+        for rpayload in r_payloads:
+            if self.ces_policy.has_available(rpayload):
+                lpayload = self._create_offer_tlv(rpayload)
+                l_payloads.append(lpayload)
+        
+        lpayloads, rpayloads = self._filter_payload_list(l_payloads, r_payloads)
+        return (lpayloads, rpayloads)
                 
 
+
+    def _filter_payload_list(self, sent_tlvlist, recv_tlvlist):
+        """ @todo: Sort the payload lists , as per preference field? """
+        def _build_list(tlvlist):
+            """ Build a list based on the code field of the payload TLV: "ipv4", "ipv6", "ether" """
+            retlist = []
+            for p in tlvlist:
+                print(p)
+                if 'cmp' in p:
+                    if p['cmp']=="notAvailable":
+                        continue
+                #p["value"]
+                retlist.append(p["code"])
+            return retlist
+
+        def _filter(base_payload, cmp_payload):
+            """ Compares the local and remote RLOCs to filter unmatching RLOCs """ 
+            lpayloads, rpayloads = [], []
+
+            for p in range(0, len(base_payload)):
+                p_pay = base_payload[p]
+                if p_pay in cmp_payload:
+                    lpayloads.append(p_pay)
+                    rpayloads.append(p_pay)
+                    
+            return (lpayloads, rpayloads)
+
+        
+        l_payloads = _build_list(sent_tlvlist)          #Build the payload list for comparison
+        r_payloads = _build_list(recv_tlvlist)
+        l_payloads = list(set(l_payloads))
+        r_payloads = list(set(r_payloads))
+        (l_payloads, l_payloads) = _filter(l_payloads, r_payloads)
+        return (l_payloads, r_payloads)
+    
+    
     
     def negotiated_parameters(self):
         s = [self.l_cesid, self.r_cesid, self.ttl, self.evidence_format, self.remote_session_limit, self.lrloc, self.rrloc, self.lpayload, self.rpayload]
@@ -592,16 +627,16 @@ class oC2CTransaction(C2CTransaction):
                             continue
                         
                     if self._check_tlv(received_tlv, cmp="optional"):
-                        self._logger.info(" An optional Request TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
+                        self._logger.info(" A remote-CES required optional TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
                         ret_tlv = self._get_unavailable_response(received_tlv)
                         tlvs_to_send.append(ret_tlv)
                     else:
                         if self._check_tlv2(received_tlv, group=["rloc", "payload"]):
-                            self._logger.info(" A required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
+                            self._logger.info(" A remote-CES required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
                             ret_tlv = self._get_unavailable_response(received_tlv)
                             tlvs_to_send.append(ret_tlv)
                         else:                            
-                            self._logger.info(" A mandatory required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
+                            self._logger.info(" A remote-CES required mandatory TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
                             error = True
                             break
 
@@ -621,7 +656,7 @@ class oC2CTransaction(C2CTransaction):
                             satisfied_requriements += 1
                         else:
                             if self._check_tlv2(received_tlv, group=["rloc", "payload"]) and (self._check_tlv(received_tlv, cmp="notAvailable")):
-                                self._logger.info(" A required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
+                                self._logger.info(" A locally required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
                                 error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
                                 satisfied_requriements += 1                                 # Work around for iterating on received RLOC TLVs to find a matching RLOC.
                             else:
@@ -674,7 +709,7 @@ class oC2CTransaction(C2CTransaction):
                     #terminate_transaction()
                 
                 unsatisfied_requirements = len(self.ces_policy.required) - satisfied_requriements
-                self._logger.info(" {} Inbound packet didn't meet all the policy requirements of oCES".format(unsatisfied_requirements))
+                self._logger.info(" Inbound packet didn't meet the {} policy requirements of oCES".format(unsatisfied_requirements))
                 # A more LAX version may allow another negotiation round
 
                 # Issuing oCES Full query                                -- This will not scale to oCES for allowing another RTT, unless we send offers/availables as well.
@@ -1101,7 +1136,7 @@ class iC2CTransaction(C2CTransaction):
                             satisfied_requriements += 1
                         else:
                             if self._check_tlv2(received_tlv, group=["rloc", "payload"]) and (self._check_tlv(received_tlv, cmp="notAvailable")):
-                                self._logger.info(" A required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
+                                self._logger.info(" Locally required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
                                 error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
                                 satisfied_requriements += 1                                 # Work around for iterating on received RLOC TLVs to find a matching RLOC.
                             else:
@@ -1130,16 +1165,16 @@ class iC2CTransaction(C2CTransaction):
                             continue
                         
                     if self._check_tlv(received_tlv, cmp="optional"):
-                        self._logger.info(" An optional required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
+                        self._logger.info(" A remote-CES required optional TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
                         ret_tlv = self._get_unavailable_response(received_tlv)
                         tlvs_to_send.append(ret_tlv)
                     else:
                         if self._check_tlv2(received_tlv, group=["rloc", "payload"]):
-                            self._logger.info(" A required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
+                            self._logger.info(" A remote-CES required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
                             ret_tlv = self._get_unavailable_response(received_tlv)
                             tlvs_to_send.append(ret_tlv)
                         else:                            
-                            self._logger.info(" A mandatory required TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
+                            self._logger.info(" A remote-CES required mandatory TLV {}.{} is not available.".format(received_tlv['group'], received_tlv['code']))
                             error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
                             error = True
                             break
