@@ -599,7 +599,7 @@ def test_cetp_layering(cetp_mgr):
     #naptr_list = [('srv1.hostb1.cesb.lte.', 'cesb.lte.', '10.0.3.103', '49001', 'tcp'), ('srv1.hostb1.cesb.lte.', 'cesb.lte.', '10.0.3.103', '49002', 'tcp')]
     dst_id, r_cesid, r_ip, r_port, r_proto = ('srv1.hostb1.cesb.lte.', 'cesb.lte.', '10.0.3.103', '49001', 'tcp')
     print("Initiating a connection towards: ", r_cesid)
-    sender_info = ("10.0.3.118", 43333)
+    sender_info = ("10.0.3.111", 43333)
     cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
     
 def test3(cetp_mgr):
@@ -609,7 +609,7 @@ def test4(cetp_mgr):
     pass
 
 def test_terminate_cetp_c2c_signalling(cetp_mgr):
-    sender_info = ("10.0.3.118", 43333)
+    sender_info = ("10.0.3.111", 43333)
     dst_id, r_cesid, r_ip, r_port, r_proto = "", "", "", "", ""
     naptr_records = {}
     naptr_records['srv1.hostb1.cesb.lte.']         = [('srv1.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49001', 'tcp')]
@@ -648,7 +648,7 @@ def test_terminate_cetp_c2c_signalling(cetp_mgr):
 @asyncio.coroutine    
 def test_h2h_session_termination(cetp_mgr):
     """ Tests termination of H2H-CETP sessions based on different parameters: Local host-ID, Local host-IP, remote host-ID and (sender-ID, dst-ID) pair. """
-    sender_info = ("10.0.3.118", 43333)
+    sender_info = ("10.0.3.111", 43333)
     dst_id, r_cesid, r_ip, r_port, r_proto = "", "", "", "", ""
     naptr_records = {}
     naptr_records['srv1.hostb1.cesb.lte.']         = [('srv1.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49001', 'tcp')]
@@ -691,7 +691,7 @@ def test_h2h_session_termination(cetp_mgr):
 @asyncio.coroutine
 def test_drop_connection(cetp_mgr):
     """ Tests whether CETPSecurity module can block connection requests to/from undesired parties. """
-    sender_info = ("10.0.3.118", 43333)
+    sender_info = ("10.0.3.111", 43333)
     dst_id, r_cesid, r_ip, r_port, r_proto = "", "", "", "", ""
     naptr_records = {}
     naptr_records['srv1.hostb1.cesb.lte.']         = [('srv1.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49001', 'tcp')]
@@ -722,7 +722,7 @@ def test_drop_connection(cetp_mgr):
     #cetp_mgr.block_connections_to_remote_ces_host(r_hostid="srv2.hostb1.cesb.lte.")
     #cetp_mgr.block_connections_to_remote_ces_host(r_hostid="srv2.hostb1.cesb.lte.", r_cesid="cesb.lte.")
     #cetp_mgr.disable_local_host(local_domain="hosta1.cesa.lte.")
-    cetp_mgr.send_evidence(lip="10.0.3.118", lpip="", evidence="")
+    cetp_mgr.send_evidence(lip="10.0.3.111", lpip="", evidence="")
     
     yield from asyncio.sleep(1)
     

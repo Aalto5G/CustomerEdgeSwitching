@@ -33,7 +33,7 @@ class HostRegister(object):
     def load_ip_fqdn_mapping(self):
         """ Acting as a static Identity assignment server to IP addresses """
         #self.ip_fqdn_map = {"127.0.0.1":"raimo_son1.cesa.fi.", "10.0.3.118":"son1.raimo.aalto.lte.", "10.0.3.219":"raimo.aalto.lte.", "10.0.2.15":"son1.raimo.aalto.lte.", "10.0.2.16":"son2.raimo.aalto.lte."}
-        self.ip_fqdn_map = {"10.0.3.118":"hosta1.cesa.lte.", "10.0.3.219":"hostb1.cesb.lte.", \
+        self.ip_fqdn_map = {"10.0.3.111":"hosta1.cesa.lte.", "10.0.3.112":"hosta2.cesa.lte.", "10.0.3.121":"hostb1.cesb.lte.", "10.0.3.122":"hostb2.cesb.lte.", \
                             "10.0.3.189":"raimo_son1.cesa.lte.", "10.0.3.53":"raimo.cesb.lte.", "127.0.0.1":"raimo_son1.cesa.lte."}
  
     def ip_to_fqdn_mapping(self, l_ip):
