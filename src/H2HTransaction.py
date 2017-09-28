@@ -340,13 +340,17 @@ class H2HTransactionOutbound(H2HTransaction):
         
         # Offered TLVs
         for otlv in self.opolicy.get_offer():
-            tlv = self._create_offer_tlv(otlv)
-            tlvs_to_send.append(tlv)
+            ret_tlv = self._create_offer_tlv(otlv)
+            if type(ret_tlv)==type(list()):
+                for p in ret_tlv:
+                    tlvs_to_send.append(p)
+            else:
+                tlvs_to_send.append(ret_tlv)
             
         # Required TLVs
         for rtlv in self.opolicy.get_required():
-            tlv = self._create_request_tlv(rtlv)
-            tlvs_to_send.append(tlv)
+            ret_tlv = self._create_request_tlv(rtlv)
+            tlvs_to_send.append(ret_tlv)
         
         cetp_msg = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
         cetp_packet = json.dumps(cetp_msg)
@@ -420,14 +424,19 @@ class H2HTransactionOutbound(H2HTransaction):
                 if self._check_tlv(received_tlv, ope="query"):
                     if self.opolicy.has_available(received_tlv):
                         ret_tlv = self._create_response_tlv(received_tlv)
-                        if ret_tlv !=None:
-                            tlvs_to_send +=ret_tlv
+                        
+                        if ret_tlv != None:
+                            if type(ret_tlv) == type(list()):
+                                for p in ret_tlv:
+                                    tlvs_to_send.append(p)
+                            else:
+                                tlvs_to_send.append(ret_tlv)
                             continue
                                                 
                     if self._check_tlv(received_tlv, cmp="optional"):
                         self._logger.info(" An optional requirement {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
                         ret_tlv = self._get_unavailable_response(received_tlv)
-                        tlvs_to_send +=ret_tlv
+                        tlvs_to_send.append(ret_tlv)
                     else:
                         error = True
                         break
@@ -774,14 +783,20 @@ class H2HTransactionInbound(H2HTransaction):
             if self._check_tlv(received_tlv, ope="query"):
                 if self.ipolicy.has_available(received_tlv):
                     ret_tlv = self._create_response_tlv(received_tlv)
-                    if ret_tlv !=None:
-                        tlvs_to_send +=ret_tlv
+                    
+                    if ret_tlv != None:
+                        if type(ret_tlv) == type(list()):
+                            for p in ret_tlv:
+                                tlvs_to_send.append(p)
+                        else:
+                            tlvs_to_send.append(ret_tlv)
+                    
                         continue
                     
                 if self._check_tlv(received_tlv, cmp="optional"):
                     self._logger.info(" An optional requirement TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
                     ret_tlv = self._get_unavailable_response(received_tlv)
-                    tlvs_to_send +=ret_tlv
+                    tlvs_to_send.append(ret_tlv)
                 else:
                     self._logger.info(" A required TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
                     error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]

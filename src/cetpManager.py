@@ -48,7 +48,7 @@ class CETPManager:
         self.cetpstate_mgr          = ConnectionTable.CETPStateTable()                                        # Records the established CETP transactions (both H2H & C2C). Required for preventing the re-allocation already in-use SST & DST (in CETP transaction).
         self.conn_table             = ConnectionTable.ConnectionTable()
         self.cetp_security          = CETPSecurity.CETPSecurity(loop, self.conn_table, ces_params)
-        self.interfaces             = PolicyManager.Interfaces()
+        self.interfaces             = PolicyManager.FakeInterfaceDefinition(cesid)
         self.policy_mgr             = PolicyManager.PolicyManager(self.cesid, policy_file= cetp_policies)     # Shall ideally fetch the policies from Policy Management System (of Hassaan)    - And will be called, policy_sys_agent
         self.host_register          = PolicyManager.HostRegister()
         self._loop                  = loop
@@ -595,8 +595,8 @@ def test_cetp_ep_creation(cetp_mgr):
 
 def test_cetp_layering(cetp_mgr):
     """ Testing the establishment of CETP-H2H, CETP-C2C layer and CETPTransport(s) upon getting list of NAPTR records for a new remote CESID."""
-    #naptr_list = [('srv1.hostb1.cesb.lte.', 'cesb.lte.', '10.0.3.103', '49001', 'tcp')]
-    naptr_list = [('srv1.hostb1.cesb.lte.', 'cesb.lte.', '10.0.3.103', '49001', 'tcp'), ('srv1.hostb1.cesb.lte.', 'cesb.lte.', '10.0.3.103', '49002', 'tcp')]
+    naptr_list = [('srv1.hostb1.cesb.lte.', 'cesb.lte.', '10.0.3.103', '49001', 'tcp')]
+    #naptr_list = [('srv1.hostb1.cesb.lte.', 'cesb.lte.', '10.0.3.103', '49001', 'tcp'), ('srv1.hostb1.cesb.lte.', 'cesb.lte.', '10.0.3.103', '49002', 'tcp')]
     dst_id, r_cesid, r_ip, r_port, r_proto = ('srv1.hostb1.cesb.lte.', 'cesb.lte.', '10.0.3.103', '49001', 'tcp')
     print("Initiating a connection towards: ", r_cesid)
     sender_info = ("10.0.3.118", 43333)
@@ -722,6 +722,7 @@ def test_drop_connection(cetp_mgr):
     #cetp_mgr.block_connections_to_remote_ces_host(r_hostid="srv2.hostb1.cesb.lte.")
     #cetp_mgr.block_connections_to_remote_ces_host(r_hostid="srv2.hostb1.cesb.lte.", r_cesid="cesb.lte.")
     #cetp_mgr.disable_local_host(local_domain="hosta1.cesa.lte.")
+    cetp_mgr.send_evidence(lip="10.0.3.118", lpip="", evidence="")
     
     yield from asyncio.sleep(1)
     
@@ -748,9 +749,9 @@ def test_func(loop):
     cetp_policies   = ces_conf["cetp_policy_file"]
     print("Local CESID: ", cesid)
     cetp_mgr = CETPManager(cetp_policies, cesid, ces_params, loop=loop)
-    #test_cetp_layering(cetp_mgr)
+    test_cetp_layering(cetp_mgr)
     #asyncio.ensure_future(test_h2h_session_termination(cetp_mgr))
-    asyncio.ensure_future(test_drop_connection(cetp_mgr))
+    #asyncio.ensure_future(test_drop_connection(cetp_mgr))
     #asyncio.ensure_future(test_terminate_cetp_c2c_signalling(cetp_mgr))
     
     """

@@ -42,16 +42,25 @@ class HostRegister(object):
             return l_fqdn
 
 
-class Interfaces(object):
-    def __init__(self, config_file=None, name="Interfaces"):
+class FakeInterfaceDefinition(object):
+    """ To be replaced by actual Class defining the CES Network Interfaces """
+    def __init__(self, cesid, config_file=None, name="Interfaces"):
+        self.cesid = cesid
         self._interfaces = []
         self.register_interfaces(config_file)
 
     def register_interfaces(self, config_file):
         #r  = pref, order, rloc_type, rloc, iface
-        r1 = 100, 80, "ipv4", "10.0.3.101",         "ISP"
-        r2 = 100, 60, "ipv4", "10.0.3.121",         "ISP"
-        r3 = 100, 60, "ipv6", "11:22:33:44:55:66:77:88", "IXP"
+        r1, r2, r3 = None, None, None
+        if self.cesid=="cesa.lte.":
+            r1 = 100, 80, "ipv4", "10.0.3.111",         "ISP"
+            r2 = 100, 60, "ipv4", "10.1.3.111",         "IXP"
+            r3 = 100, 40, "ipv6", "11:22:33:44:55:66:77:01", "ICP"
+        else:
+            r1 = 100, 80, "ipv4", "10.0.3.121",         "ISP"
+            r2 = 100, 60, "ipv4", "10.1.3.121",         "IXP"
+            r3 = 100, 40, "ipv6", "11:22:33:44:55:66:77:902", "ICP"
+            
         self._interfaces.append(r1)
         self._interfaces.append(r2)
         self._interfaces.append(r3)
@@ -60,10 +69,15 @@ class Interfaces(object):
         self._interfaces
         
     def get_interface(self, rloc_type=None, iface=None):
+        """ Returns the list of interfaces defined for an RLOC type """
+        ret_list = []
         for ifaces in self._interfaces:
             pref, order, r_type, rloc, iface = ifaces
             if r_type == rloc_type:
-                return (pref, order, rloc, iface)
+                iface_info = (pref, order, rloc, iface)
+                ret_list.append(iface_info)
+        
+        return ret_list
     
     
 

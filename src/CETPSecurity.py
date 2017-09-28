@@ -148,7 +148,7 @@ class CETPSecurity:
     
     def record_evidence(self, keytype, key_ces, key_host, evidence):
         """ Record misbehavior evidences """
-        if keytype in [KEY_Evidence_against_RCES_Host, KEY_Evidence_Reported_by_RCES_against_host]:
+        if keytype in [KEY_Evidence_against_RCES_Host, KEY_Evidence_Reported_by_RCES]:
             if keytype not in self.misbehavior_record:
                 self.misbehavior_record[keytype] = {}
                 self.misbehavior_record[keytype][key_ces]
@@ -164,11 +164,6 @@ class CETPSecurity:
                 filtered_domains = self.domains_to_filter[keytype]
                 filtered_domains.append(value)
 
-    KEY_Evidence_against_RCES
-    KEY_Evidence_against_RCES_Host
-    KEY_Evidence_Reported_by_RCES_against_host
-    KEY_Evidence_Reported_against_local_host
-    
 
     def process_inbound_evidence(self, r_cesid, evidence):
         """ Processes the evidence received from 'r_cesid' """

@@ -713,15 +713,23 @@ def verify_ces_pow(**kwargs):
 
 def send_rloc(**kwargs):
     tlv, code, query, policy, interfaces = kwargs["tlv"], kwargs["code"], kwargs["query"], kwargs["policy"], kwargs["interfaces"]
+    ret_tlvs = []
+    #new_tlv = copy.deepcopy(tlv)
     if query==True:
         if 'value' in tlv:
             tlv["value"] = ""
+        return tlv
     else:
         #Create an offer TLV
         group, code = tlv["group"], tlv["code"]
-        pref, order, rloc, iface = interfaces.get_interface(rloc_type=code)
-        tlv["value"] = (pref, order, rloc, iface)
-    return tlv
+        ret_list = interfaces.get_interface(rloc_type=code)
+        for p in range(0, len(ret_list)):
+            new_tlv = copy.deepcopy(tlv)
+            new_tlv["value"] = ret_list[p]      # pref, order, rloc, iface_alias
+            ret_tlvs.append(new_tlv)
+        
+        return ret_tlvs
+
 
 def send_payload(**kwargs):
     tlv, code, query, policy = kwargs["tlv"], kwargs["code"], kwargs["query"], kwargs["policy"]
@@ -736,12 +744,19 @@ def send_payload(**kwargs):
 def response_rloc(**kwargs):
     try:
         tlv, policy, interfaces = kwargs["tlv"], kwargs["policy"], kwargs["interfaces"]
+        ret_tlvs = []
         new_tlv = copy.deepcopy(tlv)
         ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-        pref, order, rloc, iface = interfaces.get_interface(rloc_type=code)             # Value comes from dataplane/interface definitions
-        new_tlv["value"] = (pref, order, rloc, iface)
-        new_tlv['ope'] = 'info'
-        return new_tlv
+        ret_list = interfaces.get_interface(rloc_type=code)             # Value comes from dataplane/interface definitions
+        
+        for p in range(0, len(ret_list)):
+            new_tlv = copy.deepcopy(tlv)
+            new_tlv["value"] = ret_list[p]      # pref, order, rloc, iface_alias
+            new_tlv['ope'] = 'info'
+            ret_tlvs.append(new_tlv)
+            
+        return ret_tlvs
+        
     except Exception as ex:
         print("Exception in response_rloc(): ", ex)
         return None

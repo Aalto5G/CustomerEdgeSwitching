@@ -55,6 +55,9 @@ class CETPTLV(object):
 
     def get_code(self):
         return self.code
+    
+    def has_value(self):
+        return self.value
         
     def get_value(self):
         return self.value
@@ -103,14 +106,14 @@ TLV_GROUP = {'id':'id',                 'id':'id',
 
 
 VERIFY_TLV_RLOC_CODE      = {"ipv4":cetpOperations.verify_rloc,
-                       "ipv6":cetpOperations.verify_rloc,
-                       "eth":cetpOperations.verify_rloc}
+                             "ipv6":cetpOperations.verify_rloc,
+                             "eth":cetpOperations.verify_rloc}
 
 
 VERIFY_TLV_PAYLOAD_CODE   = {#"all"cetpOperations.verify_payload,
-                          "ipv4":cetpOperations.verify_payload,
-                          "ipv6":cetpOperations.verify_payload,
-                          "eth":cetpOperations.verify_payload}
+                             "ipv4":cetpOperations.verify_payload,
+                             "ipv6":cetpOperations.verify_payload,
+                             "eth":cetpOperations.verify_payload}
 
 
 
@@ -120,19 +123,19 @@ SEND_TLV_PAYLOAD_CODE   = {#"all"cetpOperations.send_payload,
                           "eth":cetpOperations.send_payload}
 
 SEND_TLV_RLOC_CODE      = {#"all"cetpOperations.send_rloc,
-                       "ipv4":cetpOperations.send_rloc,
-                       "ipv6":cetpOperations.send_rloc,
-                       "eth":cetpOperations.send_rloc}
+                           "ipv4":cetpOperations.send_rloc,
+                           "ipv6":cetpOperations.send_rloc,
+                           "eth":cetpOperations.send_rloc}
 
 RESPONSE_TLV_PAYLOAD_CODE = {#"all"cetpOperations.response_payload,
-                          "ipv4":cetpOperations.response_payload,
-                          "ipv6":cetpOperations.response_payload,
-                          "eth":cetpOperations.response_payload}
+                             "ipv4":cetpOperations.response_payload,
+                             "ipv6":cetpOperations.response_payload,
+                             "eth":cetpOperations.response_payload}
 
 RESPONSE_TLV_RLOC_CODE = {#"all"cetpOperations.response_rloc,
-                       "ipv4":cetpOperations.response_rloc,
-                       "ipv6":cetpOperations.response_rloc,
-                       "eth":cetpOperations.response_rloc}
+                          "ipv4":cetpOperations.response_rloc,
+                          "ipv6":cetpOperations.response_rloc,
+                          "eth":cetpOperations.response_rloc}
 
 
 SEND_TLV_ID_CODE        = {"fqdn":cetpOperations.send_id,
