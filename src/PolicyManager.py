@@ -53,13 +53,13 @@ class FakeInterfaceDefinition(object):
         #r  = pref, order, rloc_type, rloc, iface
         r1, r2, r3 = None, None, None
         if self.cesid=="cesa.lte.":
-            r1 = 100, 80, "ipv4", "10.0.3.111",         "ISP"
-            r2 = 100, 60, "ipv4", "10.1.3.111",         "IXP"
+            r1 = 100, 80, "ipv4", "10.0.3.101",         "ISP"
+            r2 = 100, 60, "ipv4", "10.1.3.101",         "IXP"
             r3 = 100, 40, "ipv6", "11:22:33:44:55:66:77:01", "ICP"
         else:
-            r1 = 100, 80, "ipv4", "10.0.3.121",         "ISP"
-            r2 = 100, 60, "ipv4", "10.1.3.121",         "IXP"
-            r3 = 100, 40, "ipv6", "11:22:33:44:55:66:77:902", "ICP"
+            r1 = 100, 80, "ipv4", "10.0.3.103",         "ISP"
+            r2 = 100, 60, "ipv4", "10.1.3.103",         "IXP"
+            r3 = 100, 40, "ipv6", "11:22:33:44:55:66:77:03", "ICP"
             
         self._interfaces.append(r1)
         self._interfaces.append(r2)
@@ -154,7 +154,7 @@ class PolicyManager(object):
             return policy
             #return copy.deepcopy(policy)
         except Exception as ex:
-            raise Exception("Host '{}' has no '{}' policy.".format(host_id, direction))
+            return None
 
     def load_CES_policy(self):
         for policy in self._config:

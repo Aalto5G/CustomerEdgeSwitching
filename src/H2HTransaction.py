@@ -64,10 +64,15 @@ class H2HTransaction(object):
             tlv = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, interfaces=self.interfaces, query=False)
         return tlv          # shall use try, except here.
 
-    def _create_offer_tlv2(self, group=None, code=None):
+    def _create_offer_tlv2(self, group=None, code=None, value=None):
         tlv ={}
-        tlv['group'], tlv['code'], tlv["value"] = group, code, ""
-        if group=="ces":
+        tlv['ope'], tlv['group'], tlv['code'] = "info", group, code
+        if value!=None:
+            tlv["value"] = value
+        else:
+            tlv["value"] = ""
+        
+        if group in ["control", "rloc", "payload"]:
             func = CETP.SEND_TLV_GROUP[group][code]
             tlv = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, interfaces=self.interfaces, query=False)
         return tlv
@@ -150,50 +155,136 @@ class H2HTransaction(object):
             return False
 
 
-    def get_rloc(self, rrloc_tlv, policy):
-        #iface_list = CES_CONF.network.get((KEY_NETWORK_PORT, KEY_IFACE_REALM, INTERFACE_PUBLIC), update=False)
-        #for iface in iface_list:
+    def get_local_rloc(self, rrloc_tlv, policy):
+        """ Extracts local RLOCs from ces-policy """
+        lrloc_tlv = None
         if policy.has_available(rrloc_tlv):
-            lrloc_tlv = policy.get_available(rrloc_tlv)
-            self._create_offer_tlv(lrloc_tlv)
-            #print(rrloc_tlv)
-            lrloc = lrloc_tlv["value"]
-            rrloc = rrloc_tlv["value"]
-            
-        return (lrloc, rrloc)
+            lrloc_tlv = self._create_offer_tlv(rrloc_tlv)
+        
+        return lrloc_tlv
 
 
-    def _get_connection_rlocs(self):
+    def _get_dp_connection_rlocs(self):
         l_rlocs, r_rlocs = [], []
-        rrloc_tlvs = self._get_from_tlvlist(self.received_tlvs, "rloc", ope="info", code=None)
+        ope, group = "info", "rloc"
+        rrloc_tlvs = self._get_from_tlvlist(self.received_tlvs, group, ope=ope)
+        lrloc_tlvs = []
+        
         #print("rrlocs: ", rrloc_tlvs)
         for rrloc_tlv in rrloc_tlvs:
-            lrloc, rrloc = self.get_rloc(rrloc_tlv, self.policy)
-            l_rlocs.append(lrloc)
-            r_rlocs.append(rrloc)
-            
+            lrloc_tlv = self.get_local_rloc(rrloc_tlv, self.policy)
+            lrloc_tlvs += lrloc_tlv
+                
+        l_rlocs, r_rlocs = self._filter_rlocs_list(lrloc_tlvs, rrloc_tlvs)       # Matches & Verifies the payload in the TLVs, and Removes duplicate RLOCs (on sender and receiver side)
         return (l_rlocs, r_rlocs)
+    
+
+    def _filter_rlocs_list(self, lrlocs_list, rrlocs_list):
+        """ Extracts matching RLOCs b/w Local and Remote CES """
+        
+        def _build_list(tlvlist):
+            """ Builds list of rloc_tlv values for comparison """
+            retlist = []
+            for p in tlvlist:
+                if 'cmp' in p:
+                    if p['cmp']=="notAvailable":
+                        continue
+                    
+                pref, order, addr, alias = p["value"]
+                addrtype = p["code"]
+                if addrtype == "ipv4":
+                    if CETP.is_IPv4(addr):
+                        retlist.append((order, pref, addrtype, addr, alias))
+                elif addrtype == "ipv6":
+                    if CETP.is_IPv6(addr):
+                        retlist.append((order, pref, addrtype, addr, alias))
+
+            return retlist
+    
+
+        def _filter(base_rloc, cmp_rloc):
+            """ Compares the local and remote RLOCs to filter unmatching RLOCs """ 
+            lrlocs, rrlocs = [], []
+            for p in range(0, len(base_rloc)):
+                prloc = base_rloc[p]
+                p_addrtype, p_alias = prloc[2], prloc[4]
+                #self.logger.debug("# Evaluating p rloc: %s" % (str(prloc)))
+                for q in range(0, len(cmp_rloc)):
+                    qrloc = cmp_rloc[q]
+                    q_addrtype, q_alias = qrloc[2], qrloc[4]
+                    #self.logger.debug(">>> Evaluating q rloc: %s" % (str(qrloc)))
+                    if p_addrtype == q_addrtype and p_alias == q_alias:
+                        lrlocs.append(prloc)
+                        rrlocs.append(qrloc)
+                    
+            return (lrlocs, rrlocs)
 
 
-    def get_payload(self, rpayload_tlv, policy):
-        if policy.has_available(rpayload_tlv):
-            lpayload_tlv = policy.get_available(rpayload_tlv)
-            self._create_offer_tlv(lpayload_tlv)
-            lpayload = lpayload_tlv["code"]
-            rpayload = rpayload_tlv["code"]
-        return (lpayload, rpayload)
+        lrlocs_list = _build_list(lrlocs_list)
+        rrlocs_list = _build_list(rrlocs_list)
+        lrlocs_list = list(set(lrlocs_list))        # Removes the duplicated RLOCs information in a list
+        rrlocs_list = list(set(rrlocs_list))
+        #print("Filtered Local_RLOCs_list & Remote_RLOCs_list: ", lrlocs_list, rrlocs_list)
+        lrlocs, rrlocs = _filter(lrlocs_list, rrlocs_list)
+        lrlocs = sorted(lrlocs, key=lambda s:s[0], reverse=True)
+        rrlocs = sorted(rrlocs, key=lambda s:s[0], reverse=True)
+        return (lrlocs, rrlocs)
 
-    def _get_connection_payloads(self):
+
+
+
+    def _get_dp_connection_payloads(self):
         l_payloads, r_payloads = [], []
-        rpayloads = self._get_from_tlvlist(self.received_tlvs, "payload", ope="info", code=None)
-        for rpayload in rpayloads:
-            lpayload, rpayload = self.get_payload(rpayload, self.policy)
-            l_payloads.append(lpayload)
-            r_payloads.append(rpayload)
-            
-        return (lpayload, rpayload)
+        group, ope = "payload", "info"
+        r_payloads = self._get_from_tlvlist(self.received_tlvs, group, ope=ope)
+        
+        for rpayload in r_payloads:
+            if self.policy.has_available(rpayload):
+                group, code = rpayload["group"], rpayload["code"]
+                lpayload = self._create_offer_tlv2(group=group, code=code)
+                print(lpayload)
+                l_payloads += lpayload
+                print(l_payloads)
+        
+        lpayloads, rpayloads = self._filter_payload_list(l_payloads, r_payloads)
+        return (lpayloads, rpayloads)
+                
+
+    def _filter_payload_list(self, sent_tlvlist, recv_tlvlist):
+        """ @todo: Sort the payload lists , as per preference field? """
+        def _build_list(tlvlist):
+            """ Build a list based on the code field of the payload TLV: "ipv4", "ipv6", "ether" """
+            retlist = []
+            for p in tlvlist:
+                if 'cmp' in p:
+                    if p['cmp']=="notAvailable":
+                        continue
+                #p["value"]
+                print(p)
+                retlist.append(p["code"])
+            return retlist
+
+        def _filter(base_payload, cmp_payload):
+            """ Compares the local and remote RLOCs to filter unmatching RLOCs """ 
+            lpayloads, rpayloads = [], []
+
+            for p in range(0, len(base_payload)):
+                p_pay = base_payload[p]
+                if p_pay in cmp_payload:
+                    lpayloads.append(p_pay)
+                    rpayloads.append(p_pay)
+                    
+            return (lpayloads, rpayloads)
 
         
+        l_payloads = _build_list(sent_tlvlist)          #Build the payload list for comparison
+        r_payloads = _build_list(recv_tlvlist)
+        l_payloads = list(set(l_payloads))
+        r_payloads = list(set(r_payloads))
+        (l_payloads, l_payloads) = _filter(l_payloads, r_payloads)
+        return (l_payloads, r_payloads)
+
+
     def _allocate_proxy_address(self, lip):
         """Allocates a proxy IP address to represent remote host in local CES."""
         if self.is_IPv4(lip):      ap = "AP_PROXY4_HOST_ALLOCATION"
@@ -287,10 +378,11 @@ class H2HTransactionOutbound(H2HTransaction):
             self.cetp_h2h.update_H2H_transaction_count(initiated=False)
     
     def load_policies(self, l_cesid=None, r_cesid=None, src_id=None, dst_id=None):
-        """ Selection of host policy """
+        """ Returns host-policy on success, or None on failure """
         #index = self.policy_mgr.mapping_srcId_to_policy(src_id)                # Choosing policy for sender's (identity)
-        self.opolicy  = self.policy_mgr.get_host_policy(self.direction, host_id=src_id)
-        self.policy   = self.opolicy
+        self.policy = self.policy_mgr.get_host_policy(self.direction, host_id=src_id)
+        self.opolicy= self.policy
+        return self.policy
 
     def _initialize(self):
         """ Loads policies, generates session tags, and initiates event handlers """
@@ -303,9 +395,10 @@ class H2HTransactionOutbound(H2HTransaction):
                 self._logger.warning(" Remote CES doesn't accept connection to '{}'.".format(self.dst_id))
                 return False
             
-            self.sstag = self.generate_session_tags()
-            self.load_policies(src_id = self.src_id)
             self.state_timeout = DEFAULT_STATE_TIMEOUT
+            self.sstag = self.generate_session_tags()
+            if self.load_policies(src_id = self.src_id) == None:
+                return False
             
             if 'state_timeout' in self.ces_params:
                 self.state_timeout   = self.ces_params['state_timeout']
@@ -326,7 +419,7 @@ class H2HTransactionOutbound(H2HTransaction):
         """ Returns CETP message containing Policy Offers & Request towards remote-host """
         #try:
         if not self._initialize():
-            self._logger.debug(" Failure in initiating the CES-to-CES session.")
+            self._logger.debug(" Failure in initiating the Host-to-Host session.")
             return None
         
         self._logger.debug(" Starting H2H session towards '{}' (SST= {} -> DST={})".format(self.dst_id, self.sstag, self.dstag))
@@ -341,16 +434,12 @@ class H2HTransactionOutbound(H2HTransaction):
         # Offered TLVs
         for otlv in self.opolicy.get_offer():
             ret_tlv = self._create_offer_tlv(otlv)
-            if type(ret_tlv)==type(list()):
-                for p in ret_tlv:
-                    tlvs_to_send.append(p)
-            else:
-                tlvs_to_send.append(ret_tlv)
+            tlvs_to_send += ret_tlv
             
         # Required TLVs
         for rtlv in self.opolicy.get_required():
             ret_tlv = self._create_request_tlv(rtlv)
-            tlvs_to_send.append(ret_tlv)
+            tlvs_to_send += ret_tlv
         
         cetp_msg = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
         cetp_packet = json.dumps(cetp_msg)
@@ -404,7 +493,7 @@ class H2HTransactionOutbound(H2HTransaction):
         
         #self._logger.info("Continue establishing H2H session towards '{}' ({} -> {})".format(self.dst_id, self.sstag, 0))
         #self._logger.info("Host policy: {}".format(self.opolicy))
-        tlvs_to_send = []
+        tlvs_to_send, error_tlvs = [], []
         error = False
         satisfied_requriements = 0
         self.rtt += 1
@@ -424,13 +513,8 @@ class H2HTransactionOutbound(H2HTransaction):
                 if self._check_tlv(received_tlv, ope="query"):
                     if self.opolicy.has_available(received_tlv):
                         ret_tlv = self._create_response_tlv(received_tlv)
-                        
                         if ret_tlv != None:
-                            if type(ret_tlv) == type(list()):
-                                for p in ret_tlv:
-                                    tlvs_to_send.append(p)
-                            else:
-                                tlvs_to_send.append(ret_tlv)
+                            tlvs_to_send += ret_tlv
                             continue
                                                 
                     if self._check_tlv(received_tlv, cmp="optional"):
@@ -488,7 +572,7 @@ class H2HTransactionOutbound(H2HTransaction):
                 self.send_cetp(cetp_packet)
                 return False
         else:
-            if (satisfied_requriements == len(self.opolicy.required)) and (self.dstag!=0):
+            if (satisfied_requriements >= len(self.opolicy.required)) and (self.dstag!=0):
                 self._logger.info(" H2H policy negotiation succeeded in {} RTT".format(self.rtt))
                 self._logger.info("{}".format(42*'*') )
                 self.h2h_negotiation_status = True
@@ -505,8 +589,8 @@ class H2HTransactionOutbound(H2HTransaction):
 
                 # Issuing sender's policy requirements
                 for rtlv in self.opolicy.get_required():
-                    tlv = self._create_request_tlv(rtlv)
-                    tlvs_to_send.append(tlv)
+                    ret_tlv = self._create_request_tlv(rtlv)
+                    tlvs_to_send += ret_tlv
             
                 tlvs_to_send.append(self.append_dstep_info())
                 cetp_msg = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)           # Sending 'response' as 'info'
@@ -533,30 +617,44 @@ class H2HTransactionOutbound(H2HTransaction):
         
         #Checks whether (SST, DST) pair is locally unique.
         if self.cetpstate_mgr.has_established_transaction((self.sstag, self.dstag)):
-            self._logger.warning(" Terminating transaction as ({},{}) pair is not unique in CES".format(self.sstag, self.dstag))
+            self._logger.error(" Terminating transaction as ({},{}) pair is not unique in CES".format(self.sstag, self.dstag))
             self.session_failure()
             return False
         
         proxy_ip = self._create_connection()
+        if proxy_ip==False:
+            return False
+        
         self.cetpstate_mgr.add_established_transaction((self.sstag, self.dstag), self)
         self._execute_dns_callback(r_addr=proxy_ip)
-        #self.create_transaction_in_dp()
         return True
+
 
     def _create_connection(self):
         """ Extract the negotiated parameters to create a connection state """
-        self.lfqdn, self.rfqdn          = self.src_id, self.dst_id                  #self._create_connection_get_fqdns()
-        self.lip                        = self.host_ip
-        self.proxy_ip                   = self._allocate_proxy_address(self.lip)
-        self.lrloc, self.rrloc          = self._get_connection_rlocs()
-        self.lpayload, self.rpayload    = self._get_connection_payloads()
-        self.lid, self.rid              = None, None
-        
-        self.conn = ConnectionTable.H2HConnection(120.0, "outbound", self.lid, self.lip, self.proxy_ip, self.rid, self.lrloc, self.rrloc, self.lfqdn, self.rfqdn, \
-                                              self.sstag, self.dstag, self.lpayload, self.rpayload, self.r_cesid)
-        self.conn_table.add(self.conn)
-        print(self.lfqdn, self.rfqdn, self.lip, self.proxy_ip, self.lrloc, self.rrloc, self.lpayload, self.rpayload, self.lid, self.rid)
-        return self.proxy_ip
+        try:
+            self.lfqdn, self.rfqdn          = self.src_id, self.dst_id                  #self._create_connection_get_fqdns()
+            self.lip                        = self.host_ip
+            self.lpip                       = self._allocate_proxy_address(self.lip)
+            self.lrloc, self.rrloc          = self._get_dp_connection_rlocs()
+            self.lpayload, self.rpayload    = self._get_dp_connection_payloads()
+            self.lid, self.rid              = None, None
+    
+            if len(self.lrloc)==0 or len(self.rrloc)==0 or len(self.lpayload)==0 or len(self.rpayload)==0:
+                    self._logger.info("CETP negotiation failed to create H2H-DP Connection. ")
+                    return False
+            
+            negotiated_params = [self.lfqdn, self.rfqdn, self.lid, self.rid, self.lip, self.lpip, self.lrloc, self.rrloc, self.lpayload, self.rpayload]
+            self._logger.info("Negotiated params: {}".format(negotiated_params))
+
+            self.conn = ConnectionTable.H2HConnection(120.0, "outbound", self.lid, self.lip, self.lpip, self.rid, self.lrloc, self.rrloc, self.lfqdn, self.rfqdn, \
+                                                  self.sstag, self.dstag, self.lpayload, self.rpayload, self.r_cesid)
+            self.conn_table.add(self.conn)
+            return self.lpip
+    
+        except Exception as ex:
+            self._logger.error("Exception in connection creation: '{}'".format(ex))
+            return False
     
 
     def is_local_host_allowed(self, hostid):
@@ -586,24 +684,6 @@ class H2HTransactionOutbound(H2HTransaction):
             return False
         return True
 
-
-        #conn = CES_CONF.state_creator.createconnection(CONNECTION_CETP,direction='O',sstag=self.sstag, dstag=self.dstag,lip=lip,lpip=lpip,lid=lid,rid=rid,lfqdn=lfqdn,\
-        #rfqdn=rfqdn,lrloc=lrloc,rrloc=rrloc,lpayload=lpayload,rpayload=rpayload)
-
-        """
-        group, code, ope = TLV_GROUP["rloc"], None, [TLV_OPE["response"], TLV_OPE["info"]]
-        remote_rloc = self._get_from_tlvlist(self.received_tlv_list, group, code, ope)
-
-        #Use the received RLOCs to create the list of offered RLOCs
-        #This is due to the model 1.5 RTT because we are stateless and can't recall the TLVs we sent before
-        for p in remote_rloc:
-            local_rloc += self._create_offer_tlv(p)
-
-        #Filter out the non-matching rloc technologies
-        local_rloc, remote_rloc = self._filter_rloc_list(local_rloc, remote_rloc)
-        return (local_rloc, remote_rloc)
-        """
-        
         
     def _execute_dns_callback(self, r_addr="", resolution=True):
         """ Executes DNS callback towards host """
@@ -683,10 +763,12 @@ class H2HTransactionInbound(H2HTransaction):
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HTransactionInbound)
 
-    def load_policies(self, dst_id):
+    def load_policies(self, host_id):
+        """ Returns None OR host policy """
         #index = self.policy_mgr.mapping_srcId_to_policy(host_id)
-        self.ipolicy        = self.policy_mgr.get_host_policy(self.direction, host_id=dst_id)
-        self.policy         = self.ipolicy
+        self.policy = self.policy_mgr.get_host_policy(self.direction, host_id=host_id)
+        self.ipolicy= self.policy
+        return self.policy
     
     def _pre_process(self, cetp_packet):
         """ Pre-process the inbound packet for the minimum necessary details. """
@@ -724,7 +806,9 @@ class H2HTransactionInbound(H2HTransaction):
                 self._logger.warning(" Connection to destination '{}' is not allowed".format(self.dst_id))
                 return False
             
-            self.load_policies(self.dst_id)
+            if self.load_policies(self.dst_id) == None:
+                return False
+            
             return True
         
         except Exception as ex:
@@ -774,7 +858,7 @@ class H2HTransactionInbound(H2HTransaction):
             return False
         
         satisfied_requirements = 0
-        tlvs_to_send = []
+        tlvs_to_send, error_tlvs = [], []
         error = False
         
         # Processing inbound packet
@@ -785,12 +869,7 @@ class H2HTransactionInbound(H2HTransaction):
                     ret_tlv = self._create_response_tlv(received_tlv)
                     
                     if ret_tlv != None:
-                        if type(ret_tlv) == type(list()):
-                            for p in ret_tlv:
-                                tlvs_to_send.append(p)
-                        else:
-                            tlvs_to_send.append(ret_tlv)
-                    
+                        tlvs_to_send += ret_tlv
                         continue
                     
                 if self._check_tlv(received_tlv, cmp="optional"):
@@ -834,29 +913,43 @@ class H2HTransactionInbound(H2HTransaction):
             return False
             # Future item:     Return value shall allow CETPLayering to distinguish (Failure due to policy mismatch from wrong value and hence blacklisting subsequent interactions) OR shall this be handled internally?
         else:
-            if (satisfied_requirements == len(self.ipolicy.required)):
+            if (satisfied_requirements >= len(self.ipolicy.required)):
                 #All the  requirements of remote-CES are met -> Accept/Create CETP connection (i.e. by assigning 'SST') and Export to stateful (for post-negotiation CETP flow etc.)
-                self.sstag = self.generate_session_tags(self.dstag)
-                stateful_transansaction = self._export_to_stateful()
-                self._logger.info("H2H-policy negotiation succeeded -> Create transaction (SST={}, DST={})".format(self.sstag, self.dstag))
-                self._logger.info("{}".format(42*'*') )
+                if self._create_connection():
+                    self.sstag = self.generate_session_tags(self.dstag)
+                    stateful_transansaction = self._export_to_stateful()
+                    self._logger.info("H2H-policy negotiation succeeded -> Create transaction (SST={}, DST={})".format(self.sstag, self.dstag))
+                    self._logger.info("{}".format(42*'*') )
                 
-                cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
-                self._logger.info("Response packet:")
-                self.pprint(cetp_message)
-                cetp_packet = json.dumps(cetp_message)
-                self.last_packet_sent = cetp_packet
-                #self._logger.info("iCES start_cetp_processing delay: {}".format(now- start_time))
-                transport.send_cetp(cetp_packet)
-                return True
+                    cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
+                    self._logger.info("Response packet:")
+                    self.pprint(cetp_message)
+                    cetp_packet = json.dumps(cetp_message)
+                    self.last_packet_sent = cetp_packet
+                    #self._logger.info("iCES start_cetp_processing delay: {}".format(now- start_time))
+                    transport.send_cetp(cetp_packet)
+                    return True
+                else:
+                    if len(error_tlvs)!=0:
+                        cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=error_tlvs)
+                        self.pprint(cetp_message)
+                        cetp_packet = json.dumps(cetp_message)
+                        negotiation_status = False
+                        return (negotiation_status, cetp_packet)
+                    else:
+                        error_tlvs = [self._get_terminate_tlv()]
+                        cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=error_tlvs)
+                        cetp_packet = json.dumps(cetp_message)
+                        negotiation_status = False
+                        return (negotiation_status, cetp_packet)                    
             else:
                 self._logger.info(" {} unsatisfied iCES requirements: ".format( len(self.ipolicy.required)-satisfied_requirements ))
                 self._logger.info(" Initiate full query")
                 
                 tlvs_to_send = []
                 for rtlv in self.ipolicy.get_required():            # Generating Full Query message
-                    tlv = self._create_request_tlv(rtlv)
-                    tlvs_to_send.append(tlv)
+                    ret_tlv = self._create_request_tlv(rtlv)
+                    tlvs_to_send += ret_tlv
                 
                 cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
                 self._logger.info("Response packet:")
@@ -870,19 +963,34 @@ class H2HTransactionInbound(H2HTransaction):
         #    return (None, "")
 
     def dst_hostId_is_valid(self, host):
-        """ Emulates that host exists behind CES """
+        """ Emulates that host exists behind CES.. Check from host-register """
         return True
-
+    
     def _create_connection(self):
-        lfqdn, rfqdn            = self.src_id, self.dst_id
-        lip                     = "10.0.3.111"
-        proxy_ip                = self._allocate_proxy_address(lip)          # Get local IP for a domain from Host-register
-        lrloc, rrloc            = self._get_connection_rlocs()
-        lpayload, rpayload      = self._get_connection_payloads()
-        lid, rid                = None, None
-        conn = ConnectionTable.H2HConnection(120.0, "inbound", lid, lip, proxy_ip, rid, lrloc, rrloc, lfqdn, rfqdn, self.sstag, self.dstag, lpayload, rpayload, self.r_cesid)
-        print(lfqdn, rfqdn, lip, proxy_ip, lrloc, rrloc, lpayload, rpayload, lid, rid)
-        self.conn_table.add(conn)
+        try:
+            self.lfqdn, self.rfqdn          = self.src_id, self.dst_id
+            self.lip                        = "10.0.3.111"                               # Pick info from host definition
+            self.lpip                       = self._allocate_proxy_address(self.lip)          # Get local IP for a domain from Host-register
+            self.lrloc, self.rrloc          = self._get_dp_connection_rlocs()
+            self.lpayload, self.rpayload    = self._get_dp_connection_payloads()
+            self.lid, self.rid              = None, None
+            
+            if len(self.lrloc)==0 or len(self.rrloc)==0 or len(self.lpayload)==0 or len(self.rpayload)==0:
+                    self._logger.info("CETP negotiation failed to create H2H-DP-Connection. ")
+                    return False
+            
+            negotiated_params = [self.lfqdn, self.rfqdn, self.lid, self.rid, self.lip, self.lpip, self.lrloc, self.rrloc, self.lpayload, self.rpayload]
+            self._logger.info("Negotiated params: {}".format(negotiated_params))
+    
+            conn = ConnectionTable.H2HConnection(120.0, "inbound", self.lid, self.lip, self.lpip, self.rid, self.lrloc, self.rrloc, self.lfqdn, self.rfqdn, \
+                                                 self.sstag, self.dstag, self.lpayload, self.rpayload, self.r_cesid)
+            self.conn_table.add(conn)
+            return True
+        
+        except Exception as ex:
+            self._logger.error("Exception in connection creation: '{}'".format(ex))
+            return False
+    
 
     def _export_to_stateful(self):
         """ Creates connection and complete H2Htransaction to stateful """
@@ -927,10 +1035,18 @@ class H2HTransactionLocal(H2HTransaction):
         self.opolicy  = self.policy_mgr.get_host_policy("outbound", host_id=self.src_id)
         self.ipolicy  = self.policy_mgr.get_host_policy("inbound",  host_id=self.dst_id)
         
+        if (self.opolicy==None) or (self.ipolicy==None):
+            return False
+        return True
+        
     @asyncio.coroutine
     def start_cetp_processing(self):
         """ Starts the CETPLocal policy negotiation """
-        yield from self._initialize()
+        initialized = yield from self._initialize()
+        if not initialized:
+            self._logger.info(" Failure in initiating the local H2H session.")
+            return None
+        
         #self._logger.info("Local-host policy: {}".format(self.opolicy))
         #self._logger.info("Remote-host policy: {}".format(self.ipolicy))
         error = False

@@ -834,7 +834,7 @@ def send_id(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 def response_id(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
@@ -846,7 +846,7 @@ def response_id(**kwargs):
         new_tlv["value"] = ""
     else:
         new_tlv["value"] = response_value           # There could be a check, whether value offered as ID indeed belongs to the sender.
-    return new_tlv
+    return [new_tlv]
 
     
 def verify_id(**kwargs):
@@ -888,7 +888,7 @@ def send_ctrl_fqdn(**kwargs):
         if 'value' not in tlv:
             tlv["value"] = ""
         
-    return tlv
+    return [tlv]
     
 def send_ctrl_certificate(**kwargs):
     tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
@@ -900,7 +900,7 @@ def send_ctrl_certificate(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 
 def send_ctrl_caep(**kwargs):
@@ -914,7 +914,7 @@ def send_ctrl_caep(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 def send_ctrl_dp_rlocs(**kwargs):
     tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
@@ -926,7 +926,7 @@ def send_ctrl_dp_rlocs(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 def send_ctrl_dp_ttl(**kwargs):
     tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
@@ -938,7 +938,7 @@ def send_ctrl_dp_ttl(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 
 def send_ctrl_dp_keepalive_cycle(**kwargs):
@@ -951,7 +951,7 @@ def send_ctrl_dp_keepalive_cycle(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 def send_ctrl_qos(**kwargs):
     tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
@@ -963,7 +963,7 @@ def send_ctrl_qos(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 def send_ctrl_ack(**kwargs):
     tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
@@ -975,7 +975,7 @@ def send_ctrl_ack(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 def send_ctrl_os_version(**kwargs):
     tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
@@ -987,7 +987,7 @@ def send_ctrl_os_version(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 def send_ctrl_policy_caching(**kwargs):
     tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
@@ -999,7 +999,7 @@ def send_ctrl_policy_caching(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 def send_ctrl_dp_proto(**kwargs):
     tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["query"] 
@@ -1011,7 +1011,7 @@ def send_ctrl_dp_proto(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 def send_ctrl_dp_port(**kwargs):
     tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
@@ -1023,7 +1023,7 @@ def send_ctrl_dp_port(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 def send_ctrl_dp_ratelimit(**kwargs):
     tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
@@ -1035,7 +1035,7 @@ def send_ctrl_dp_ratelimit(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 def send_ctrl_terminate(**kwargs):
     tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
@@ -1047,7 +1047,7 @@ def send_ctrl_terminate(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 def send_ctrl_warning(**kwargs):
     tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
@@ -1059,7 +1059,7 @@ def send_ctrl_warning(**kwargs):
     else:
         if not ('value' in new_tlv):
             new_tlv["value"] = ""
-    return new_tlv
+    return [new_tlv]
 
 def response_ctrl_dstep(**kwargs):
     tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
@@ -1070,7 +1070,7 @@ def response_ctrl_dstep(**kwargs):
         new_tlv["value"] = ""
     else:
         new_tlv["value"] = response_value
-    return new_tlv
+    return [new_tlv]
 
 def response_ctrl_fqdn(**kwargs):
     tlv, policy = kwargs["tlv"], kwargs["policy"]
@@ -1081,7 +1081,7 @@ def response_ctrl_fqdn(**kwargs):
         new_tlv["value"] = ""
     else:
         new_tlv["value"] = response_value
-    return new_tlv
+    return [new_tlv]
 
 def response_ctrl_certificate(**kwargs):
     try:
@@ -1093,7 +1093,7 @@ def response_ctrl_certificate(**kwargs):
             new_tlv["value"] = ""
         else:
             new_tlv["value"] = response_value
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ctrl_certificate()", ex)
         return None
@@ -1110,7 +1110,7 @@ def response_ctrl_caep(**kwargs):
             new_tlv["value"] = ""
         else:
             new_tlv["value"] = response_value
-        return new_tlv
+        return [new_tlv]
 
     except Exception as ex:
         print("Exception in response_ctrl_caep()", ex)
@@ -1127,7 +1127,7 @@ def response_ctrl_dp_rlocs(**kwargs):
             new_tlv["value"] = ""
         else:
             new_tlv["value"] = response_value
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ctrl_dp_rlocs()", ex)
         return None
@@ -1142,7 +1142,7 @@ def response_ctrl_dp_ttl(**kwargs):
             new_tlv["value"] = ""
         else:
             new_tlv["value"] = response_value
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ctrl_dp_ttl()", ex)
         return None
@@ -1154,7 +1154,7 @@ def response_ctrl_dp_keepalive_cycle(**kwargs):
         policy_code = CETP.CONTROL_CODES[code]
         tlv['ope'] = 'info'
         #tlv["value"] = "some-value"
-        return tlv
+        return [tlv]
     except Exception as ex:
         print("Exception in response_ctrl_dp_keepalive_cycle()", ex)
         return None
@@ -1169,7 +1169,7 @@ def response_ctrl_qos(**kwargs):
             new_tlv["value"] = ""
         else:
             new_tlv["value"] = response_value
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ctrl_qos()", ex)
         return None
@@ -1184,7 +1184,7 @@ def response_ctrl_ack(**kwargs):
             new_tlv["value"] = ""
         else:
             new_tlv["value"] = response_value
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ctrl_ack()", ex)
         return None
@@ -1200,7 +1200,7 @@ def response_ctrl_os_version(**kwargs):
             new_tlv["value"] = ""
         else:
             new_tlv["value"] = response_value
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ctrl_os_version()", ex)
         return None
@@ -1215,7 +1215,7 @@ def response_ctrl_policy_caching(**kwargs):
             new_tlv["value"] = ""
         else:
             new_tlv["value"] = response_value
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ctrl_policy_caching()", ex)
         return None
@@ -1231,7 +1231,7 @@ def response_ctrl_dp_proto(**kwargs):
             new_tlv["value"] = ""
         else:
             new_tlv["value"] = response_value
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ctrl_dp_proto()", ex)
         return None
@@ -1247,7 +1247,7 @@ def response_ctrl_dp_port(**kwargs):
             new_tlv["value"] = ""
         else:
             new_tlv["value"] = response_value
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ctrl_dp_port()", ex)
         return None
@@ -1262,7 +1262,7 @@ def response_ctrl_dp_ratelimit(**kwargs):
             new_tlv["value"] = ""
         else:
             new_tlv["value"] = response_value
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ctrl_dp_ratelimit()", ex)
         return None
@@ -1272,7 +1272,7 @@ def response_ctrl_terminate(**kwargs):
         tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
         new_tlv = copy.deepcopy(tlv)
         new_tlv['ope'] = 'info'
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ctrl_terminate()", ex)
         return None
@@ -1282,7 +1282,7 @@ def response_ctrl_warning(**kwargs):
         tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
         new_tlv = copy.deepcopy(tlv)
         new_tlv['ope'] = 'info'
-        return new_tlv
+        return [new_tlv]
     except Exception as ex:
         print("Exception in response_ctrl_warning()", ex)
         return None
