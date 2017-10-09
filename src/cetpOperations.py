@@ -283,7 +283,7 @@ def response_ces_host_filtering(**kwargs):
         new_tlv = copy.copy(tlv)
         ope, cmp, group, code, response_value = policy.get_tlv_details(new_tlv)
         filtering_msg = json.loads(response_value)
-        filtering_timeout = cesparams["host_filtering_timeout"]
+        filtering_timeout = cesparams["host_filtering_t0"]
         
         print("filtering_msg: ", filtering_msg)
         if "remote_host" in filtering_msg:

@@ -438,10 +438,10 @@ class oC2CTransaction(C2CTransaction):
         
         if 'keepalive_cycle' in self.ces_params:
             self.keepalive_cycle    = self.ces_params['keepalive_cycle']
-        if 'keepalive_timeout' in self.ces_params:
-            self.keepalive_timeout  = self.ces_params['keepalive_timeout']
-        if 'state_timeout' in self.ces_params:
-            self.state_timeout      = self.ces_params['state_timeout']
+        if 'keepalive_t0' in self.ces_params:
+            self.keepalive_timeout  = self.ces_params['keepalive_t0']
+        if 'incomplete_cetp_state_t0' in self.ces_params:
+            self.state_timeout      = self.ces_params['incomplete_cetp_state_t0']
 
     
     def _initialize(self):
@@ -682,7 +682,7 @@ class oC2CTransaction(C2CTransaction):
                     return (negotiation_status, "")
                 else:
                     self._logger.info(" Responding remote CES with the terminate-TLV")
-                    tlvs_to_send = [self._create_offer_tlv2(group="ces", code="terminate")]
+                    tlvs_to_send = self._create_offer_tlv2(group="ces", code="terminate")
                     cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
                     self.pprint(cetp_message)
                     cetp_packet = json.dumps(cetp_message)
@@ -803,8 +803,7 @@ class oC2CTransaction(C2CTransaction):
         if not self.terminated:
             self._logger.info(" Sending CES keepalive towards '{}' (SST={}, DST={})".format(self.r_cesid, self.sstag, self.dstag))
             keepalive_tlv = self._create_request_tlv2(group="ces", code="keepalive")
-            tlvs_to_send = [keepalive_tlv]
-            cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
+            cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=keepalive_tlv)
             #self.pprint(cetp_message)
             self.keepalive_trigger_time = time.time()
             self.keepalive_triggered = True
@@ -823,8 +822,8 @@ class oC2CTransaction(C2CTransaction):
         evidence_value = json.dumps(evidence)
         evidence_tlv = self._create_request_tlv2(group="ces", code="evidence")
         evidence_tlv["value"] = evidence_value
-        tlvs_to_send = [evidence_tlv]
-        cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
+        tlvs_to_send = evidence_tlv
+        cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=evidence_tlv)
         cetp_packet = json.dumps(cetp_message)
         #self.pprint(cetp_message)
         self.evidence_acknowledged = False
@@ -837,7 +836,7 @@ class oC2CTransaction(C2CTransaction):
         blocking_payload = json.dumps(blocking_msg)
         host_filter_tlv = self._create_request_tlv2(group="ces", code="host_filtering")
         host_filter_tlv["value"] = blocking_payload
-        tlvs_to_send = [host_filter_tlv]
+        tlvs_to_send = host_filter_tlv
         cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
         cetp_packet = json.dumps(cetp_message)
         #self.pprint(cetp_message)
@@ -851,7 +850,7 @@ class oC2CTransaction(C2CTransaction):
         blocking_payload = json.dumps(blocking_msg)
         host_filter_tlv = self._create_request_tlv2(group="ces", code="host_filtering")
         host_filter_tlv["value"] = blocking_payload
-        tlvs_to_send = [host_filter_tlv]
+        tlvs_to_send = host_filter_tlv
         cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
         cetp_packet = json.dumps(cetp_message)
         #self.pprint(cetp_message)

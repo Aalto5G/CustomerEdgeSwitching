@@ -260,7 +260,6 @@ class H2HTransaction(object):
                     if p['cmp']=="notAvailable":
                         continue
                 #p["value"]
-                print(p)
                 retlist.append(p["code"])
             return retlist
 
@@ -400,8 +399,8 @@ class H2HTransactionOutbound(H2HTransaction):
             if self.load_policies(src_id = self.src_id) == None:
                 return False
             
-            if 'state_timeout' in self.ces_params:
-                self.state_timeout   = self.ces_params['state_timeout']
+            if 'incomplete_cetp_state_t0' in self.ces_params:
+                self.state_timeout   = self.ces_params['incomplete_cetp_state_t0']
         
             # Handler to unregister the incomplete CETP-C2C transaction
             self.h2h_handler = self._loop.call_later(self.state_timeout, self.handle_h2h)

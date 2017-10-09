@@ -7,21 +7,21 @@ CESParameters:
     private_key: config_cesa/cesa.key
     ca_certificate: config_cesa/ca.crt
     dp_ttl: 3600
-    keepalive_timeout: 2
+    transport_establishment_t0: 2
+    incomplete_cetp_state_t0: 2
+    host_filtering_t0: 30
+    keepalive_t0: 2
     keepalive_cycle: 30
-    max_c2c_negotiation_duration: 5
-    state_timeout: 5
     caces: 127.0.0.1
     fw_version: 0.1
+    pow_algo: hashcash
     ces_session_limit: 30
     host_sessions: 2
-    pow_algo: hashcash
     max_ces_session_limit: 100
     max_dp_ttl: 7200
     max_host_ratelimit: 10
     min_keepalive_timeout: 10
-	host_filtering_timeout: 10
-		    
+    
 DNS:
     soa: cesa.lte.
     zonefile: db.cesa.lte.

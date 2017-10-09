@@ -108,7 +108,7 @@ class CETPManager:
             if (len(r_cesid)==0) and (len(l_domain)==0):
                 return
             
-            timeout = int(self.ces_params["host_filtering_timeout"])
+            timeout = int(self.ces_params["host_filtering_t0"])
             #Store locally to detect non-compliance by remote CES
             if len(r_cesid)!=0:
                 keytype = CETPSecurity.KEY_LCES_UnreachableDestinationsForRCES
@@ -134,7 +134,7 @@ class CETPManager:
             if (len(r_cesid)==0) and (len(l_domain)==0):
                 return
             
-            timeout = int(self.ces_params["host_filtering_timeout"])
+            timeout = int(self.ces_params["host_filtering_t0"])
             #Store locally to detect non-compliance by remote CES
             if len(r_cesid)!=0:
                 #Records a host that acted as malicious towards a remote CES
@@ -154,7 +154,7 @@ class CETPManager:
             if (len(r_cesid)==0) and (len(r_hostid)==0):
                 return
             
-            timeout = int(self.ces_params["host_filtering_timeout"])
+            timeout = int(self.ces_params["host_filtering_t0"])
             
             if len(r_cesid)!=0:
                 #Stores the remote-host to be filtered in the security module.         # to detect non-compliance from remote CES
@@ -180,7 +180,7 @@ class CETPManager:
             if (len(r_cesid)==0) and (len(r_hostid)==0):
                 return
             
-            timeout = int(self.ces_params["host_filtering_timeout"])
+            timeout = int(self.ces_params["host_filtering_t0"])
             
             if len(r_cesid)!=0:
                 #Stores the remote-host to be filtered in the security module.         # to detect non-compliance from remote CES
@@ -331,7 +331,7 @@ class CETPManager:
         """ Allows to disable connection initiations towards a local_domain """
         try:
             if len(local_domain)!=0:
-                timeout = self.ces_params["host_filtering_timeout"]
+                timeout = self.ces_params["host_filtering_t0"]
                 self.cetp_security.register_filtered_domains(CETPSecurity.KEY_DisabledLHosts, local_domain, timeout)                 #Store the domain-name to filter
             
         except Exception as ex:

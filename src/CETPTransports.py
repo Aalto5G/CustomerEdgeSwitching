@@ -37,7 +37,7 @@ class oCESTCPTransport(asyncio.Protocol):
         self.c2c_negotiation            = False
         self.remotepeer                 = remote_addr
         self.data_buffer                = b''
-        self.c2c_negotiation_threshold  = ces_params['max_c2c_negotiation_duration']           # In seconds
+        self.c2c_negotiation_threshold  = int(ces_params['transport_establishment_t0'])           # In seconds
         self._logger.setLevel(LOGLEVEL_oCESTCPTransport)
         self._loop.call_later(self.c2c_negotiation_threshold, self.is_c2c_negotiated)
 
@@ -133,9 +133,11 @@ class iCESServerTCPTransport(asyncio.Protocol):
         self._logger         = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_iCESTCPServerTransport)
         self.data_buffer     = b''
-        self.c2c_negotiation_threshold = ces_params['max_c2c_negotiation_duration']              # In seconds
+        self.c2c_negotiation_threshold = int(ces_params['transport_establishment_t0'])              # In seconds
+        print("1111")
         
     def connection_made(self, transport):
+        print("1111")
         self.remotepeer = transport.get_extra_info('peername')
         self._logger.info('Connection from {}'.format(self.remotepeer))
         self.transport = transport
@@ -230,7 +232,7 @@ class iCESServerTLSTransport(asyncio.Protocol):
         self._logger         = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_iCESTLSServerTransport)
         self.data_buffer     = b''
-        self.c2c_negotiation_threshold = ces_params['max_c2c_negotiation_duration']              # In seconds
+        self.c2c_negotiation_threshold = int(ces_params['transport_establishment_t0'])              # In seconds
         
     def connection_made(self, transport):
         self.remotepeer = transport.get_extra_info('peername')
