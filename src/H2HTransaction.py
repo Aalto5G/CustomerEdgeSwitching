@@ -391,7 +391,7 @@ class H2HTransactionOutbound(H2HTransaction):
             if not self.is_local_host_allowed(self.src_id):
                 self._logger.warning(" Sender '{}' cannot initiate connection towards CES '{}'".format(self.src_id, self.r_cesid))
                 return False
-            if not self.is_remote_host_allowed(self.dst_id):
+            if not self.is_remote_destination_allowed(self.dst_id):
                 self._logger.warning(" Remote CES doesn't accept connection to '{}'.".format(self.dst_id))
                 return False
             
@@ -672,7 +672,7 @@ class H2HTransactionOutbound(H2HTransaction):
         return True
 
 
-    def is_remote_host_allowed(self, hostid):
+    def is_remote_destination_allowed(self, hostid):
         """ Determines whether the traffic to destination is permitted """
         if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlacklistedRHosts, hostid):
             return False
@@ -802,7 +802,7 @@ class H2HTransactionInbound(H2HTransaction):
             if not self.is_remote_host_allowed(self.src_id):
                 self._logger.warning(" Sender '{}' is blocked.".format(self.src_id))
                 return False
-            if not self.is_local_host_allowed(self.dst_id):
+            if not self.is_local_destination_allowed(self.dst_id):
                 self._logger.warning(" Connection to destination '{}' is not allowed".format(self.dst_id))
                 return False
             
@@ -816,7 +816,7 @@ class H2HTransactionInbound(H2HTransaction):
             return False
 
 
-    def is_local_host_allowed(self, hostid):
+    def is_local_destination_allowed(self, hostid):
         """ Checks in the CETPSecurity module if the traffic from the sender host is permitted.. OR  whether the host is blacklisted """
         if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlacklistedLHosts, hostid):
             return False
@@ -1010,7 +1010,8 @@ class H2HTransactionInbound(H2HTransaction):
 
 
 class H2HTransactionLocal(H2HTransaction):
-    def __init__(self, loop=None, host_ip="", cb=None, src_id="", dst_id="", policy_mgr= None, host_register=None, cetpstate_mgr=None, cetp_h2h=None, interfaces=None, conn_table=None, name="H2HTransactionLocal"):
+    def __init__(self, loop=None, host_ip="", cb=None, src_id="", dst_id="", policy_mgr= None, host_register=None, cetpstate_mgr=None, cetp_h2h=None, \
+                 interfaces=None, conn_table=None, cetp_security=None, name="H2HTransactionLocal"):
         self.cb                 = cb
         self.host_ip            = host_ip                   # IP of the sender host
         self.src_id             = src_id                    # FQDN
@@ -1022,6 +1023,7 @@ class H2HTransactionLocal(H2HTransaction):
         self.host_register      = host_register
         self.interfaces         = interfaces
         self.conn_table         = conn_table
+        self.cetp_security      = cetp_security
         self.l_cesid            = ""
         self.r_cesid            = ""
         self.name               = name
@@ -1032,6 +1034,13 @@ class H2HTransactionLocal(H2HTransaction):
     def _initialize(self):
         yield from asyncio.sleep(0.000)          # Simulating the delay in loading policies from the Policy System
         self.src_id   = self.host_register.ip_to_fqdn_mapping(self.host_ip)
+        sender_permitted = self.check_outbound_permission(self.src_id)
+        destination_permitted = self.check_inbound_permission(self.dst_id)
+        
+        if (not sender_permitted) or (not destination_permitted):
+            self._logger.warning("Communication from sender <{}> to destination <{}> is not allowed.".format(self.src_id, self.dst_id))
+            return False
+        
         self.opolicy  = self.policy_mgr.get_host_policy("outbound", host_id=self.src_id)
         self.ipolicy  = self.policy_mgr.get_host_policy("inbound",  host_id=self.dst_id)
         
@@ -1044,7 +1053,7 @@ class H2HTransactionLocal(H2HTransaction):
         """ Starts the CETPLocal policy negotiation """
         initialized = yield from self._initialize()
         if not initialized:
-            self._logger.info(" Failure in initiating the local H2H session.")
+            self._logger.error(" Failure in initiating the local H2H session.")
             return None
         
         #self._logger.info("Local-host policy: {}".format(self.opolicy))
@@ -1142,3 +1151,23 @@ class H2HTransactionLocal(H2HTransaction):
         return lpip
         
 
+    def check_outbound_permission(self, hostid):
+        """ Checks in the CETPSecurity module if traffic from the sender is permitted """
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlacklistedLHosts, hostid):
+            return False
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_DisabledLHosts, hostid):
+            return False
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_LocalHosts_Outbound_Disabled, hostid):
+            return False
+        return True
+
+    def check_inbound_permission(self, hostid):
+        """ Checks in the CETPSecurity module if traffic to the destination host is permitted. """
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlacklistedLHosts, hostid):
+            return False
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_DisabledLHosts, hostid):
+            return False
+        if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_LocalHosts_Inbound_Disabled, hostid):
+            return False
+        return True
+    

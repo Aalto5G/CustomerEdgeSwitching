@@ -916,17 +916,6 @@ def send_ctrl_caep(**kwargs):
             new_tlv["value"] = ""
     return [new_tlv]
 
-def send_ctrl_dp_rlocs(**kwargs):
-    tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
-    #policy_code = CETP.CES_CODE_TO_POLICY[code]
-    new_tlv = copy.deepcopy(tlv)
-    if query==True:
-        if 'value' in new_tlv:
-            del new_tlv["value"]
-    else:
-        if not ('value' in new_tlv):
-            new_tlv["value"] = ""
-    return [new_tlv]
 
 def send_ctrl_dp_ttl(**kwargs):
     tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
@@ -1117,21 +1106,6 @@ def response_ctrl_caep(**kwargs):
         return None
 
 
-def response_ctrl_dp_rlocs(**kwargs):
-    try:
-        tlv, policy = kwargs["tlv"], kwargs["policy"]
-        new_tlv = copy.deepcopy(tlv)
-        ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-        new_tlv['ope'] = 'info'
-        if response_value==None:
-            new_tlv["value"] = ""
-        else:
-            new_tlv["value"] = response_value
-        return [new_tlv]
-    except Exception as ex:
-        print("Exception in response_ctrl_dp_rlocs()", ex)
-        return None
-
 def response_ctrl_dp_ttl(**kwargs):
     try:
         tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
@@ -1318,14 +1292,6 @@ def verify_ctrl_caep(**kwargs):
         if tlv['cmp'] == "notAvailable":
             return False
     
-    return True
-
-def verify_ctrl_dp_rlocs(**kwargs):
-    tlv, code = kwargs["tlv"], kwargs["code"]
-    #policy_code = CETP.CONTROL_CODES[code]
-    if 'cmp' in tlv:
-        if tlv['cmp'] == "notAvailable":
-            return False
     return True
 
 def verify_ctrl_dp_ttl(**kwargs):

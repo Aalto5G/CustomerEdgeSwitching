@@ -563,7 +563,7 @@ class CETPManager:
                 c2c_layer.set_connectivity_params()
             else:
                 c2c_layer = self.get_c2c_layer(r_cesid)                 # Gets existing c2c-layer for remote ’cesid’
-            
+
             stateful_transaction._assign_c2c_layer(c2c_layer)
             c2c_layer.register_c2c_transport(transport, stateful_transaction)
             transport.set_c2c_details(r_cesid, c2c_layer)
@@ -587,6 +587,8 @@ class CETPManager:
             return response
 
 
+""" Test functions """
+
 def test_cetp_ep_creation(cetp_mgr):
     """ Testing the addition of a new cetp_endpoint """
     r_cesid = "random_ces.lte."
@@ -601,13 +603,21 @@ def test_cetp_layering(cetp_mgr):
     print("Initiating a connection towards: ", r_cesid)
     sender_info = ("10.0.3.111", 43333)
     cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
-    
+
+@asyncio.coroutine   
 def test3(cetp_mgr):
-    pass
+    sender_info = ("10.0.3.111", 43333)
+    dns_cb = (1,(2, sender_info))
+    cb_args = (2, sender_info)
+    dst_id = "srv1.hosta1.cesa.lte."
+    cetp_mgr.block_connections_to_local_domain(l_domain=dst_id)
+    asyncio.sleep(0.2)
+    cetp_mgr.process_local_cetp(dns_cb, cb_args, dst_id)
 
 def test4(cetp_mgr):
     pass
 
+@asyncio.coroutine  
 def test_terminate_cetp_c2c_signalling(cetp_mgr):
     sender_info = ("10.0.3.111", 43333)
     dst_id, r_cesid, r_ip, r_port, r_proto = "", "", "", "", ""
@@ -739,7 +749,7 @@ def test_drop_connection(cetp_mgr):
     
     
 def test_func(loop):
-    filename = "config_cesa/config_cesa_container2.yaml"
+    filename = "config_cesa/config_cesa_container.yaml"
     config_file = open(filename)
     ces_conf = yaml.load(config_file)
     logging.basicConfig(level=logging.DEBUG)
@@ -749,7 +759,8 @@ def test_func(loop):
     cetp_policies   = ces_conf["cetp_policy_file"]
     print("Local CESID: ", cesid)
     cetp_mgr = CETPManager(cetp_policies, cesid, ces_params, loop=loop)
-    test_cetp_layering(cetp_mgr)
+    #test_cetp_layering(cetp_mgr)
+    asyncio.ensure_future(test3(cetp_mgr))
     #asyncio.ensure_future(test_h2h_session_termination(cetp_mgr))
     #asyncio.ensure_future(test_drop_connection(cetp_mgr))
     #asyncio.ensure_future(test_terminate_cetp_c2c_signalling(cetp_mgr))

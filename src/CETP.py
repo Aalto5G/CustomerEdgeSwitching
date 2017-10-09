@@ -172,34 +172,33 @@ RESPONSE_TLV_ID_CODE     = {"fqdn":cetpOperations.response_id,
 
 
 VERIFY_TLV_ID_CODE       = {"fqdn":cetpOperations.verify_id,
-                         "maid":cetpOperations.verify_id,
-                         "moc":cetpOperations.verify_id,
-                         "hash":cetpOperations.verify_id,
-                         "temp":cetpOperations.verify_id,
-                         "random":cetpOperations.verify_id,
-                         "bbbbid":cetpOperations.verify_id,
-                         "msisdn":cetpOperations.verify_id,
-                         "sip_uri":cetpOperations.verify_id,
-                         "impu":cetpOperations.verify_id
+                            "maid":cetpOperations.verify_id,
+                            "moc":cetpOperations.verify_id,
+                            "hash":cetpOperations.verify_id,
+                            "temp":cetpOperations.verify_id,
+                            "random":cetpOperations.verify_id,
+                            "bbbbid":cetpOperations.verify_id,
+                            "msisdn":cetpOperations.verify_id,
+                            "sip_uri":cetpOperations.verify_id,
+                            "impu":cetpOperations.verify_id
                          }
 
 
 SEND_TLV_CONTROL_CODE = {"dstep":cetpOperations.send_ctrl_dstep,
-                      "fqdn":cetpOperations.send_ctrl_fqdn,
-                      "certificate":cetpOperations.send_ctrl_certificate,
-                      "caep":cetpOperations.send_ctrl_caep,
-                      "dp_rlocs":cetpOperations.send_ctrl_dp_rlocs,
-                      "dp_ttl":cetpOperations.send_ctrl_dp_ttl,
-                      "dp_keepalive_cycle":cetpOperations.send_ctrl_dp_keepalive_cycle,
-                      "qos":cetpOperations.send_ctrl_qos,
-                      "ack":cetpOperations.send_ctrl_ack,
-                      "os_version":cetpOperations.send_ctrl_os_version,
-                      "policy_caching":cetpOperations.send_ctrl_policy_caching,
-                      "dp_proto":cetpOperations.send_ctrl_dp_proto,
-                      "dp_port":cetpOperations.send_ctrl_dp_port,
-                      "dp_ratelimit":cetpOperations.send_ctrl_dp_ratelimit,
-                      "terminate":cetpOperations.send_ctrl_terminate,
-                      "warning":cetpOperations.send_ctrl_warning,
+                         "fqdn":cetpOperations.send_ctrl_fqdn,
+                         "certificate":cetpOperations.send_ctrl_certificate,
+                         "caep":cetpOperations.send_ctrl_caep,
+                         "dp_ttl":cetpOperations.send_ctrl_dp_ttl,
+                         "dp_keepalive_cycle":cetpOperations.send_ctrl_dp_keepalive_cycle,
+                         "qos":cetpOperations.send_ctrl_qos,
+                         "ack":cetpOperations.send_ctrl_ack,
+                         "os_version":cetpOperations.send_ctrl_os_version,
+                         "policy_caching":cetpOperations.send_ctrl_policy_caching,
+                         "dp_proto":cetpOperations.send_ctrl_dp_proto,
+                         "dp_port":cetpOperations.send_ctrl_dp_port,
+                         "dp_ratelimit":cetpOperations.send_ctrl_dp_ratelimit,
+                         "terminate":cetpOperations.send_ctrl_terminate,
+                         "warning":cetpOperations.send_ctrl_warning
                       }
 
 
@@ -238,21 +237,20 @@ SEND_TLV_GROUP = {TLV_GROUP["id"]:SEND_TLV_ID_CODE,
 
 
 RESPONSE_TLV_CONTROl_CODE = {"dstep":cetpOperations.response_ctrl_dstep,
-                      "fqdn":cetpOperations.response_ctrl_fqdn,
-                      "certificate":cetpOperations.response_ctrl_certificate,
-                      "caep":cetpOperations.response_ctrl_caep,
-                      "dp_rlocs":cetpOperations.response_ctrl_dp_rlocs,
-                      "dp_ttl":cetpOperations.response_ctrl_dp_ttl,
-                      "dp_keepalive_cycle":cetpOperations.response_ctrl_dp_keepalive_cycle,
-                      "qos":cetpOperations.response_ctrl_qos,
-                      "ack":cetpOperations.response_ctrl_ack,
-                      "os_version":cetpOperations.response_ctrl_os_version,
-                      "policy_caching":cetpOperations.response_ctrl_policy_caching,
-                      "dp_proto":cetpOperations.response_ctrl_dp_proto,
-                      "dp_port":cetpOperations.response_ctrl_dp_port,
-                      "dp_ratelimit":cetpOperations.response_ctrl_dp_ratelimit,
-                      "terminate":cetpOperations.response_ctrl_terminate,
-                      "warning":cetpOperations.response_ctrl_warning
+                             "fqdn":cetpOperations.response_ctrl_fqdn,
+                             "certificate":cetpOperations.response_ctrl_certificate,
+                             "caep":cetpOperations.response_ctrl_caep,
+                             "dp_ttl":cetpOperations.response_ctrl_dp_ttl,
+                             "dp_keepalive_cycle":cetpOperations.response_ctrl_dp_keepalive_cycle,
+                             "qos":cetpOperations.response_ctrl_qos,
+                             "ack":cetpOperations.response_ctrl_ack,
+                             "os_version":cetpOperations.response_ctrl_os_version,
+                             "policy_caching":cetpOperations.response_ctrl_policy_caching,
+                             "dp_proto":cetpOperations.response_ctrl_dp_proto,
+                             "dp_port":cetpOperations.response_ctrl_dp_port,
+                             "dp_ratelimit":cetpOperations.response_ctrl_dp_ratelimit,
+                             "terminate":cetpOperations.response_ctrl_terminate,
+                             "warning":cetpOperations.response_ctrl_warning
                       }
 
 
@@ -273,17 +271,16 @@ RESPONSE_TLV_CES_CODE     = { "cesid":cetpOperations.response_ces_cesid,
                               }
 
 RESPONSE_TLV_GROUP = {TLV_GROUP["id"]:RESPONSE_TLV_ID_CODE,
-                   TLV_GROUP["payload"]:RESPONSE_TLV_PAYLOAD_CODE,
-                   TLV_GROUP["rloc"]:RESPONSE_TLV_RLOC_CODE,
-                   TLV_GROUP["control"]:RESPONSE_TLV_CONTROl_CODE,
-                   TLV_GROUP['ces']:RESPONSE_TLV_CES_CODE }
+                      TLV_GROUP["payload"]:RESPONSE_TLV_PAYLOAD_CODE,
+                      TLV_GROUP["rloc"]:RESPONSE_TLV_RLOC_CODE,
+                      TLV_GROUP["control"]:RESPONSE_TLV_CONTROl_CODE,
+                      TLV_GROUP['ces']:RESPONSE_TLV_CES_CODE }
 
 
 VERIFY_TLV_CONTROl_CODE = {"dstep":cetpOperations.verify_ctrl_dstep,
-                      "fqdn":cetpOperations.verify_ctrl_fqdn,
+                           "fqdn":cetpOperations.verify_ctrl_fqdn,
                       "certificate":cetpOperations.verify_ctrl_certificate,
                       "caep":cetpOperations.verify_ctrl_caep,
-                      "dp_rlocs":cetpOperations.verify_ctrl_dp_rlocs,
                       "dp_ttl":cetpOperations.verify_ctrl_dp_ttl,
                       "dp_keepalive_cycle":cetpOperations.verify_ctrl_dp_keepalive_cycle,
                       "qos":cetpOperations.verify_ctrl_qos,

@@ -240,7 +240,7 @@ class CETPH2HLocal:
         dns_q, addr = cb_args
         ip_addr, port = addr
         h2h = H2HTransaction.H2HTransactionLocal(loop=self._loop, cb=cb, host_ip=ip_addr, src_id="", dst_id=dst_id, policy_mgr=self.policy_mgr, cetp_h2h=self, \
-                                                 cetpstate_mgr=self.cetpstate_mgr, host_register=self.host_register, conn_table=self.conn_table)
+                                                 cetpstate_mgr=self.cetpstate_mgr, cetp_security= self.cetp_security, host_register=self.host_register, conn_table=self.conn_table)
         result = yield from h2h.start_cetp_processing()     # Returns True or False
         if result == True:
             print("OK")
