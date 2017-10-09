@@ -587,7 +587,16 @@ class CETPManager:
             return response
 
 
+
+
 """ Test functions """
+def output_system_states(cetp_mgr, r_cesid):
+    print("\n\nTesting results:")
+    print("cetp_mgr.has_cetp_endpoint(r_cesid)", cetp_mgr.has_cetp_endpoint(r_cesid))
+    print("cetp_mgr.has_c2c_layer", cetp_mgr.has_c2c_layer(r_cesid))
+    print("CETP states: ", cetp_mgr.cetpstate_mgr.cetp_transactions[ConnectionTable.KEY_ESTABLISHED_CETP])
+    #print("CETP session states:\n", cetp_mgr.cetpstate_mgr.cetp_transactions[ConnectionTable.KEY_ESTABLISHED_CETP])
+    #print("Connection Table:\n", cetp_mgr.conn_table.connection_dict)
 
 def test_cetp_ep_creation(cetp_mgr):
     """ Testing the addition of a new cetp_endpoint """
@@ -596,16 +605,11 @@ def test_cetp_ep_creation(cetp_mgr):
     assert cetp_mgr.has_cetp_endpoint(r_cesid)==True
 
 def test_cetp_layering(cetp_mgr):
-    """ Testing the establishment of CETP-H2H, CETP-C2C layer and CETPTransport(s) upon getting list of NAPTR records for a new remote CESID."""
-    naptr_list = [('srv1.hostb1.cesb.lte.', 'cesb.lte.', '10.0.3.103', '49001', 'tcp')]
-    #naptr_list = [('srv1.hostb1.cesb.lte.', 'cesb.lte.', '10.0.3.103', '49001', 'tcp'), ('srv1.hostb1.cesb.lte.', 'cesb.lte.', '10.0.3.103', '49002', 'tcp')]
-    dst_id, r_cesid, r_ip, r_port, r_proto = ('srv1.hostb1.cesb.lte.', 'cesb.lte.', '10.0.3.103', '49001', 'tcp')
-    print("Initiating a connection towards: ", r_cesid)
-    sender_info = ("10.0.3.111", 43333)
-    cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
+    """ Tests the establishment of CETP-H2H, CETP-C2C layer and CETPTransport(s) upon getting list of NAPTR records for a new remote CESID."""
+    setup_for_cetp_negotiation()
 
 @asyncio.coroutine   
-def test3(cetp_mgr):
+def test_local_cetp(cetp_mgr):
     sender_info = ("10.0.3.111", 43333)
     dns_cb = (1,(2, sender_info))
     cb_args = (2, sender_info)
@@ -614,64 +618,31 @@ def test3(cetp_mgr):
     asyncio.sleep(0.2)
     cetp_mgr.process_local_cetp(dns_cb, cb_args, dst_id)
 
-def test4(cetp_mgr):
-    pass
-
-@asyncio.coroutine  
+@asyncio.coroutine
 def test_terminate_cetp_c2c_signalling(cetp_mgr):
-    sender_info = ("10.0.3.111", 43333)
+    sender_info, naptr_records, l_hostid, l_hostip = setup_for_cetp_negotiation()
     dst_id, r_cesid, r_ip, r_port, r_proto = "", "", "", "", ""
-    naptr_records = {}
-    naptr_records['srv1.hostb1.cesb.lte.']         = [('srv1.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49001', 'tcp')]
-    naptr_records['srv2.hostb1.cesb.lte.']         = [('srv2.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49002', 'tcp')]
-    
-    l_hostid = "hosta1.cesa.lte."
-    l_hostip = sender_info[0]
-
-    print("\nInitiating first H2H query")
-    for naptr_rr in naptr_records['srv1.hostb1.cesb.lte.']:
-        dst_id, r_cesid, r_ip, r_port, r_proto = naptr_rr
-        naptr_list = naptr_records['srv1.hostb1.cesb.lte.']
-        
-    cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
+    yield from asyncio.sleep(0.5)
     
     print("\nInitiating second H2H query")
     for naptr_rr in naptr_records['srv2.hostb1.cesb.lte.']:
         dst_id, r_cesid, r_ip, r_port, r_proto = naptr_rr
         naptr_list = naptr_records['srv2.hostb1.cesb.lte.']
         
-    cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
+    cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)    
+    yield from asyncio.sleep(1)
     
-    yield from asyncio.sleep(2)
-    
-    r_cesid = "cesb.lte."
-    #r_cesid = "cesc.lte."
     #cetp_mgr.terminate_cetp_c2c_signalling(r_cesid, terminate_h2h=False)
     cetp_mgr.terminate_cetp_c2c_signalling(r_cesid, terminate_h2h=True)
-    asyncio.sleep(1)
-    print("\n\nTesting results:")
-    print("cetp_mgr.has_cetp_endpoint(r_cesid)", cetp_mgr.has_cetp_endpoint(r_cesid))
-    print("cetp_mgr.has_c2c_layer", cetp_mgr.has_c2c_layer(r_cesid))
-    print("CETP states: ", cetp_mgr.cetpstate_mgr.cetp_transactions[ConnectionTable.KEY_ESTABLISHED_CETP])
 
 
 @asyncio.coroutine    
 def test_h2h_session_termination(cetp_mgr):
     """ Tests termination of H2H-CETP sessions based on different parameters: Local host-ID, Local host-IP, remote host-ID and (sender-ID, dst-ID) pair. """
-    sender_info = ("10.0.3.111", 43333)
+    sender_info, naptr_records, l_hostid, l_hostip = setup_for_cetp_negotiation()
     dst_id, r_cesid, r_ip, r_port, r_proto = "", "", "", "", ""
-    naptr_records = {}
-    naptr_records['srv1.hostb1.cesb.lte.']         = [('srv1.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49001', 'tcp')]
-    naptr_records['srv2.hostb1.cesb.lte.']         = [('srv2.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49002', 'tcp')]
-    
-    print("\nInitiating first H2H query")
-    for naptr_rr in naptr_records['srv1.hostb1.cesb.lte.']:
-        dst_id, r_cesid, r_ip, r_port, r_proto = naptr_rr
-        naptr_list = naptr_records['srv1.hostb1.cesb.lte.']
-        
-    cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
-    yield from asyncio.sleep(1)
-    
+    yield from asyncio.sleep(0.5)
+
     print("\nInitiating second H2H query")
     for naptr_rr in naptr_records['srv2.hostb1.cesb.lte.']:
         dst_id, r_cesid, r_ip, r_port, r_proto = naptr_rr
@@ -679,8 +650,7 @@ def test_h2h_session_termination(cetp_mgr):
         
     cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
     yield from asyncio.sleep(2)
-    
-    
+        
     # Tests termination of H2H-CETP sessions involving a particular local-host, based on host-ID or host-IP
     l_hostid = "hosta1.cesa.lte."
     l_hostip = sender_info[0]
@@ -693,30 +663,13 @@ def test_h2h_session_termination(cetp_mgr):
     #cetp_mgr.terminate_remote_host_sessions(r_hostid)
     #cetp_mgr.terminate_session_by_fqdns(l_hostid=l_hostid, r_hostid=r_hostid)
 
-    # Checks for verifying the test execution
-    #print("\nPost deletion check")
-    #print("CETP session states:\n", cetp_mgr.cetpstate_mgr.cetp_transactions[ConnectionTable.KEY_ESTABLISHED_CETP])
-    #print("Connection Table:\n", cetp_mgr.conn_table.connection_dict)
 
 @asyncio.coroutine
 def test_drop_connection(cetp_mgr):
     """ Tests whether CETPSecurity module can block connection requests to/from undesired parties. """
-    sender_info = ("10.0.3.111", 43333)
+    sender_info, naptr_records, l_hostid, l_hostip = setup_for_cetp_negotiation()
     dst_id, r_cesid, r_ip, r_port, r_proto = "", "", "", "", ""
-    naptr_records = {}
-    naptr_records['srv1.hostb1.cesb.lte.']         = [('srv1.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49001', 'tcp')]
-    naptr_records['srv2.hostb1.cesb.lte.']         = [('srv2.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49002', 'tcp')]
-    
-    l_hostid = "hosta1.cesa.lte."
-    l_hostip = sender_info[0]
-
-    print("\nInitiating first H2H query")
-    for naptr_rr in naptr_records['srv1.hostb1.cesb.lte.']:
-        dst_id, r_cesid, r_ip, r_port, r_proto = naptr_rr
-        naptr_list = naptr_records['srv1.hostb1.cesb.lte.']
-        
-    cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
-    yield from asyncio.sleep(1)
+    yield from asyncio.sleep(0.5)
     
     #cetp_mgr.block_connections_from_local_domain(l_domain=l_hostid)
     #cetp_mgr.block_connections_from_local_domain(l_domain=l_hostid, r_cesid=r_cesid)
@@ -733,8 +686,7 @@ def test_drop_connection(cetp_mgr):
     #cetp_mgr.block_connections_to_remote_ces_host(r_hostid="srv2.hostb1.cesb.lte.", r_cesid="cesb.lte.")
     #cetp_mgr.disable_local_host(local_domain="hosta1.cesa.lte.")
     cetp_mgr.send_evidence(lip="10.0.3.111", lpip="", evidence="")
-    
-    yield from asyncio.sleep(1)
+    yield from asyncio.sleep(0.5)
     
     print("\nInitiating second H2H query")
     for naptr_rr in naptr_records['srv2.hostb1.cesb.lte.']:
@@ -742,36 +694,55 @@ def test_drop_connection(cetp_mgr):
         naptr_list = naptr_records['srv2.hostb1.cesb.lte.']
         
     cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
-    #yield from asyncio.sleep(2)
+
+
+def setup_for_cetp_negotiation():
+    """ initial setup for testing """
+    sender_info = ("10.0.3.111", 43333)
+    dst_id, r_cesid, r_ip, r_port, r_proto = "", "", "", "", ""
+    naptr_records = {}
+    naptr_records['srv1.hostb1.cesb.lte.']         = [('srv1.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49001', 'tcp')]
+    naptr_records['srv2.hostb1.cesb.lte.']         = [('srv2.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49002', 'tcp')]
     
+    l_hostid = "hosta1.cesa.lte."
+    l_hostip = sender_info[0]
+
+    print("Initiating the 1st H2H negotiation")
+    for naptr_rr in naptr_records['srv1.hostb1.cesb.lte.']:
+        dst_id, r_cesid, r_ip, r_port, r_proto = naptr_rr
+        naptr_list = naptr_records['srv1.hostb1.cesb.lte.']
+        
+    cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
+    # I could define my own callback here, and it will be executed. This doesn't have to be ugly as above.
+    return (sender_info, naptr_records, l_hostid, l_hostip)
+
     
-    
-    
+def _initialize_testing(loop):
+    try:
+        config_file = "config_cesa/config_cesa_container.yaml"
+        config = open(config_file)
+        ces_conf = yaml.load(config)
+        ces_params      = ces_conf['CESParameters']
+        cesid           = ces_params['cesid']
+        cetp_policies   = ces_conf["cetp_policy_file"]
+        logging.basicConfig(level=logging.DEBUG)
+        cetp_mgr = CETPManager(cetp_policies, cesid, ces_params, loop=loop)
+        print("Ready for testing")
+        return cetp_mgr
+    except Exception as ex:
+        print("Exception: ", ex)
     
 def test_func(loop):
-    filename = "config_cesa/config_cesa_container.yaml"
-    config_file = open(filename)
-    ces_conf = yaml.load(config_file)
-    logging.basicConfig(level=logging.DEBUG)
+    cetp_mgr = _initialize_testing(loop)
+    if cetp_mgr==None:
+        return
     
-    ces_params      = ces_conf['CESParameters']
-    cesid           = ces_params['cesid']
-    cetp_policies   = ces_conf["cetp_policy_file"]
-    print("Local CESID: ", cesid)
-    cetp_mgr = CETPManager(cetp_policies, cesid, ces_params, loop=loop)
     #test_cetp_layering(cetp_mgr)
-    asyncio.ensure_future(test3(cetp_mgr))
+    asyncio.ensure_future(test_local_cetp(cetp_mgr))
     #asyncio.ensure_future(test_h2h_session_termination(cetp_mgr))
     #asyncio.ensure_future(test_drop_connection(cetp_mgr))
     #asyncio.ensure_future(test_terminate_cetp_c2c_signalling(cetp_mgr))
     
-    """
-    naptr_records['srv1.hostb1.cesb.lte.']         = [('srv1.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49001', 'tcp'), ('srv1.hostb1.cesb.lte.', 'cesb.lte.', '10.0.3.103', '49002', 'tcp')]
-    test3(cetp_mgr, naptr_list)
-    naptr_records['hostc1.cesb.lte.']              = [('hostb1.cesb.lte.',          'cesc.lte.', '10.0.3.103', '49001', 'tcp')]
-    naptr_records['hostd1.cesb.lte.']              = [('hostb1.cesb.lte.',          'cesd.lte.', '10.0.3.103', '49001', 'tcp')]
-    naptr_records['hoste1.cesb.lte.']              = [('hostb1.cesb.lte.',          'cese.lte.', '10.0.3.103', '49001', 'tcp')]
-    """
 
 
 
