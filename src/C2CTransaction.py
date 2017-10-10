@@ -29,7 +29,7 @@ DEFAULT_STATE_TIMEOUT           = 11
 NEGOTIATION_RTT_THRESHOLD       = 3
 
 """
-General_policy
+General_CES_policy
         cesid: cesa.lte.
         certificate: config_cesa/cesa.crt
         #private_key: config_cesa/cesa.key
@@ -46,7 +46,6 @@ General_policy
         max_dp_ttl: 7200
         max_host_ratelimit: 10
         min_keepalive_timeout: 10
-
 """
 
 
@@ -58,7 +57,7 @@ class C2CTransaction(object):
 
     def get_cetp_packet(self, sstag=None, dstag=None, tlvs=[]):
         """ Default CETP fields for signalling message """
-        version                     = 1
+        version                     = 2
         cetp_header                 = {}
         cetp_header['VER']          = version
         cetp_header['SST']          = sstag

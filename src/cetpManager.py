@@ -598,16 +598,6 @@ def output_system_states(cetp_mgr, r_cesid):
     #print("CETP session states:\n", cetp_mgr.cetpstate_mgr.cetp_transactions[ConnectionTable.KEY_ESTABLISHED_CETP])
     #print("Connection Table:\n", cetp_mgr.conn_table.connection_dict)
 
-def test_cetp_ep_creation(cetp_mgr):
-    """ Testing the addition of a new cetp_endpoint """
-    r_cesid = "random_ces.lte."
-    cetp_ep = cetp_mgr.create_cetp_endpoint(r_cesid)
-    assert cetp_mgr.has_cetp_endpoint(r_cesid)==True
-
-def test_cetp_layering(cetp_mgr):
-    """ Tests the establishment of CETP-H2H, CETP-C2C layer and CETPTransport(s) upon getting list of NAPTR records for a new remote CESID."""
-    setup_for_cetp_negotiation()
-
 @asyncio.coroutine   
 def test_local_cetp(cetp_mgr):
     sender_info = ("10.0.3.111", 43333)
@@ -620,6 +610,7 @@ def test_local_cetp(cetp_mgr):
 
 @asyncio.coroutine
 def test_terminate_cetp_c2c_signalling(cetp_mgr):
+    """ Terminate C2C signalling between two CES nodes """
     sender_info, naptr_records, l_hostid, l_hostip = setup_for_cetp_negotiation()
     dst_id, r_cesid, r_ip, r_port, r_proto = "", "", "", "", ""
     yield from asyncio.sleep(0.5)
@@ -630,7 +621,7 @@ def test_terminate_cetp_c2c_signalling(cetp_mgr):
         naptr_list = naptr_records['srv2.hostb1.cesb.lte.']
         
     cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)    
-    yield from asyncio.sleep(1)
+    yield from asyncio.sleep(0.5)
     
     #cetp_mgr.terminate_cetp_c2c_signalling(r_cesid, terminate_h2h=False)
     cetp_mgr.terminate_cetp_c2c_signalling(r_cesid, terminate_h2h=True)
@@ -650,40 +641,40 @@ def test_h2h_session_termination(cetp_mgr):
         
     cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
     yield from asyncio.sleep(2)
-        
+    
+    # Pick one of the following tests  
     # Tests termination of H2H-CETP sessions involving a particular local-host, based on host-ID or host-IP
-    l_hostid = "hosta1.cesa.lte."
-    l_hostip = sender_info[0]
     #print("Request to terminate H2H-CETP sessions involving the host-id <{}>.".format(l_hostid))         # Does it close all session initiated by a host-id or all sessions involving a hostid?
-    #cetp_mgr.terminate_local_host_sessions(l_hostid=l_hostid)
+    #cetp_mgr.terminate_local_host_sessions(l_hostid="hosta1.cesa.lte.")
     #cetp_mgr.terminate_local_host_sessions(lip=l_hostip)
     
     # Tests termination of session with a remote host
-    r_hostid = "srv1.hostb1.cesb.lte."
-    #cetp_mgr.terminate_remote_host_sessions(r_hostid)
-    #cetp_mgr.terminate_session_by_fqdns(l_hostid=l_hostid, r_hostid=r_hostid)
+    #cetp_mgr.terminate_remote_host_sessions("srv1.hostb1.cesb.lte.")
+    #cetp_mgr.terminate_session_by_fqdns(l_hostid="hosta1.cesa.lte.", r_hostid="srv1.hostb1.cesb.lte.")
 
 
 @asyncio.coroutine
 def test_drop_connection(cetp_mgr):
-    """ Tests whether CETPSecurity module can block connection requests to/from undesired parties. """
+    """ Checks whether CETPSecurity module can block connection requests to/from undesired parties. """
     sender_info, naptr_records, l_hostid, l_hostip = setup_for_cetp_negotiation()
     dst_id, r_cesid, r_ip, r_port, r_proto = "", "", "", "", ""
     yield from asyncio.sleep(0.5)
     
+    # Pick one of the test, to check whether inbound/outbound connections to/from undesired local domains are blocked
+    l_domain = "srv1.hosta1.cesa.lte."
     #cetp_mgr.block_connections_from_local_domain(l_domain=l_hostid)
     #cetp_mgr.block_connections_from_local_domain(l_domain=l_hostid, r_cesid=r_cesid)
-    l_domain = "srv1.hosta1.cesa.lte."
     #cetp_mgr.block_connections_to_local_domain(l_domain=l_domain, r_cesid=r_cesid)
     #cetp_mgr.block_connections_to_local_domain(l_domain=l_domain)
     
+    # Pick one of the test, to check whether inbound/outbound connections from undesired remote domains are blocked
     r_hostid ="hostb1.cesb.lte."
     r_cesid  = "cesb.lte."
     #cetp_mgr.block_connections_from_remote_ces_host(r_hostid=r_hostid)
     #cetp_mgr.block_connections_from_remote_ces_host(r_hostid=r_hostid, r_cesid=r_cesid)
-    
     #cetp_mgr.block_connections_to_remote_ces_host(r_hostid="srv2.hostb1.cesb.lte.")
     #cetp_mgr.block_connections_to_remote_ces_host(r_hostid="srv2.hostb1.cesb.lte.", r_cesid="cesb.lte.")
+    
     #cetp_mgr.disable_local_host(local_domain="hosta1.cesa.lte.")
     cetp_mgr.send_evidence(lip="10.0.3.111", lpip="", evidence="")
     yield from asyncio.sleep(0.5)
@@ -696,18 +687,27 @@ def test_drop_connection(cetp_mgr):
     cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
 
 
+def test_cetp_ep_creation(cetp_mgr):
+    """ Testing the addition of a new cetp_endpoint """
+    r_cesid = "random_ces.lte."
+    cetp_ep = cetp_mgr.create_cetp_endpoint(r_cesid)
+    assert cetp_mgr.has_cetp_endpoint(r_cesid)==True
+
+def test_cetp_layering(cetp_mgr):
+    """ Tests the establishment of CETP-H2H, CETP-C2C layer and CETPTransport(s) towards r-ces upon getting a list of NAPTR records."""
+    setup_for_cetp_negotiation()
+
+
 def setup_for_cetp_negotiation():
-    """ initial setup for testing """
+    """ Establishes the CETP relation with remote CES, used for testing """
     sender_info = ("10.0.3.111", 43333)
+    l_hostid, l_hostip = "hosta1.cesa.lte.", sender_info[0]
     dst_id, r_cesid, r_ip, r_port, r_proto = "", "", "", "", ""
     naptr_records = {}
     naptr_records['srv1.hostb1.cesb.lte.']         = [('srv1.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49001', 'tcp')]
     naptr_records['srv2.hostb1.cesb.lte.']         = [('srv2.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49002', 'tcp')]
     
-    l_hostid = "hosta1.cesa.lte."
-    l_hostip = sender_info[0]
-
-    print("Initiating the 1st H2H negotiation")
+    print("Initiating 1st H2H negotiation")
     for naptr_rr in naptr_records['srv1.hostb1.cesb.lte.']:
         dst_id, r_cesid, r_ip, r_port, r_proto = naptr_rr
         naptr_list = naptr_records['srv1.hostb1.cesb.lte.']
@@ -743,8 +743,6 @@ def test_func(loop):
     #asyncio.ensure_future(test_drop_connection(cetp_mgr))
     #asyncio.ensure_future(test_terminate_cetp_c2c_signalling(cetp_mgr))
     
-
-
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
