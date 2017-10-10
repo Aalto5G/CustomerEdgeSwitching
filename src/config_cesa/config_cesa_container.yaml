@@ -3,6 +3,7 @@
 CESParameters:
     name: cesa
     cesid: cesa.lte.
+    CETPVersion: 2
     certificate: config_cesa/cesa.crt
     private_key: config_cesa/cesa.key
     ca_certificate: config_cesa/ca.crt

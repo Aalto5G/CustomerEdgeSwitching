@@ -83,12 +83,13 @@ class CETPC2CLayer:
             cetp_msg = json.loads(msg)
             inbound_sstag, inbound_dstag, ver = cetp_msg['SST'], cetp_msg['DST'], cetp_msg['VER']
             sstag, dstag    = inbound_dstag, inbound_sstag
+            cetp_ver = self.ces_params["CETPVersion"]
             
             if ( (sstag==0) and (dstag ==0)) or (sstag < 0) or (dstag < 0):
                 self._logger.error(" Session tag values are invalid")
                 return False
             
-            if ver!=1:
+            if ver!=cetp_ver:
                 self._logger.info(" CETP version is not supported.")
                 return False
             

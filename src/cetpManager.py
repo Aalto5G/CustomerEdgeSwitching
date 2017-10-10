@@ -508,8 +508,9 @@ class CETPManager:
             cetp_msg = json.loads(msg)
             inbound_sstag, inbound_dstag, ver = cetp_msg['SST'], cetp_msg['DST'], cetp_msg['VER']
             sstag, dstag    = inbound_dstag, inbound_sstag
+            cetp_ver = self.ces_params["CETPVersion"]
             
-            if ver!=1:
+            if ver!=2:
                 self._logger.info(" CETP version is not supported.")
                 return False
             
@@ -562,7 +563,7 @@ class CETPManager:
                 c2c_layer.assign_cetp_h2h_layer(h2h_layer)    # Top layer to handle inbound H2H
                 c2c_layer.set_connectivity_params()
             else:
-                c2c_layer = self.get_c2c_layer(r_cesid)                 # Gets existing c2c-layer for remote ’cesid’
+                c2c_layer = self.get_c2c_layer(r_cesid)                 # Gets c2c-layer corresponding to for remote cesid
 
             stateful_transaction._assign_c2c_layer(c2c_layer)
             c2c_layer.register_c2c_transport(transport, stateful_transaction)
@@ -590,6 +591,10 @@ class CETPManager:
 
 
 """ Test functions """
+
+def some_cb(dns_q, addr, r_addr=None, success=True):
+    print("H2HTransaction success = '{}'".format(success))
+
 def output_system_states(cetp_mgr, r_cesid):
     print("\n\nTesting results:")
     print("cetp_mgr.has_cetp_endpoint(r_cesid)", cetp_mgr.has_cetp_endpoint(r_cesid))
@@ -601,7 +606,7 @@ def output_system_states(cetp_mgr, r_cesid):
 @asyncio.coroutine   
 def test_local_cetp(cetp_mgr):
     sender_info = ("10.0.3.111", 43333)
-    dns_cb = (1,(2, sender_info))
+    dns_cb = (some_cb,(2, sender_info))
     cb_args = (2, sender_info)
     dst_id = "srv1.hosta1.cesa.lte."
     cetp_mgr.block_connections_to_local_domain(l_domain=dst_id)
@@ -620,7 +625,7 @@ def test_terminate_cetp_c2c_signalling(cetp_mgr):
         dst_id, r_cesid, r_ip, r_port, r_proto = naptr_rr
         naptr_list = naptr_records['srv2.hostb1.cesb.lte.']
         
-    cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)    
+    cetp_mgr.process_outbound_cetp(some_cb, (2, sender_info), dst_id, r_cesid, naptr_list)    
     yield from asyncio.sleep(0.5)
     
     #cetp_mgr.terminate_cetp_c2c_signalling(r_cesid, terminate_h2h=False)
@@ -639,7 +644,7 @@ def test_h2h_session_termination(cetp_mgr):
         dst_id, r_cesid, r_ip, r_port, r_proto = naptr_rr
         naptr_list = naptr_records['srv2.hostb1.cesb.lte.']
         
-    cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
+    cetp_mgr.process_outbound_cetp(some_cb, (2, sender_info), dst_id, r_cesid, naptr_list)    
     yield from asyncio.sleep(2)
     
     # Pick one of the following tests  
@@ -684,7 +689,7 @@ def test_drop_connection(cetp_mgr):
         dst_id, r_cesid, r_ip, r_port, r_proto = naptr_rr
         naptr_list = naptr_records['srv2.hostb1.cesb.lte.']
         
-    cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
+    cetp_mgr.process_outbound_cetp(some_cb, (2, sender_info), dst_id, r_cesid, naptr_list)    
 
 
 def test_cetp_ep_creation(cetp_mgr):
@@ -695,10 +700,9 @@ def test_cetp_ep_creation(cetp_mgr):
 
 def test_cetp_layering(cetp_mgr):
     """ Tests the establishment of CETP-H2H, CETP-C2C layer and CETPTransport(s) towards r-ces upon getting a list of NAPTR records."""
-    setup_for_cetp_negotiation()
+    setup_for_cetp_negotiation(cetp_mgr)
 
-
-def setup_for_cetp_negotiation():
+def setup_for_cetp_negotiation(cetp_mgr):
     """ Establishes the CETP relation with remote CES, used for testing """
     sender_info = ("10.0.3.111", 43333)
     l_hostid, l_hostip = "hosta1.cesa.lte.", sender_info[0]
@@ -712,7 +716,7 @@ def setup_for_cetp_negotiation():
         dst_id, r_cesid, r_ip, r_port, r_proto = naptr_rr
         naptr_list = naptr_records['srv1.hostb1.cesb.lte.']
         
-    cetp_mgr.process_outbound_cetp( (1,(2, sender_info)), (2, sender_info), dst_id, r_cesid, naptr_list)
+    cetp_mgr.process_outbound_cetp(some_cb, (2, sender_info), dst_id, r_cesid, naptr_list)    
     # I could define my own callback here, and it will be executed. This doesn't have to be ugly as above.
     return (sender_info, naptr_records, l_hostid, l_hostip)
 
@@ -737,8 +741,8 @@ def test_func(loop):
     if cetp_mgr==None:
         return
     
-    #test_cetp_layering(cetp_mgr)
-    asyncio.ensure_future(test_local_cetp(cetp_mgr))
+    test_cetp_layering(cetp_mgr)
+    #asyncio.ensure_future(test_local_cetp(cetp_mgr))
     #asyncio.ensure_future(test_h2h_session_termination(cetp_mgr))
     #asyncio.ensure_future(test_drop_connection(cetp_mgr))
     #asyncio.ensure_future(test_terminate_cetp_c2c_signalling(cetp_mgr))

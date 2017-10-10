@@ -3,6 +3,7 @@
 CESParameters:
     name: cesb
     cesid: cesb.lte.
+    CETPVersion: 2
     certificate: config_cesb/cesb.crt
     private_key: config_cesb/cesb.key
     ca_certificate: config_cesb/ca.crt

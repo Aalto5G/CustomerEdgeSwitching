@@ -546,8 +546,9 @@ class oC2CTransaction(C2CTransaction):
             self.sstag, self.dstag = inbound_dstag, inbound_sstag
             self.received_tlvs = cetp_msg['TLV']
             self.packet = cetp_msg
+            cetp_ver = self.ces_params["CETPVersion"]
             
-            if ver!=1:
+            if ver!=cetp_ver:
                 self._logger.error(" CETP Version is not supported.")
                 return False
             
@@ -1055,8 +1056,9 @@ class iC2CTransaction(C2CTransaction):
             self.sstag, self.dstag = inbound_dstag, inbound_sstag
             self.packet            = cetp_packet
             self.received_tlvs     = cetp_packet['TLV']
+            cetp_ver = self.ces_params["CETPVersion"]
             
-            if ver!=1:
+            if ver!=cetp_ver:
                 self._logger.error(" CETP Version is not supported.")
                 return False
 

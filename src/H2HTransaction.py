@@ -36,9 +36,8 @@ class H2HTransaction(object):
 
     def get_cetp_packet(self, sstag=None, dstag=None, tlvs=[]):
         """ Default CETP fields for signalling message """
-        version             = 1
         cetp_header         = {}
-        cetp_header['VER']  = version
+        cetp_header['VER']  = self.ces_params["CETPVersion"]
         cetp_header['SST']  = sstag
         cetp_header['DST']  = dstag
         cetp_header['TLV']  = tlvs
@@ -468,8 +467,9 @@ class H2HTransactionOutbound(H2HTransaction):
             self.received_tlvs = cetp_msg['TLV']
             self.sstag, self.dstag = inbound_dstag, inbound_sstag                                       # Sender's SST is DST for CES
             self.packet = cetp_msg
+            cetp_ver = self.ces_params["CETPVersion"]
 
-            if ver!=1:
+            if ver!=2:
                 self._logger.error(" CETP Version is not supported.")
                 return False
             
@@ -746,7 +746,7 @@ class H2HTransactionOutbound(H2HTransaction):
 
 class H2HTransactionInbound(H2HTransaction):
     def __init__(self, sstag=0, dstag=0, l_cesid="", r_cesid="", policy_mgr= None, cetpstate_mgr= None, interfaces=None, conn_table=None, \
-                 cetp_h2h=None, cetp_security=None, name="H2HTransactionInbound"):
+                 cetp_h2h=None, cetp_security=None, ces_params=None, name="H2HTransactionInbound"):
         self.sstag              = sstag
         self.dstag              = dstag
         self.l_cesid            = l_cesid
@@ -758,6 +758,7 @@ class H2HTransactionInbound(H2HTransaction):
         self.conn_table         = conn_table
         self.cetp_h2h           = cetp_h2h
         self.cetp_security      = cetp_security
+        self.ces_params         = ces_params
         self.name               = name
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HTransactionInbound)
@@ -777,8 +778,9 @@ class H2HTransactionInbound(H2HTransaction):
             self.packet            = cetp_packet
             self.received_tlvs     = cetp_packet['TLV']
             self.src_id, self.dst_id = "", ""
+            cetp_ver = self.ces_params["CETPVersion"]
             
-            if ver!=1:
+            if ver!=2:
                 self._logger.error(" CETP Version is not supported.")
                 return False
 
