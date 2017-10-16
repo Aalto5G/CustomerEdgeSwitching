@@ -16,6 +16,7 @@ import H2HTransaction
 import PolicyManager
 import CETPH2H
 import CETPC2C
+import asyncio
 
 CETP_LEN_FIELD = 2
 LOGLEVEL_oCESTCPTransport           = logging.INFO
@@ -31,42 +32,24 @@ class oCESTCPTransport(asyncio.Protocol):
         self._loop                      = loop
         self.name                       = name+proto
         self._logger                    = logging.getLogger(name)
-        self._start_time                = self._loop.time()
         self.transport                  = None
         self.is_connected               = False
-        self.c2c_negotiation            = False
+        self.c2c_negotiated             = False
         self.remotepeer                 = remote_addr
         self.data_buffer                = b''
-        self.transport_establishment_t0  = int(ces_params['transport_establishment_t0'])           # In seconds
+        self.c2c_establishment_t0       = int(ces_params['c2c_establishment_t0'])           # In seconds
         self._logger.setLevel(LOGLEVEL_oCESTCPTransport)
-        self._loop.call_later(self.transport_establishment_t0, self.is_c2c_negotiated)
 
     def connection_made(self, transport):
-        try:
-            current_time = self._loop.time()
-            time_lapsed  = current_time - self._start_time
-            self.transport = transport
-            self.peername = transport.get_extra_info('peername')
-            self.is_connected = True
-            
-            if time_lapsed > self.transport_establishment_t0:
-                self._logger.info(" Transport connection established in > (To={})".format(str(self.transport_establishment_t0)))
-                self.close()
-            else:
-                self._logger.info('Connected to {}'.format(self.peername))
-                self.ces_layer.report_connectivity(self)                 # Reporting the connectivity to upper layer.
-        except Exception as ex:
-            self._logger.error( "Exception in connection_made() '{}'".format(ex))
-            
+        self.transport = transport
+        self.peername = transport.get_extra_info('peername')
+        self._logger.info('Connected to {}'.format(self.peername))
+        self.ces_layer.report_connectivity(self)                        # Reporting the connectivity to C2C layer.
+        self.is_connected = True
+        
     def report_c2c_negotiation(self, status):
         """ Used by the C2C layer to notify if the c2c-negotiation succeeded """
-        self.c2c_negotiation = status
-
-    def is_c2c_negotiated(self):
-        """ Closes CETPTransport, if C2C-negotiation is not completed in 'To' """
-        if (self.transport != None) and (self.c2c_negotiation == False):
-            self._logger.info(" C2C negotiation did not complete in To={} seconds".format(str(self.transport_establishment_t0)))
-            self.close()
+        self.c2c_negotiated = status
 
     def send_cetp(self, msg):
         #self._logger.debug("Message to send: {!r}".format(msg))
@@ -133,7 +116,7 @@ class iCESServerTCPTransport(asyncio.Protocol):
         self._logger         = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_iCESTCPServerTransport)
         self.data_buffer     = b''
-        self.c2c_negotiation_t0 = int(ces_params['c2c_establishment_t0'])              # In seconds
+        self.c2c_negotiation_t0 = 3 #int(ces_params['c2c_establishment_t0'])              # In seconds
         
     def connection_made(self, transport):
         self.remotepeer = transport.get_extra_info('peername')
@@ -313,3 +296,31 @@ class iCESServerTLSTransport(asyncio.Protocol):
             self.c2c_layer.report_connectivity(self, status=False)
             self.is_connected = False
 
+
+
+@asyncio.coroutine
+def test1(loop):
+    print(" Initiating CETPTransport towards cesid")
+    transport_instance = oCESTCPTransport(None, "tcp", None, None, remote_addr=("10.0.3.103", 49001), loop=loop)
+    
+    try:
+        coro = loop.create_connection(lambda: transport_instance, ip_addr, port)
+        connect_task = asyncio.ensure_future(coro)
+        yield from connect_task
+        
+    except Exception as ex:
+        print("Exception handled towards r_cesid")
+
+def test_function(loop):
+    asyncio.ensure_future(test1(loop))
+
+if __name__=="__main__":
+    logging.basicConfig(level=logging.DEBUG)
+    loop = asyncio.get_event_loop()
+    test_function(loop)
+    try:
+        loop.run_forever()
+    except KeyboardInterrupt:
+        print("Ctrl+C Handled")
+    finally:
+        loop.close()

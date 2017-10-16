@@ -50,8 +50,9 @@ class CETPC2CLayer:
         self.connected_transports       = []
         self.remote_ces_eps             = []                     # Registers ip, port, and protocol info of remote ep.
         self.trusted_rces_eps           = []
-        self.transport_c2c_binding      = {}
+        self.unverified_ep_addr         = []
         self.c2c_transaction_list       = []
+        self.transport_c2c_binding      = {}
         self.transport_rtt              = {}
         self.transport_lastseen         = {}
         self.c2c_negotiated             = False
@@ -67,9 +68,13 @@ class CETPC2CLayer:
         try:
             for naptr_rr in naptr_rrs:
                 dst_id, r_cesid, r_ip, r_port, r_transport = naptr_rr                   # Assumption: All NAPTRs point towards one 'r_cesid'.    (Destination domain is reachable via one CES only)
-                if (r_ip, r_port, r_transport) not in self.remote_ces_eps:
-                    self.remote_ces_eps.append( (r_ip, r_port, r_transport) )
-                    self._logger.info(" Initiating a new CETPTransport.")
+                key = (r_ip, r_port, r_transport)
+                
+                if (key in self.remote_ces_eps) or (key in self.unverified_ep_addr):
+                    continue
+                else:
+                    self.remote_ces_eps.append( key )
+                    self._logger.info(" Initiating a new transport.")
                     if not self.remote_endpoint_malicious_history(r_cesid, r_ip):
                         asyncio.ensure_future(self.initiate_transport(r_transport, r_ip, r_port, delay=0))        # Delay parameter prevents H2H negotiation from suffering delay due to triggering of transport/C2C-negotiation
                         
@@ -252,6 +257,9 @@ class CETPC2CLayer:
             transport_obj.send_cetp(cetp_resp)
         
 
+    def get_c2c_dp_connection(self):
+        pass
+
     def remote_endpoint_malicious_history(self, r_cesid, ip_addr):
         """ Function emulating the check whether 'r_cesid' & 'ip-address' have history of misbehavior """
         return False
@@ -264,7 +272,7 @@ class CETPC2CLayer:
 
     def send_cetp(self, msg):
         transport = self._select_transport2()
-        print("transport: ", transport)
+        #print("transport: ", transport)
         if transport!=None:
             transport.send_cetp(msg)
 
@@ -354,8 +362,10 @@ class CETPC2CLayer:
     def initiate_transport(self, proto, ip_addr, port, delay=0):
         """ Description """
         if proto == 'tcp' or proto=="tls":
+            triggered_at = time.time()
             self._logger.info(" Initiating CETPTransport towards cesid '{}' @({}, {})".format(self.r_cesid, ip_addr, port))
-            transport_instance = CETPTransports.oCESTCPTransport(self, proto, self.r_cesid, self.ces_params, remote_addr=(ip_addr, port), loop=self._loop)
+            transport_ins = CETPTransports.oCESTCPTransport(self, proto, self.r_cesid, self.ces_params, remote_addr=(ip_addr, port), loop=self._loop)
+            timeout = self.ces_params["c2c_establishment_t0"]
             yield from asyncio.sleep(delay)
             
             if proto == "tls":
@@ -368,29 +378,50 @@ class CETPC2CLayer:
                 sc.load_cert_chain(self.ces_certificate_path, self.ces_privatekey_path)
                 sc.load_verify_locations(self.ca_certificate_path)
                 #sc.check_hostname = True
+                coro = self._loop.create_connection(lambda: transport_ins, ip_addr, port, ssl=sc)
             
-                try:
-                    coro = self._loop.create_connection(lambda: transport_instance, ip_addr, port, ssl=sc)
-                    self.initiated_transports.append(transport_instance)
-                    yield from asyncio.ensure_future(coro)
-                except Exception as ex:
-                    self.remote_ces_eps.remove( (ip_addr, port, proto) )
-                    self._logger.info(" Exception in {} transport towards {}: '{}'".format(proto, self.r_cesid, ex.strerror))                  # ex.errno == 111 -- means connection RST received
-                    self.unregister_connected_transport(transport_instance)
-
             elif proto == "tcp":
-                try:
-                    coro = self._loop.create_connection(lambda: transport_instance, ip_addr, port)
-                    self.initiated_transports.append(transport_instance)
-                    connect_task = asyncio.ensure_future(coro)
-                    yield from connect_task
-                except Exception as ex:
-                    self.remote_ces_eps.remove( (ip_addr, port, proto) )
-                    self._logger.info(" Exception in {} transport towards <{}>: '{}'".format(proto, self.r_cesid, ex.strerror))
-                    self.unregister_connected_transport(transport_instance)
+                coro = self._loop.create_connection(lambda: transport_ins, ip_addr, port)
+            
+            try:
+                self.initiated_transports.append(transport_ins)
+                connect_task = asyncio.ensure_future(coro)
+                yield from asyncio.wait_for(connect_task, timeout)
+                
+                connection_time = time.time() - triggered_at
+                c2c_timeout = timeout - connection_time
+                self._loop.call_later(c2c_timeout, self.is_c2c_negotiated, transport_ins, ip_addr, port, proto, timeout)
+
+            except Exception as ex:
+                self._logger.info(" Exception in {} transport towards '{}'".format(proto, self.r_cesid))                  # ex.errno == 111 -- means connection RST received
+                self.remote_ces_eps.remove( (ip_addr, port, proto) )
+                self.unregister_connected_transport(transport_ins)
+                self.register_unverified_addr(ip_addr, port, proto)
 
 
+    def is_c2c_negotiated(self, transport, ip_addr, port, proto, timeout):
+        """ Closes CETPTransport, if C2C-negotiation doesn't complete in 'To' """
+        if transport.c2c_negotiated == False:
+            self._logger.error(" C2C policies to '{}' @ {}:{} not negotiated in To='{}' sec".format(self.r_cesid, ip_addr, port, timeout))
+            self.register_unverified_addr(ip_addr, port, proto)
+            transport.close()
 
+    def register_unverified_addr(self, ip_addr, port, proto):
+        if not self.has_unverified_addr(ip_addr, port, proto):
+            key = (ip_addr, port, proto)
+            self.unverified_ep_addr.append(key)
+            self._loop.call_later(30, self.unregister_unverified_addr, ip_addr, port, proto)
+
+    def unregister_unverified_addr(self, ip_addr, port, proto):
+        if self.has_unverified_addr(ip_addr, port, proto):
+            key = (ip_addr, port, proto)
+            self.unverified_ep_addr.remove(key)
+            
+    def has_unverified_addr(self, ip_addr, port, proto):
+        key = (ip_addr, port, proto)
+        return key in self.unverified_ep_addr
+        
+        
     def report_connectivity(self, transport, status=True):
         """ Triggers next function (on transport connection success) OR resouce-cleanup (on transport connection termination) """ 
         if status == True:
