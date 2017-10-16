@@ -37,9 +37,9 @@ class oCESTCPTransport(asyncio.Protocol):
         self.c2c_negotiation            = False
         self.remotepeer                 = remote_addr
         self.data_buffer                = b''
-        self.c2c_negotiation_threshold  = int(ces_params['transport_establishment_t0'])           # In seconds
+        self.transport_establishment_t0  = int(ces_params['transport_establishment_t0'])           # In seconds
         self._logger.setLevel(LOGLEVEL_oCESTCPTransport)
-        self._loop.call_later(self.c2c_negotiation_threshold, self.is_c2c_negotiated)
+        self._loop.call_later(self.transport_establishment_t0, self.is_c2c_negotiated)
 
     def connection_made(self, transport):
         try:
@@ -49,8 +49,8 @@ class oCESTCPTransport(asyncio.Protocol):
             self.peername = transport.get_extra_info('peername')
             self.is_connected = True
             
-            if (time_lapsed) > self.c2c_negotiation_threshold:
-                self._logger.info(" Transport connection established in > (To={})".format(str(self.c2c_negotiation_threshold)))
+            if time_lapsed > self.transport_establishment_t0:
+                self._logger.info(" Transport connection established in > (To={})".format(str(self.transport_establishment_t0)))
                 self.close()
             else:
                 self._logger.info('Connected to {}'.format(self.peername))
@@ -65,7 +65,7 @@ class oCESTCPTransport(asyncio.Protocol):
     def is_c2c_negotiated(self):
         """ Closes CETPTransport, if C2C-negotiation is not completed in 'To' """
         if (self.transport != None) and (self.c2c_negotiation == False):
-            self._logger.info(" C2C negotiation did not complete in To={} seconds".format(str(self.c2c_negotiation_threshold)))
+            self._logger.info(" C2C negotiation did not complete in To={} seconds".format(str(self.transport_establishment_t0)))
             self.close()
 
     def send_cetp(self, msg):
@@ -133,11 +133,9 @@ class iCESServerTCPTransport(asyncio.Protocol):
         self._logger         = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_iCESTCPServerTransport)
         self.data_buffer     = b''
-        self.c2c_negotiation_threshold = int(ces_params['transport_establishment_t0'])              # In seconds
-        print("1111")
+        self.c2c_negotiation_t0 = int(ces_params['c2c_establishment_t0'])              # In seconds
         
     def connection_made(self, transport):
-        print("1111")
         self.remotepeer = transport.get_extra_info('peername')
         self._logger.info('Connection from {}'.format(self.remotepeer))
         self.transport = transport
@@ -148,13 +146,13 @@ class iCESServerTCPTransport(asyncio.Protocol):
             self._logger.info(" Remote endpoint has misbehavior history.")
             self.close()
         else:
-            self._loop.call_later(self.c2c_negotiation_threshold, self.is_c2c_negotiated)     # Schedules a check for C2C-policy negotiation.
+            self._loop.call_later(self.c2c_negotiation_t0, self.is_c2c_negotiated)     # Schedules a check for C2C-policy negotiation.
 
          
     def is_c2c_negotiated(self):
         """ Terminates connection with a CETPH2H that doesn't complete C2C negotiation in t<To) """        
-        if (self.c2c_layer==None) and (self.is_connected):
-            self._logger.info(" Remote end did not complete C2C negotiation in To={}".format(str(self.c2c_negotiation_threshold)))
+        if self.is_connected and (self.c2c_layer==None):
+            self._logger.info(" Remote end did not complete C2C negotiation in To={}".format(str(self.c2c_negotiation_t0)))
             self.close()
 
     def set_c2c_details(self, r_cesid, c2c_layer):
@@ -232,7 +230,7 @@ class iCESServerTLSTransport(asyncio.Protocol):
         self._logger         = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_iCESTLSServerTransport)
         self.data_buffer     = b''
-        self.c2c_negotiation_threshold = int(ces_params['transport_establishment_t0'])              # In seconds
+        self.c2c_negotiation_t0 = int(ces_params['c2c_establishment_t0'])              # In seconds
         
     def connection_made(self, transport):
         self.remotepeer = transport.get_extra_info('peername')
@@ -245,13 +243,13 @@ class iCESServerTLSTransport(asyncio.Protocol):
             self._logger.info(" Remote endpoint has misbehavior history.")
             self.close()
         else:
-            self._loop.call_later(self.c2c_negotiation_threshold, self.is_c2c_negotiated)     # Schedules a check for C2C-policy negotiation.
+            self._loop.call_later(self.c2c_negotiation_t0, self.is_c2c_negotiated)     # Schedules a check for C2C-policy negotiation.
 
 
     def is_c2c_negotiated(self):
         """ Terminates connection with a CETPH2H that doesn't complete C2C negotiation in t<To) """        
         if (self.c2c_layer==None) and (self.is_connected):
-            self._logger.info(" Remote end did not complete C2C negotiation in To={}".format(str(self.c2c_negotiation_threshold)))
+            self._logger.info(" Remote end did not complete C2C negotiation in To={}".format(str(self.c2c_negotiation_t0)))
             self.close()
 
     def set_c2c_details(self, r_cesid, c2c_layer):
