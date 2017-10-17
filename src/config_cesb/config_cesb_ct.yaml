@@ -7,11 +7,11 @@ CESParameters:
     certificate: config_cesb/cesb.crt
     private_key: config_cesb/cesb.key
     ca_certificate: config_cesb/ca.crt
-    dp_ttl: 3600
-    transport_establishment_t0: 2
     c2c_establishment_t0: 2
     incomplete_cetp_state_t0: 2
+    max_rces_transports: 5
     host_filtering_t0: 30
+    dp_ttl: 3600
     keepalive_t0: 2
     keepalive_cycle: 30
     caces: 127.0.0.1

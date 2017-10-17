@@ -57,9 +57,11 @@ class CETPSecurity:
         self.evidences_against_localhosts    = {}                            # {host-fqdn: [evidence]}
         self.evidences_against_remotehosts   = {}
         self.evidences_against_remoteces     = {}
-        self.misbehavior_record = {}
+        self.misbehavior_record              = {}
         self.reporting_ces                   = {}
-        self.domains_to_filter               = {}
+        self.unverifiable_addresses          = []
+        self.filtered_domains                = {}
+        self.unreachable_cetp_addrs          = []
         self.conn_table                      = conn_table
         self.ces_params                      = ces_params
         self._loop                           = loop
@@ -68,6 +70,22 @@ class CETPSecurity:
         self._initialize_pow()
         
     # CETPSecurity shall have specific 'CES-to-CES' view & aggregated view of all 'CES-to-CES' interactions
+
+
+    def register_as_unreachable_cetp(self, ip_addr, port, proto):
+        if not self.is_unreachable_cetp(ip_addr, port, proto):
+            key = (ip_addr, port, proto)
+            self.unreachable_cetp_addrs.append(key)
+            self._loop.call_later(30, self.unregister_as_unreachable_cetp, ip_addr, port, proto)
+
+    def unregister_as_unreachable_cetp(self, ip_addr, port, proto):
+        if self.is_unreachable_cetp(ip_addr, port, proto):
+            key = (ip_addr, port, proto)
+            self.unreachable_cetp_addrs.remove(key)
+            
+    def is_unreachable_cetp(self, ip_addr, port, proto):
+        key = (ip_addr, port, proto)
+        return key in self.unreachable_cetp_addrs
 
 
     def register_filtered_domains(self, keytype, value, key=None, timeout=None):
@@ -82,53 +100,53 @@ class CETPSecurity:
     
     def add_filtered_domains(self, keytype, value, key=None):
         if keytype in [KEY_RCES_BlockedHostsByRCES, KEY_LCES_BlockedHostsOfRCES, KEY_RCES_UnreachableRCESDestinations, KEY_LCES_UnreachableDestinationsForRCES, KEY_LCES_FilteredSourcesTowardsRCES]:                
-            if keytype not in self.domains_to_filter:
-                self.domains_to_filter[keytype] = {}
-                self.domains_to_filter[keytype][key]=[value]
+            if keytype not in self.filtered_domains:
+                self.filtered_domains[keytype] = {}
+                self.filtered_domains[keytype][key]=[value]
             else:
-                filtered_domains = self.domains_to_filter[keytype][key]
+                filtered_domains = self.filtered_domains[keytype][key]
                 filtered_domains.append(value)
         else:
-            if keytype not in self.domains_to_filter:
-                self.domains_to_filter[keytype] = [value]
+            if keytype not in self.filtered_domains:
+                self.filtered_domains[keytype] = [value]
             else:
-                filtered_domains = self.domains_to_filter[keytype]
+                filtered_domains = self.filtered_domains[keytype]
                 filtered_domains.append(value)
                 
     def remove_filtered_domains(self, keytype, value, key=None):
-        if keytype in self.domains_to_filter:
+        if keytype in self.filtered_domains:
             if key==None:
-                filtered_domains = self.domains_to_filter[keytype]
+                filtered_domains = self.filtered_domains[keytype]
                 
                 if value in filtered_domains:
                     filtered_domains.remove(value)
                     if len(filtered_domains)==0:
-                        del self.domains_to_filter[keytype]
+                        del self.filtered_domains[keytype]
                     
             else:
-                if key in self.domains_to_filter[keytype]:
-                    filtered_domains = self.domains_to_filter[keytype][key]
+                if key in self.filtered_domains[keytype]:
+                    filtered_domains = self.filtered_domains[keytype][key]
                     if value in filtered_domains:
                         filtered_domains.remove(value)
                         
                         if len(filtered_domains)==0:
-                            del self.domains_to_filter[keytype][key]
+                            del self.filtered_domains[keytype][key]
                             
-                        if len(self.domains_to_filter[keytype])==0:
-                            del self.domains_to_filter[keytype]
+                        if len(self.filtered_domains[keytype])==0:
+                            del self.filtered_domains[keytype]
             
-            print("After deletion: ", self.domains_to_filter)
+            print("After deletion: ", self.filtered_domains)
 
 
     def has_filtered_domain(self, keytype, value, key=None):
         try:
-            if keytype in self.domains_to_filter:
+            if keytype in self.filtered_domains:
                 if key==None:
-                    if value in self.domains_to_filter[keytype]:
+                    if value in self.filtered_domains[keytype]:
                         return True
                 else:
-                    if key in self.domains_to_filter[keytype]:
-                        if value in self.domains_to_filter[keytype][key]:
+                    if key in self.filtered_domains[keytype]:
+                        if value in self.filtered_domains[keytype][key]:
                             return True
             return False
         except Exception as ex:
@@ -138,9 +156,9 @@ class CETPSecurity:
     def get_filtered_domains(self, keytype, key=None):
         try:
             if key!=None:
-                filtered_domains = self.domains_to_filter[keytype][key]
+                filtered_domains = self.filtered_domains[keytype][key]
             else:
-                filtered_domains = self.domains_to_filter[keytype]
+                filtered_domains = self.filtered_domains[keytype]
             return filtered_domains
         except Exception as ex:
             self._logger.info("Exception '{}'".format(ex))
@@ -155,13 +173,13 @@ class CETPSecurity:
                 self.misbehavior_record[keytype][key_ces][key_host]
                 self.misbehavior_record[keytype][key_ces][key_host] = [evidence]
             else:
-                filtered_domains = self.domains_to_filter[keytype][key_ces]
+                filtered_domains = self.filtered_domains[keytype][key_ces]
                 filtered_domains.append(value)
         else:
-            if keytype not in self.domains_to_filter:
-                self.domains_to_filter[keytype] = [value]
+            if keytype not in self.filtered_domains:
+                self.filtered_domains[keytype] = [value]
             else:
-                filtered_domains = self.domains_to_filter[keytype]
+                filtered_domains = self.filtered_domains[keytype]
                 filtered_domains.append(value)
 
 
@@ -204,7 +222,6 @@ class CETPSecurity:
         else:
             self.reporting_ces[r_cesid] = [evidence]
         #print(self.reporting_ces)            
-        
         
 
     

@@ -47,7 +47,7 @@ class CETPH2H:
         self._logger.info("CETPH2H layer created for cesid '{}'".format(r_cesid))
 
 
-    def create_cetp_c2c_layer(self, naptr_list):
+    def create_cetp_c2c_layer(self):
         """ Initiates CETPc2clayer between two CES nodes """
         self.c2c = self.cetp_mgr.create_c2c_layer(cetp_h2h=self, r_cesid=self.r_cesid)
         
@@ -133,8 +133,7 @@ class CETPH2H:
         sstag, dstag    = inbound_dstag, inbound_sstag
         
         if inbound_dstag == 0:
-            self._logger.info(" No prior H2H-transaction found -> Initiating Inbound H2HTransaction (SST={} -> DST={})".format(inbound_sstag, inbound_dstag))
-            print(self.interfaces)
+            #self._logger.info(" No prior H2H-transaction found -> Initiating Inbound H2HTransaction (SST={} -> DST={})".format(inbound_sstag, inbound_dstag))
             i_h2h = H2HTransaction.H2HTransactionInbound(sstag=sstag, dstag=sstag, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, \
                                                          interfaces=self.interfaces, conn_table=self.conn_table, cetp_h2h=self, cetp_security=self.cetp_security, ces_params=self.ces_params)
             asyncio.ensure_future(i_h2h.start_cetp_processing(cetp_msg, transport))

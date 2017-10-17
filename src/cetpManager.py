@@ -210,15 +210,49 @@ class CETPManager:
         try:
             if self.has_cetp_endpoint(r_cesid):
                 ep = self.get_cetp_endpoint(r_cesid)
+                ep.enqueue_h2h_requests_nowait(dst_id, naptr_list, (dns_cb, cb_args))                            # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
             else:
-                self._logger.info("Initiating a CETP-Endpoint towards cesid='{}': ".format(r_cesid))
-                ep = self.create_cetp_endpoint(r_cesid)
-                ep.create_cetp_c2c_layer(naptr_list)
+                sanitized_naptrs = self._pre_check(naptr_list)
+                if sanitized_naptrs == None:
+                    self._logger.info(" Cannot initiate CETP endpoint towards '{}'".format(r_cesid))
+                    return
+                else:
+                    self._logger.info(" Initiating a CETP-Endpoint towards '{}': ".format(r_cesid))
+                    ep = self.create_cetp_endpoint(r_cesid)
+                    ep.create_cetp_c2c_layer()
+                    ep.enqueue_h2h_requests_nowait(dst_id, sanitized_naptrs, (dns_cb, cb_args))                  # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
     
-            ep.enqueue_h2h_requests_nowait(dst_id, naptr_list, (dns_cb, cb_args))                                # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
         except Exception as ex:
             self._logger.info("Exception in '{}'".format(ex))
             return
+
+
+    def _pre_check(self, naptr_rrs):
+        """ Sanitizes the naptr responses: 1) Checks the number of NAPTR records in DNS response.
+            2) Filters out the NAPTRs that recently failed connectivity.    3) Assures that all NAPTRs belong to the same r_cesid.
+        """
+        try:
+            if len(naptr_rrs)>10:
+                return None                                                     # > 10 naptr_rrs could create high traffic flood
+            
+            remove_naptrs =  []
+            for n_rr in naptr_rrs:
+                dst_id, r_cesid, r_ip, r_port, r_proto = n_rr                   # Assumption: All NAPTRs point towards one 'r_cesid'.    (Destination domain is reachable via one CES only)
+                key = (r_ip, r_port, r_proto)
+                
+                if self.cetp_security.is_unreachable_cetp(r_ip, r_port, r_proto):
+                    remove_naptrs.append(n_rr)
+            
+            for p in remove_naptrs:
+                naptr_rrs.remove(p)
+            
+            if len(naptr_rrs)==0:
+                return None
+            
+            return naptr_rrs
+        
+        except:
+            return None
 
 
     def terminate_cetp_c2c_signalling(self, r_cesid="", terminate_h2h=False):
@@ -723,7 +757,7 @@ def setup_for_cetp_negotiation(cetp_mgr):
     
 def _initialize_testing(loop):
     try:
-        config_file = "config_cesa/config_cesa_container.yaml"
+        config_file = "config_cesa/config_cesa_ct.yaml"
         config = open(config_file)
         ces_conf = yaml.load(config)
         ces_params      = ces_conf['CESParameters']
