@@ -87,13 +87,13 @@ class CETPH2H:
             
             try:
                 (dst_id, naptr_rr, cb) = queued_data
-                if self.ongoing_h2h_transactions < self.max_session_limit:              # Number of simultaneous H2H-transactions are below the upper limit  
-                    asyncio.ensure_future(self.h2h_transaction_start(cb, dst_id))       # "try, except" within task can consume a task-related exception
-                    self.h2h_q.task_done()
-                else:
-                    self._logger.error(" Number of simultaneous connections to remote CES '<%s>' exceeded limit.".format(self.r_cesid))
-                    self.execute_dns_callback(cb, success=False)
-                    self.h2h_q.task_done()
+                #if self.ongoing_h2h_transactions < self.max_session_limit:              # Number of simultaneous H2H-transactions are below the upper limit  
+                asyncio.ensure_future(self.h2h_transaction_start(cb, dst_id))       # "try, except" within task can consume a task-related exception
+                self.h2h_q.task_done()
+                #else:
+                #    self._logger.error(" Number of simultaneous connections to remote CES '<%s>' exceeded limit.".format(self.r_cesid))
+                #    self.execute_dns_callback(cb, success=False)
+                #    self.h2h_q.task_done()
 
             except Exception as ex:
                 if self._closure_signal: break
@@ -241,10 +241,10 @@ class CETPH2HLocal:
         h2h = H2HTransaction.H2HTransactionLocal(loop=self._loop, cb=cb, host_ip=ip_addr, src_id="", dst_id=dst_id, policy_mgr=self.policy_mgr, cetp_h2h=self, \
                                                  cetpstate_mgr=self.cetpstate_mgr, cetp_security= self.cetp_security, host_register=self.host_register, conn_table=self.conn_table)
         result = yield from h2h.start_cetp_processing()     # Returns True or False
-        if result == True:
-            print("OK")
-        else:
-            print("NOK")
+        #if result == True:
+        #    print("OK")
+        #else:
+        #    print("NOK")
 
     def pre_processing(self, dns_q, addr, dst_id):
         sender_ip, sender_port = addr

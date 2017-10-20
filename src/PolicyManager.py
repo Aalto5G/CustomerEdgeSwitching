@@ -146,13 +146,16 @@ class PolicyManager(object):
         """ The search key for host-policy number 0 is 'policy-0' """
         try:
             policy_type = "hostpolicy"
-            if host_id=="":
-                host_id="hosta1.cesa.lte."
-            
             key = policy_type +":"+ direction +":"+ host_id
             policy = self._hostpolicy[key]
             return policy
-            #return copy.deepcopy(policy)
+        except Exception as ex:
+            return None
+        
+    def get_policy_copy(self, policy):
+        """ The search key for host-policy number 0 is 'policy-0' """
+        try:
+            return copy.deepcopy(policy)
         except Exception as ex:
             return None
 

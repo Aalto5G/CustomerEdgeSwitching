@@ -411,7 +411,7 @@ class CETPC2CLayer:
         """ Closes CETPTransport, if C2C-negotiation doesn't complete in 'To' """
         if transport.c2c_negotiated == False:
             self._logger.error(" C2C policies to '{}' @ {}:{} not negotiated in To='{}' sec".format(self.r_cesid, ip_addr, port, timeout))
-            self.register_unverified_addr(ip_addr, port, proto, across_ces=False)
+            self.register_as_unreachable_cetp(ip_addr, port, proto, across_ces=False)
             transport.close()
 
     def register_as_unreachable_cetp(self, ip_addr, port, proto, across_ces=True):

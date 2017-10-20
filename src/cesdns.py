@@ -170,7 +170,7 @@ class DNSServer(asyncio.DatagramProtocol):
     def resolve_naptr(self, domain):
         """ Resolves a domain name, and returns a list of NAPTR record parsed in format: ('host-id', 'ces-id', 'ip', 'port', 'protocol') """
         search_domain = str(domain)
-        self._logger.info("Resolving DNS NAPTR for domain: {}".format(search_domain))
+        #self._logger.info("Resolving DNS NAPTR for domain: {}".format(search_domain))
         if search_domain in self.naptr_records:
             naptr_resp = self.naptr_records[search_domain]
             return [naptr_resp]
