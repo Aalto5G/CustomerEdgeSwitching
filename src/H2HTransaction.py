@@ -575,7 +575,7 @@ class H2HTransactionOutbound(H2HTransaction):
                 #self._logger.info("{}".format(42*'*') )
                 self.h2h_negotiation_status = True
                 ##self._logger.info("continue_cetp_processing delay #1: {}".format(now - start_time))
-                #self.rtt_time.append(now-self.start_time)
+                self.rtt_time.append(time.time()-self.start_time)
                 #print(self.rtt_time)
                 if not self._cetp_established(cetp_packet):
                     return False

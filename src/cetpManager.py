@@ -210,7 +210,7 @@ class CETPManager:
         try:
             if self.has_cetp_endpoint(r_cesid):
                 ep = self.get_cetp_endpoint(r_cesid)
-                ep.enqueue_h2h_requests_nowait(dst_id, naptr_list, (dns_cb, cb_args))                            # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
+                ep.enqueue_h2h_requests(dst_id, naptr_list, (dns_cb, cb_args))                            # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
             else:
                 sanitized_naptrs = self._pre_check(naptr_list)
                 if sanitized_naptrs == None:
@@ -220,7 +220,7 @@ class CETPManager:
                     self._logger.info(" Initiating a CETP-Endpoint towards '{}': ".format(r_cesid))
                     ep = self.create_cetp_endpoint(r_cesid)
                     ep.create_cetp_c2c_layer()
-                    ep.enqueue_h2h_requests_nowait(dst_id, sanitized_naptrs, (dns_cb, cb_args))                  # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
+                    ep.enqueue_h2h_requests(dst_id, sanitized_naptrs, (dns_cb, cb_args))                  # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
     
         except Exception as ex:
             self._logger.info("Exception in '{}'".format(ex))

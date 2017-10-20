@@ -206,11 +206,6 @@ class CETPC2CLayer:
         """ Assigns the CETP-H2H layer to a pre-established C2C layer """
         self.cetp_h2h = cetp_h2h
         self.cetp_h2h.start_h2h_consumption()
-        """
-        t1 = asyncio.ensure_future(self.cetp_h2h.consume_h2h_requests())                       # For consuming DNS NAPTR-responses triggered by private hosts
-        self.cetp_h2h.h2h_cetp_task = t1
-        self.pending_tasks.append(t1)
-        """
         
     def _record_transport(self, status, transport):
         """ Records the transport connection information to which the C2C negotiation succeeded """
@@ -226,8 +221,7 @@ class CETPC2CLayer:
         """ Activates the CETP-H2H layer upon completion of C2C negotiation with remote CES """
         if (not self.c2c_connectivity) and c2c_negotiated:
             self.c2c_connectivity = True                        # Indicates that atleast one active transport link towards remote CES exists.
-            self._start_h2h_cetp()
-            self.cetp_h2h.c2c_negotiation_status()
+            self.report_connectivity_to_h2h()
     
     def process_c2c(self, sstag, dstag, cetp_msg, transport):
         """ Calls corresponding C2CTransaction method, depending on whether its an ongoing or completed C2C Transaction. """
@@ -486,13 +480,13 @@ class CETPC2CLayer:
         if not healthy and (self.c2c_connectivity==True):
             self.c2c_connectivity = self.ready_to_send()
             if not self.c2c_connectivity:                               # No transport link to remote CES is active
-                self._suspend_h2h_cetp()                                # Suspends the H2H queue consumption
+                self.report_connectivity_to_h2h(connected=False)
                 self._logger.info("Reconnecting to {} transport endpoints: ".format(len(self.trusted_rces_eps)))
                 self._reconnect_transport_eps()                         # Reconnects to the remote transport endpoints. 
                                     
         elif healthy and (self.c2c_connectivity==False):
             self.c2c_connectivity =True
-            self._start_h2h_cetp()                                      # Triggers the H2H queue consumption
+            self.report_connectivity_to_h2h()                                      # Triggers the H2H queue consumption
         
         self._logger.info("Number of active connections: '{}'".format(self.active_connections()))
     
@@ -510,12 +504,9 @@ class CETPC2CLayer:
         except Exception as ex:
             self._logger.error(ex)
 
-    def _start_h2h_cetp(self):
-        self.cetp_h2h.start_h2h_consumption()
+    def report_connectivity_to_h2h(self, connected=True):
+        self.cetp_h2h.c2c_negotiation_status(connected=connected)
         
-    def _suspend_h2h_cetp(self):
-        self.cetp_h2h.suspend_h2h_consumption()
-
     def ready_to_send(self):
         """ returns True, if atleast one C2C-transport link to remote CES is active """
         try:

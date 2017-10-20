@@ -42,6 +42,7 @@ class CETPH2H:
         self.DNS_Cleanup_Threshold      = 5                         # No. of pending DNS queries gracefully handled in case of C2C termination. 
         self.c2c_connectivity           = c2c_negotiated
         self.pending_tasks              = []
+        self.rtt_measurement            = []
         self._logger                    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPH2H)
         self._logger.info("CETPH2H layer created for cesid '{}'".format(r_cesid))
@@ -51,14 +52,17 @@ class CETPH2H:
         """ Initiates CETPc2clayer between two CES nodes """
         self.c2c = self.cetp_mgr.create_c2c_layer(cetp_h2h=self, r_cesid=self.r_cesid)
         
-    def enqueue_h2h_requests_nowait(self, dst_id, naptr_records, cb):
+    def enqueue_h2h_requests(self, dst_id, naptr_records, cb):
         """ This method enqueues the naptr responses triggered by private hosts. """
         queue_msg = (dst_id, naptr_records, cb)
-        self.h2h_q.put_nowait(queue_msg)               # Possible exception: If the queue is full, [It will simply drop the message (without waiting for space to be available in the queue]
-        self.c2c.add_naptr_records(naptr_records)
+        if not self.c2c_connectivity:
+            self.h2h_q.put_nowait(queue_msg)               # Possible exception: If the queue is full, [It will simply drop the message (without waiting for space to be available in the queue]
+            self.c2c.add_naptr_records(naptr_records)
+        else:
+            self.trigger_h2h_negotiation(queue_msg)
         
     @asyncio.coroutine
-    def enqueue_h2h_requests(self, dst_id, naptr_records, cb):
+    def enqueue_h2h_requests_task(self, dst_id, naptr_records, cb):
         yield from self.h2h_q.put(msg)                 # More safe enqueuing, if the queue is full, the call doesn't return until the queue has space to store this message - can be triggered via asyncio.ensure_future(enqueue) 
 
     def start_h2h_consumption(self):
@@ -82,29 +86,36 @@ class CETPH2H:
                 queued_data = yield from self.h2h_q.get()
             except Exception as ex:
                 if not self._closure_signal:
-                    self._logger.info(" Exception '{}' in asyncio H2H-queue towards '{}'".format(ex, self.r_cesid))
+                    self._logger.info(" Exception '{}' in H2H-queue towards '{}'".format(ex, self.r_cesid))
                 break
             
-            try:
-                (dst_id, naptr_rr, cb) = queued_data
-                #if self.ongoing_h2h_transactions < self.max_session_limit:              # Number of simultaneous H2H-transactions are below the upper limit  
-                asyncio.ensure_future(self.h2h_transaction_start(cb, dst_id))       # "try, except" within task can consume a task-related exception
-                self.h2h_q.task_done()
-                #else:
-                #    self._logger.error(" Number of simultaneous connections to remote CES '<%s>' exceeded limit.".format(self.r_cesid))
-                #    self.execute_dns_callback(cb, success=False)
-                #    self.h2h_q.task_done()
+            self.trigger_h2h_negotiation(queued_data, from_queue=True)
+    
+    def trigger_h2h_negotiation(self, queued_data, from_queue=False):
+        try:
+            (dst_id, naptr_rr, cb) = queued_data
+            #if self.ongoing_h2h_transactions < self.max_session_limit:              # Number of simultaneous H2H-transactions are below the upper limit  
+            asyncio.ensure_future(self.h2h_transaction_start(cb, dst_id))       # "try, except" within task can consume a task-related exception
+            if from_queue:  self.h2h_q.task_done()
+            #else:
+            #    self._logger.error(" Number of simultaneous connections to remote CES '<%s>' exceeded limit.".format(self.r_cesid))
+            #    self.execute_dns_callback(cb, success=False)
+            #    self.h2h_q.task_done()
 
-            except Exception as ex:
-                if self._closure_signal: break
-                self._logger.info(" Exception '{}' in consuming H2H request towards {}".format(ex, self.r_cesid))
-                self.h2h_q.task_done()
+        except Exception as ex:
+            self._logger.info(" Exception '{}' in consuming H2H request towards {}".format(ex, self.r_cesid))
+            if from_queue:  self.h2h_q.task_done()
             
+    
 
-            
-    def c2c_negotiation_status(self, status=True):
+    
+    def c2c_negotiation_status(self, connected=True):
         """ Reports that success/failure of C2C-negotiation """
-        self.c2c_connectivity = status
+        self.c2c_connectivity = connected
+        if connected:
+            self.start_h2h_consumption()
+        else:
+            self.suspend_h2h_consumption()
             
     def close_pending_tasks(self):
         for tsk in self.pending_tasks:
@@ -119,7 +130,7 @@ class CETPH2H:
         ip_addr, port = addr
         h2h = H2HTransaction.H2HTransactionOutbound(loop=self._loop, cb=cb, host_ip=ip_addr, src_id="", dst_id=dst_id, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetp_h2h=self, \
                                                     ces_params=self.ces_params, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, host_register=self.host_register, \
-                                                    conn_table=self.conn_table, interfaces=self.interfaces, cetp_security=self.cetp_security)
+                                                    conn_table=self.conn_table, interfaces=self.interfaces, cetp_security=self.cetp_security, rtt_time=self.rtt_measurement)
         cetp_packet = yield from h2h.start_cetp_processing()
         if cetp_packet != None:
             self._logger.debug(" H2H transaction started.")
@@ -173,7 +184,11 @@ class CETPH2H:
 
     def set_closure_signal(self):
         self._closure_signal = True
-    
+        if len(self.rtt_measurement)>0:
+            avg = sum(self.rtt_measurement)/len(self.rtt_measurement)
+            print("Min: ", min(self.rtt_measurement)*1000,"ms\t", "Max: ", max(self.rtt_measurement)*1000,"ms")
+            print("Average: ", avg*1000,"ms")
+        
     def execute_dns_callback(self, cb, success= False):
         cb_func, cb_args = cb
         dns_q, addr = cb_args

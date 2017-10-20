@@ -80,7 +80,7 @@ class ConnectionTable:
                 self.connection_dict[keytype][key] = connection
             
         self._logger.debug("New connection: %s" % (connection))
-        print("ConnTable: ", self.connection_dict)
+        #print("ConnTable: ", self.connection_dict)
 
 
     def delete(self, connection):
