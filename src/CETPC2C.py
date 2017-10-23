@@ -88,7 +88,7 @@ class CETPC2CLayer:
                     continue
                 else:
                     self.remote_ces_eps.append( key )
-                    self._logger.info(" Initiating a new transport.")
+                    #self._logger.debug(" Initiating a new transport.")
                     if not self.remote_endpoint_malicious_history(r_cesid, r_ip):
                         asyncio.ensure_future(self.initiate_transport(r_transport, r_ip, r_port, delay=0))        # Delay parameter prevents H2H negotiation from suffering delay due to triggering of transport/C2C-negotiation
                 
@@ -363,12 +363,12 @@ class CETPC2CLayer:
     @asyncio.coroutine
     def initiate_transport(self, proto, ip_addr, port, delay=0):
         """ Description """
+        yield from asyncio.sleep(delay)
         if proto == 'tcp' or proto=="tls":
             triggered_at = time.time()
-            self._logger.info(" Initiating CETPTransport towards cesid '{}' @({}, {})".format(self.r_cesid, ip_addr, port))
+            self._logger.info(" Initiating a '{}' transport towards cesid='{}' @({}:{})".format(proto, self.r_cesid, ip_addr, port))
             transport_ins = CETPTransports.oCESTCPTransport(self, proto, self.r_cesid, self.ces_params, remote_addr=(ip_addr, port), loop=self._loop)
             timeout = self.ces_params["c2c_establishment_t0"]
-            yield from asyncio.sleep(delay)
             
             if proto == "tls":
                 self.ces_certificate_path   = self.ces_params['certificate']
@@ -395,7 +395,7 @@ class CETPC2CLayer:
                 self._loop.call_later(c2c_timeout, self.is_c2c_negotiated, transport_ins, ip_addr, port, proto, timeout)
 
             except Exception as ex:
-                self._logger.info(" Exception in {} transport towards '{}'".format(proto, self.r_cesid))                  # ex.errno == 111 -- means connection RST received
+                self._logger.error(" Exception in {} transport towards '{}'".format(proto, self.r_cesid))                  # ex.errno == 111 -- means connection RST received
                 self.remote_ces_eps.remove( (ip_addr, port, proto) )
                 self.unregister_connected_transport(transport_ins)
                 self.register_as_unreachable_cetp(ip_addr, port, proto)
@@ -523,7 +523,6 @@ class CETPC2CLayer:
         """ Reconnects to the previously established transport enpoints """
         for (r_ip, r_port, r_transport) in self.trusted_rces_eps:
             try:
-                self._logger.info(" Initiating a new transport endpoint.")
                 if not self.remote_endpoint_malicious_history(self.r_cesid, r_ip):
                     asyncio.ensure_future(self.initiate_transport(r_transport, r_ip, r_port))
             except Exception as ex:

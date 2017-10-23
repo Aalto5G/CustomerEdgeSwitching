@@ -52,14 +52,15 @@ class CETPH2H:
         """ Initiates CETPc2clayer between two CES nodes """
         self.c2c = self.cetp_mgr.create_c2c_layer(cetp_h2h=self, r_cesid=self.r_cesid)
         
-    def enqueue_h2h_requests(self, dst_id, naptr_records, cb):
+    def enqueue_h2h_requests(self, dst_id, naptr_rrs, cb):
         """ This method enqueues the naptr responses triggered by private hosts. """
-        queue_msg = (dst_id, naptr_records, cb)
+        self.c2c.add_naptr_records(naptr_rrs)
         if not self.c2c_connectivity:
+            queue_msg = (dst_id, naptr_rrs, cb)
             self.h2h_q.put_nowait(queue_msg)               # Possible exception: If the queue is full, [It will simply drop the message (without waiting for space to be available in the queue]
-            self.c2c.add_naptr_records(naptr_records)
+            print("Stored in queue")
         else:
-            self.trigger_h2h_negotiation(queue_msg)
+            self.trigger_h2h_negotiation(dst_id, naptr_rrs, cb)
         
     @asyncio.coroutine
     def enqueue_h2h_requests_task(self, dst_id, naptr_records, cb):
@@ -84,16 +85,18 @@ class CETPH2H:
         while True:
             try:
                 queued_data = yield from self.h2h_q.get()
+                print("Via queue")
             except Exception as ex:
                 if not self._closure_signal:
                     self._logger.info(" Exception '{}' in H2H-queue towards '{}'".format(ex, self.r_cesid))
                 break
             
-            self.trigger_h2h_negotiation(queued_data, from_queue=True)
+            dst_id, naptr_rr, cb = queued_data
+            self.trigger_h2h_negotiation(dst_id, naptr_rr, cb, from_queue=True)
     
-    def trigger_h2h_negotiation(self, queued_data, from_queue=False):
+    def trigger_h2h_negotiation(self, dst_id, naptr_rr, cb, from_queue=False):
         try:
-            (dst_id, naptr_rr, cb) = queued_data
+            print("Via tasks")
             #if self.ongoing_h2h_transactions < self.max_session_limit:              # Number of simultaneous H2H-transactions are below the upper limit  
             asyncio.ensure_future(self.h2h_transaction_start(cb, dst_id))       # "try, except" within task can consume a task-related exception
             if from_queue:  self.h2h_q.task_done()

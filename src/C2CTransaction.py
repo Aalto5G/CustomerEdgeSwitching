@@ -173,7 +173,7 @@ class C2CTransaction(object):
                 return True
             return False
         except Exception as ex:
-            print(ex)
+            self._logger.error(ex)
             return False
 
     def _check_tlv2(self, tlv, group=[], code=[]):
@@ -185,7 +185,7 @@ class C2CTransaction(object):
                 return True
             return False
         except Exception as ex:
-            print(ex)
+            self._logger.error(ex)
             return False
 
     def _get_from_tlvlist(self, tlvlist, group, code = None, ope = ""):

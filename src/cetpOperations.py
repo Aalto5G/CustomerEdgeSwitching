@@ -872,7 +872,7 @@ def verify_id(**kwargs):
         return False
         
     except Exception as ex:
-        print(ex)
+        print("verify_id(): ", ex)
         return False
 
 def send_ctrl_dstep(**kwargs):
