@@ -42,13 +42,12 @@ class oCESTCPTransport(asyncio.Protocol):
 
     def connection_made(self, transport):
         self.transport = transport
-        self.peername = transport.get_extra_info('peername')
-        self._logger.info('Connected to {}'.format(self.peername))
+        self._logger.info('Connected to {}'.format(self.remotepeer))
         self.ces_layer.report_connectivity(self)                        # Reporting the connectivity to C2C layer.
         self.is_connected = True
         
     def report_c2c_negotiation(self, status):
-        """ Used by the C2C layer to notify if the c2c-negotiation succeeded """
+        """ Method used by C2CLayer to report success of C2C-Negotiation """
         self.c2c_negotiated = status
 
     def send_cetp(self, msg):
@@ -91,14 +90,14 @@ class oCESTCPTransport(asyncio.Protocol):
     
     def connection_lost(self, exc):
         if self.is_connected:                                # Prevents reporting the connection closure twice, at sending & receiving of FIN/ACK
-            self._logger.info(' CETPServer transport closed the connection')
+            self._logger.info(" Remote CES '{}'closed the transport connection".format(self.r_cesid))
             self.ces_layer.report_connectivity(self, status=False)
             self.is_connected=False
         # process exc
 
     def close(self):
         """ Closes the connection towards remote CES """
-        self._logger.info(' Closing the client CETP Transport towards {}'.format(self.r_cesid))
+        self._logger.info(" Closing the client CETP Transport towards '{}'".format(self.r_cesid))
         self.transport.close()
         if self.is_connected:
             self.ces_layer.report_connectivity(self, status=False)
@@ -109,38 +108,41 @@ class iCESServerTCPTransport(asyncio.Protocol):
     def __init__(self, loop, ces_params, cetp_mgr = None, name="iCESServerTransportTCP"):
         self._loop           = loop
         self.proto           = "tcp"
-        self.cetp_mgr        = cetp_mgr                 # Inbound c2c-Manager for handling a newly connected client.
-        self.c2c_layer       = None                     # CES-to-CES layer assigned by inbound C2CManager on completion of C2C-negotiation
+        self.cetp_mgr        = cetp_mgr                 # CETPManager for handling a newly connected client.
+        self.cetp_security   = cetp_mgr.cetp_security        
+        self.c2c_layer       = None                     # C2C-layer assigned by CETPManager on completion of C2C-negotiation
         self.r_cesid         = None
         self.is_connected    = False
         self._logger         = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_iCESTCPServerTransport)
         self.data_buffer     = b''
-        self.c2c_negotiation_t0 = 3 #int(ces_params['c2c_establishment_t0'])              # In seconds
+        self.c2c_negotiation_t0 = 10 #int(ces_params['c2c_establishment_t0'])              # In seconds
         
     def connection_made(self, transport):
+        self.transport = transport
         self.remotepeer = transport.get_extra_info('peername')
         self._logger.info('Connection from {}'.format(self.remotepeer))
-        self.transport = transport
         ip_addr, port = self.remotepeer
         self.is_connected   = True
         
-        if self.cetp_mgr.remote_endpoint_malicious_history(ip_addr) == True:
-            self._logger.info(" Remote endpoint has misbehavior history.")
+        if self.cetp_security.is_unverifiable_cetp_sender(ip_addr):
+            self._logger.warning(" Remote address <{}> has misbehavior history.".format(ip_addr))
             self.close()
         else:
             self._loop.call_later(self.c2c_negotiation_t0, self.is_c2c_negotiated)     # Schedules a check for C2C-policy negotiation.
 
          
     def is_c2c_negotiated(self):
-        """ Terminates connection with a CETPH2H that doesn't complete C2C negotiation in t<To) """        
+        """ Terminates transport connection if C2C negotiation doesn't complete in t<To """        
         if self.is_connected and (self.c2c_layer==None):
             self._logger.info(" Remote end did not complete C2C negotiation in To={}".format(str(self.c2c_negotiation_t0)))
+            ip_addr, port = self.remotepeer
+            self.cetp_security.register_unverifiable_cetp_sender(ip_addr)
             self.close()
 
     def set_c2c_details(self, r_cesid, c2c_layer):
-        """ Inbound C2C-Manager calls this method to assign c2c-layer """
-        self.r_cesid = r_cesid
+        """ CETPManager uses this method to assign C2C-layer to transport """
+        self.r_cesid    = r_cesid
         self.c2c_layer  = c2c_layer
 
     def send_cetp(self, msg):
@@ -163,41 +165,52 @@ class iCESServerTCPTransport(asyncio.Protocol):
         1. Appends received data to a buffer;          2. Parses the stream into CETP messages, based on length field;
         3. invokes CETP process to handle message;     4. Removes processed data from the buffer.
         """
-        self.data_buffer = self.data_buffer+data
-        while True:
-            if len(self.data_buffer) < CETP_LEN_FIELD:
-                break
-            
-            len_field = self.data_buffer[0:CETP_LEN_FIELD]
-            msg_length = int.from_bytes(len_field, byteorder='big')
-
-            if len(self.data_buffer) >= (CETP_LEN_FIELD+ msg_length):
-                cetp_data = self.data_buffer[CETP_LEN_FIELD:CETP_LEN_FIELD+msg_length]
-                self.data_buffer = self.data_buffer[CETP_LEN_FIELD+msg_length:]
-                cetp_msg = cetp_data.decode()
-
-                if self.c2c_layer is None:
-                    self.cetp_mgr.process_inbound_message(cetp_msg, self)                # Forwards the message to inbound-C2Cmanager for C2C negotiation.
+        try:
+            self.data_buffer = self.data_buffer+data
+            while True:
+                if len(self.data_buffer) < CETP_LEN_FIELD:
+                    break
+                
+                len_field = self.data_buffer[0:CETP_LEN_FIELD]
+                msg_length = int.from_bytes(len_field, byteorder='big')
+    
+                if len(self.data_buffer) >= (CETP_LEN_FIELD+ msg_length):
+                    cetp_data = self.data_buffer[CETP_LEN_FIELD:CETP_LEN_FIELD+msg_length]
+                    self.data_buffer = self.data_buffer[CETP_LEN_FIELD+msg_length:]
+                    cetp_msg = cetp_data.decode()
+                    self.forward_to_CETP_c2c(cetp_msg)
                 else:
-                    self.c2c_layer.consume_transport_message(cetp_msg, self)   # Forwarding the message to C2C layer, along with the transport for sending reply.
-            else:
-                break
+                    break
+        except Exception as ex:
+            self._logger.info("Exception in received data: {}".format(ex))
+            self.close()
 
-            
+
+    def forward_to_CETP_c2c(self, cetp_msg):
+        if self.c2c_layer is None:
+            self.cetp_mgr.process_inbound_message(cetp_msg, self)      # Forwards the message to CETPManager for C2C negotiation.
+        else:
+            self.c2c_layer.consume_transport_message(cetp_msg, self)   # Forwarding the message to C2C layer
+    
     def connection_lost(self, ex):
         """ Called by asyncio framework """
-        self._logger.info(" Remote endpoint closed the connection")
-        if (self.c2c_layer != None) and self.is_connected:
-            self.c2c_layer.report_connectivity(self, status=False)
-            self.is_connected = False
+        if self.is_connected:
+            self._logger.info(" Remote endpoint closed the connection")
+            self.clean_resources()
 
     def close(self):
         """ Closes the connection with the remote CES """
-        self._logger.info(" Closing connection to remote endpoint")
+        if self.is_connected:
+            self._logger.info(" Closing connection to remote endpoint")
+            self.clean_resources()
+            
+    def clean_resources(self):
         self.transport.close()
-        if (self.c2c_layer != None) and self.is_connected:
+        self.is_connected = False
+        if self.c2c_layer != None:
             self.c2c_layer.report_connectivity(self, status=False)
-            self.is_connected = False
+            
+        
 
 
 class iCESServerTLSTransport(asyncio.Protocol):
@@ -206,8 +219,9 @@ class iCESServerTLSTransport(asyncio.Protocol):
         self.ces_certificate = ces_certificate
         self.ca_certificate  = ca_certificate
         self.proto           = "tls"
-        self.cetp_mgr        = cetp_mgr                 # Inbound c2c-Manager for handling a newly connected client.
-        self.c2c_layer       = None                     # CES-to-CES layer assigned by inbound C2CManager on completion of C2C-negotiation
+        self.cetp_mgr        = cetp_mgr                 # CETPManager for handling a newly connected client.
+        self.cetp_security   = cetp_mgr.cetp_security
+        self.c2c_layer       = None                     # C2C-layer assigned by CETPManager on completion of C2C-negotiation
         self.r_cesid         = None
         self.is_connected    = False
         self._logger         = logging.getLogger(name)
@@ -216,27 +230,29 @@ class iCESServerTLSTransport(asyncio.Protocol):
         self.c2c_negotiation_t0 = int(ces_params['c2c_establishment_t0'])              # In seconds
         
     def connection_made(self, transport):
+        self.transport = transport
         self.remotepeer = transport.get_extra_info('peername')
         self._logger.info('Connection from {}'.format(self.remotepeer))
-        self.transport = transport
         ip_addr, port = self.remotepeer
         self.is_connected   = True
         
-        if self.cetp_mgr.remote_endpoint_malicious_history(ip_addr) == True:
-            self._logger.info(" Remote endpoint has misbehavior history.")
+        if self.cetp_security.is_unverifiable_cetp_sender(ip_addr):
+            self._logger.warning(" Remote endpoint has misbehavior history.")
             self.close()
         else:
             self._loop.call_later(self.c2c_negotiation_t0, self.is_c2c_negotiated)     # Schedules a check for C2C-policy negotiation.
 
 
     def is_c2c_negotiated(self):
-        """ Terminates connection with a CETPH2H that doesn't complete C2C negotiation in t<To) """        
+        """ Terminates transport connection if C2C negotiation doesn't complete in t<To """        
         if (self.c2c_layer==None) and (self.is_connected):
             self._logger.info(" Remote end did not complete C2C negotiation in To={}".format(str(self.c2c_negotiation_t0)))
+            ip_addr, port = self.remotepeer
+            self.cetp_security.register_unverifiable_cetp_sender(ip_addr)
             self.close()
 
     def set_c2c_details(self, r_cesid, c2c_layer):
-        """ Inbound C2C-Manager calls this method to assign c2c-layer """
+        """ CETPManager uses this method to assign c2c-layer """
         self.r_cesid = r_cesid
         self.c2c_layer  = c2c_layer
 
@@ -272,29 +288,34 @@ class iCESServerTLSTransport(asyncio.Protocol):
                 cetp_data = self.data_buffer[CETP_LEN_FIELD:CETP_LEN_FIELD+msg_length]
                 self.data_buffer = self.data_buffer[CETP_LEN_FIELD+ msg_length:]
                 cetp_msg  = cetp_data.decode()
-
-                if self.c2c_layer is None:
-                    self.cetp_mgr.process_inbound_message(cetp_msg, self)                # Forwards the message to inbound-C2Cmanager for C2C negotiation.
-                else:
-                    self.c2c_layer.consume_transport_message(cetp_msg, self)   # Forwarding the message to C2C layer, along with the transport for sending reply.
+                self.forward_to_CETP_c2c(cetp_msg)
             else:
                 break
 
-    
+
+    def forward_to_CETP_c2c(self, cetp_msg):
+        if self.c2c_layer is None:
+            self.cetp_mgr.process_inbound_message(cetp_msg, self)      # Forwards the message to CETPManager for C2C negotiation.
+        else:
+            self.c2c_layer.consume_transport_message(cetp_msg, self)   # Forwarding the message to C2C layer
+
     def connection_lost(self, ex):
         """ Called by asyncio framework """
-        self._logger.info(" Remote endpoint closed the connection")
-        if (self.c2c_layer != None) and self.is_connected:
-            self.c2c_layer.report_connectivity(self, status=False)
-            self.is_connected = False
+        if self.is_connected:
+            self._logger.info(" Remote endpoint closed the connection")
+            self.clean_resources()
 
     def close(self):
-        """ Closes the connection towards the remote CES """
-        self._logger.info(" Closing connection to remote endpoint")
+        """ Closes the connection with the remote CES """
+        if self.is_connected:
+            self._logger.info(" Closing connection to remote endpoint")
+            self.clean_resources()
+            
+    def clean_resources(self):
         self.transport.close()
-        if (self.c2c_layer != None) and self.is_connected:
+        self.is_connected = False
+        if self.c2c_layer != None:
             self.c2c_layer.report_connectivity(self, status=False)
-            self.is_connected = False
 
 
 

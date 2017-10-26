@@ -46,7 +46,7 @@ class CETPC2CLayer:
         self.conn_table                 = conn_table
         self.q                          = asyncio.Queue()        # Enqueues the messages from CETP Transport
         self.max_transport_conn         = ces_params["max_rces_transports"]
-        self.max_naptrs_per_msg         = 10
+        self.max_naptrs_per_msg         = ces_params["max_naptrs_per_msg"]
         self.pending_tasks              = []                                # oCESC2CLayer specific
         self.initiated_transports       = []
         self.connected_transports       = []
@@ -84,8 +84,10 @@ class CETPC2CLayer:
                 dst_id, r_cesid, r_ip, r_port, r_transport = naptr_rr                   # Assumption: All NAPTRs point towards one 'r_cesid'.    (Destination domain is reachable via one CES only)
                 key = (r_ip, r_port, r_transport)
                 
-                if (key in self.remote_ces_eps) or (key in self.unverified_ep_addr):
-                    continue
+                if (key in self.remote_ces_eps):
+                    pass
+                elif (key in self.unverified_ep_addr):
+                    pass
                 else:
                     self.remote_ces_eps.append( key )
                     #self._logger.debug(" Initiating a new transport.")
@@ -242,7 +244,10 @@ class CETPC2CLayer:
                 if len(cetp_resp) > 0:  transport.send_cetp(cetp_resp)
                 self._logger.debug(" Close the transport endpoint towards {}.".format(self.r_cesid))
                 self.unregister_c2c_transport(transport)
+                (r_ip, r_port), proto = transport.remotepeer, transport.proto
+                self.register_unreachable_cetp_addr(r_ip, r_port, proto)
                 transport.close()
+                del(transport)
                 
             elif status == None:
                 if len(cetp_resp) > 0:
@@ -398,34 +403,24 @@ class CETPC2CLayer:
                 self._logger.error(" Exception in {} transport towards '{}'".format(proto, self.r_cesid))                  # ex.errno == 111 -- means connection RST received
                 self.remote_ces_eps.remove( (ip_addr, port, proto) )
                 self.unregister_connected_transport(transport_ins)
-                self.register_as_unreachable_cetp(ip_addr, port, proto)
+                self.register_unreachable_cetp_addr(ip_addr, port, proto)
 
 
     def is_c2c_negotiated(self, transport, ip_addr, port, proto, timeout):
         """ Closes CETPTransport, if C2C-negotiation doesn't complete in 'To' """
-        if transport.c2c_negotiated == False:
-            self._logger.error(" C2C policies to '{}' @ {}:{} not negotiated in To='{}' sec".format(self.r_cesid, ip_addr, port, timeout))
-            self.register_as_unreachable_cetp(ip_addr, port, proto, across_ces=False)
-            transport.close()
+        try:
+            if transport.is_connected and (transport.c2c_negotiated == False):
+                self._logger.error(" C2C policies to '{}' are not negotiated in To='{}' sec @ {}:{}".format(self.r_cesid, timeout, ip_addr, port))
+                self.register_unreachable_cetp_addr(ip_addr, port, proto)        
+                transport.close()
+        except Exception as ex:
+            self._logger.error(ex)
 
-    def register_as_unreachable_cetp(self, ip_addr, port, proto, across_ces=True):
-        if across_ces==True:
-            self.cetp_security.register_as_unreachable_cetp(ip_addr, port, proto)
-        
-        if not self.has_unverified_addr(ip_addr, port, proto):
-            key = (ip_addr, port, proto)
-            self.unverified_ep_addr.append(key)
-            self._loop.call_later(30, self.unregister_unreachable_cetp, ip_addr, port, proto)
-
-    def unregister_unreachable_cetp(self, ip_addr, port, proto):
-        if self.has_unverified_addr(ip_addr, port, proto):
-            key = (ip_addr, port, proto)
-            self.unverified_ep_addr.remove(key)
+    def register_unreachable_cetp_addr(self, ip_addr, port, proto):
+        self.cetp_security.register_unreachable_cetp_addr(ip_addr, port, proto)
     
     def has_unverified_addr(self, ip_addr, port, proto):
-        key = (ip_addr, port, proto)
-        return key in self.unverified_ep_addr
-    
+        return self.cetp_security.is_unreachable_cetp(ip_addr, port, proto)    
         
     def report_connectivity(self, transport, status=True):
         """ Triggers next function (on transport connection success) OR resouce-cleanup (on transport connection termination) """ 

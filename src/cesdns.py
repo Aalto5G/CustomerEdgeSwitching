@@ -34,7 +34,7 @@ class DNSServer(asyncio.DatagramProtocol):
     def __init__(self, cesid, cetp_mgr = None):
         self._cetpManager   = cetp_mgr
         self.cesid          = cesid
-        self._load_naptr_records2()
+        self._load_naptr_records()
         self._logger        = logging.getLogger('DNSServer')
         self._logger.setLevel(LOGLEVELDNS)
         
@@ -119,30 +119,8 @@ class DNSServer(asyncio.DatagramProtocol):
         for flag in flags:
             dns_response.flags |= flag
         return dns_response
-
-    def _load_naptr_records(self):
-        """ Simulating availability of NAPTR records from DNS """
-        self.naptr_records = {}
-        self.naptr_records['dest-id']           = ("destHost/service-id, dest-cesid,    dest-ip, dest-port, proto")
-        self.naptr_records['hosta1.cesa.lte.']  = ('hosta1.cesa.lte.',     'cesa.lte.', '127.0.0.1', '49001', 'tcp')
-        self.naptr_records['hosta2.cesa.lte.']  = ('hosta2.cesa.lte.',     'cesa.lte.', '127.0.0.1', '49001', 'tcp')
-        self.naptr_records['hosta3.lte.']       = ('hosta3.lte.',     'cesa.lte.', '127.0.0.1', '49002', 'tcp')
-        self.naptr_records['hosta4.lte.']       = ('hosta4.lte.',     'cesa.lte.', '127.0.0.1', '49002', 'tcp')
-        self.naptr_records['hostb1.cesb.lte.']  = ('hostb1.cesb.lte.',     'cesb.lte.', '127.0.0.1', '49001', 'tcp')
-        self.naptr_records['hostb2.cesb.lte.']  = ('hostb2.cesb.lte.',     'cesb.lte.', '127.0.0.1', '49001', 'tcp')
-        self.naptr_records['hostb3.lte.']       = ('hostb3.lte.',     'cesb.lte.', '127.0.0.1', '49002', 'tcp')
-        self.naptr_records['hostb4.lte.']       = ('hostb4.lte.',     'cesb.lte.', '127.0.0.1', '49002', 'tcp')
-        self.naptr_records['hostb5.lte.']       = ('hostb5.lte.',     'cesb.lte.', '127.0.0.1', '49003', 'tls')
-        self.naptr_records['hostb6.lte.']       = ('hostb6.lte.',     'cesb.lte.', '127.0.0.1', '49003', 'tls')
-        self.naptr_records['hostc1.lte.']       = ('hostc1.lte.',     'cesc.lte.', '127.0.0.3', '49001', 'tcp')
-        self.naptr_records['hostc2.lte.']       = ('hostc2.lte.',     'cesc.lte.', '127.0.0.3', '49001', 'tcp')
-        self.naptr_records['www.google.com.']   = ('www.google.com.',      'cesd.lte.', '127.0.0.4', '49001', 'tcp')
-        self.naptr_records['www.aalto.fi.']     = ('www.aalto.fi.',        'cese.lte.', '127.0.0.5', '49001', 'tcp')
-        self.naptr_records['test.']             = ('test.',                'cesb.lte.', '127.0.0.1', '49001', 'tcp')        
-        self.naptr_records['raimo.aalto.lte.']  = ('raimo.aalto.lte.',     'cesb.lte.', '127.0.0.1', '49001', 'tcp')
-        self.naptr_records['raimo2.aalto.lte.'] = ('raimo2.aalto.lte.',    'cesb.lte.', '127.0.0.1', '49002', 'tcp')
     
-    def _load_naptr_records2(self):
+    def _load_naptr_records(self):
         """ Simulating availability of NAPTR records from DNS """
         self.naptr_records = {}
         self.naptr_records['dest-id']                       = ("destHost/service-id,         dest-cesid,    dest-ip, dest-port, proto")
@@ -153,13 +131,14 @@ class DNSServer(asyncio.DatagramProtocol):
         self.naptr_records['hostb1.cesb.lte.']              = ('hostb1.cesb.lte.',          'cesb.lte.', '10.0.3.103', '49001', 'tcp')
         self.naptr_records['hostb2.cesb.lte.']              = ('hostb2.cesb.lte.',          'cesb.lte.', '10.0.3.103', '49002', 'tcp')
         self.naptr_records['srv1.hostb1.cesb.lte.']         = ('srv1.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49001', 'tcp')
-        self.naptr_records['srv2.hostb1.cesb.lte.']         = ('srv2.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49002', 'tcp')
+        #self.naptr_records['srv2.hostb1.cesb.lte.']         = ('srv2.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49002', 'tcp')
+        self.naptr_records['srv2.hostb1.cesb.lte.']         = ('srv2.hostb1.cesb.lte.',     'cesc.lte.', '10.0.3.103', '49001', 'tcp')
         self.naptr_records['raimo.cesb.lte.']               = ('raimo.cesb.lte.',           'cesb.lte.', '10.0.3.103', '49001', 'tcp')
         self.naptr_records['raimo2.cesb.lte.']              = ('raimo2.cesb.lte.',          'cesb.lte.', '10.0.3.103', '49002', 'tcp')
         self.naptr_records['www.google.com.']               = ('www.google.com.',           'cesd.lte.', '10.0.3.103', '49001', 'tcp')
         self.naptr_records['www.aalto.fi.']                 = ('www.aalto.fi.',             'cese.lte.', '10.0.3.101', '48001', 'tcp')
         self.naptr_records['test.']                         = ('test.',                     'cesa.lte.', '10.0.3.101', '48001', 'tcp')
-        #
+        
         # Just for the sake of testing
         self.naptr_records['hostc1.cesb.lte.']              = ('hostb1.cesb.lte.',          'cesc.lte.', '10.0.3.103', '49001', 'tcp')
         self.naptr_records['hostd1.cesb.lte.']              = ('hostb1.cesb.lte.',          'cesd.lte.', '10.0.3.103', '49001', 'tcp')

@@ -539,6 +539,9 @@ class oC2CTransaction(C2CTransaction):
     def is_transport_active(self):
         """ Indicates whether the transport link corresponding to this transaction is active. """
         return self.health_report
+    
+    def get_remote_cesid(self):
+        return self.r_cesid
 
     def _pre_process(self, cetp_msg):
         """ Pre-processing check for the version field, session tags & format of TLVs in the inbound packet.
@@ -659,7 +662,7 @@ class oC2CTransaction(C2CTransaction):
         
         if error:
             self._logger.error(" CES-to-CES policy negotiation failed in {} RTT".format(self.rtt))
-            self._logger.warning(" Execute DNS error callback on the pending h2h-transactions.")
+            self._logger.warning(" Execute DNS NXDOMAIN callback on the pending h2h-transactions.")
             self.c2c_handler.cancel()
             negotiation_status = False
             self.cetpstate_mgr.remove_initiated_transaction((self.sstag, 0))      # Since transaction didn't completed at oCES.

@@ -53,6 +53,7 @@ class CETPManager:
         self.host_register          = PolicyManager.HostRegister()
         self._loop                  = loop
         self.name                   = name
+        self.max_naptrs_per_msg     = ces_params["max_naptrs_per_msg"]
         self._logger                = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPManager)
         self.local_cetp             = CETPH2H.CETPH2HLocal(cetpstate_mgr=self.cetpstate_mgr, policy_mgr=self.policy_mgr, cetp_mgr=self, \
@@ -232,7 +233,7 @@ class CETPManager:
             2) Filters out the NAPTRs that recently failed connectivity.    3) Assures that all NAPTRs belong to the same r_cesid.
         """
         try:
-            if len(naptr_rrs)>10:
+            if len(naptr_rrs) > self.max_naptrs_per_msg:
                 return None                                                     # > 10 naptr_rrs could create high traffic flood
             
             remove_naptrs =  []
@@ -243,13 +244,16 @@ class CETPManager:
                 if self.cetp_security.is_unreachable_cetp(r_ip, r_port, r_proto):
                     remove_naptrs.append(n_rr)
             
-            for p in remove_naptrs:
-                naptr_rrs.remove(p)
-            
-            if len(naptr_rrs)==0:
-                return None
-            
-            return naptr_rrs
+            if len(remove_naptrs)==0:
+                return naptr_rrs
+            else:
+                for p in remove_naptrs:
+                    naptr_rrs.remove(p)
+                
+                if len(naptr_rrs)==0:
+                    return None
+                
+                return naptr_rrs
         
         except:
             return None
@@ -538,46 +542,52 @@ class CETPManager:
     def _pre_process(self, msg):
         """ Pre-processes the received packet for validity of session tags & CETP version """
         try:
-            self._logger.info(" Initiate/continue C2C-negotiation on new CETP Transport")
             cetp_msg = json.loads(msg)
             inbound_sstag, inbound_dstag, ver = cetp_msg['SST'], cetp_msg['DST'], cetp_msg['VER']
             sstag, dstag    = inbound_dstag, inbound_sstag
-            cetp_ver = self.ces_params["CETPVersion"]
             
-            if ver!=2:
+            if ver!= self.ces_params["CETPVersion"]:
                 self._logger.info(" CETP version is not supported.")
-                return False
+                return
             
-            if ( (sstag==0) and (dstag ==0)) or (sstag < 0) or (dstag < 0) or (inbound_sstag == 0):
+            if ( (sstag < 0) or (dstag < 0) or ((sstag==0) and (dstag ==0)) or (inbound_sstag == 0)):
                 self._logger.info(" Session tag values are invalid")
-                return False
+                return
             
             if inbound_dstag !=0:
-                self._logger.debug(" First inbound CETP message shall have DST=0 -> Attacker is scanning the session tag space?")
-                return False
+                self._logger.debug(" Possible Attack scanning the session tag sapce?")       # First inbound CETP message shall have DST=0
+                return
         
-            return True
+            return cetp_msg
         except Exception as ex:
             self._logger.error(" Exception in pre-processing the received message.")
-            return False
+            return
 
     
     def process_inbound_message(self, msg, transport):
         """ Processes first few packets from a newly connected 'endpoint',
         Upon successful negotiation of C2C policies, it assigns CETP-H2H and CETP-C2C layer to the remote CETP endpoint
         """
-        result = self._pre_process(msg)
-        if result == False:
+        cetp_msg = self._pre_process(msg)
+        if cetp_msg == None:
+            ip_addr, port = transport.remotepeer
+            self.cetp_security.register_unverifiable_cetp_sender(ip_addr)
             transport.close()
+            return
         
-        (status, cetp_resp) = self.prcoess_c2c_negotiation(msg, transport)
+        response = self.prcoess_c2c_negotiation(cetp_msg, transport)
+        status, cetp_resp = response
         
         if status == False:
-            self._logger.info(" CES-to-CES negotiation failed with remote edge.")
             if len(cetp_resp) !=0:
-                self._logger.debug(" Sending CETP error_response, and closing the transport.")
+                self._logger.debug(" Sending CETP error_response.")
                 transport.send_cetp(cetp_resp)
+                
+            ip_addr, port = transport.remotepeer
+            self.cetp_security.register_unverifiable_cetp_sender(ip_addr)
+            self._logger.error(" CES-to-CES negotiation failed with remote edge. Closing transport ")
             transport.close()
+            return
             
         elif status == None:
             self._logger.info(" CES-to-CES negotiation not completed yet -> Send the response packet.")
@@ -587,8 +597,8 @@ class CETPManager:
             self._logger.debug(" CES-to-CES policies are negotiated")
             tmp_cetp = json.loads(cetp_resp)
             sstag, dstag = tmp_cetp['SST'], tmp_cetp['DST']
-            stateful_transaction = self.cetpstate_mgr.get_established_transaction((sstag, dstag))
-            r_cesid = stateful_transaction.r_cesid
+            cetp_transaction = self.cetpstate_mgr.get_established_transaction((sstag, dstag))
+            r_cesid = cetp_transaction.get_remote_cesid()
             
             if not self.has_c2c_layer(r_cesid): 
                 self._logger.info("Create CETP-H2H and CETP-C2C layer")
@@ -599,15 +609,14 @@ class CETPManager:
             else:
                 c2c_layer = self.get_c2c_layer(r_cesid)                 # Gets c2c-layer corresponding to for remote cesid
 
-            stateful_transaction._assign_c2c_layer(c2c_layer)
-            c2c_layer.register_c2c_transport(transport, stateful_transaction)
+            cetp_transaction._assign_c2c_layer(c2c_layer)
+            c2c_layer.register_c2c_transport(transport, cetp_transaction)
             transport.set_c2c_details(r_cesid, c2c_layer)
             transport.send_cetp(cetp_resp)
 
 
-    def prcoess_c2c_negotiation(self, msg, transport):
+    def prcoess_c2c_negotiation(self, cetp_msg, transport):
         """ Checks whether inbound message is part of existing or new CETP-C2C negotiation from a legitimate node... """ 
-        cetp_msg = json.loads(msg)
         inbound_sstag, inbound_dstag = cetp_msg['SST'], cetp_msg['DST']
         sstag, dstag    = inbound_dstag, inbound_sstag
         

@@ -59,9 +59,10 @@ class CETPSecurity:
         self.evidences_against_remoteces     = {}
         self.misbehavior_record              = {}
         self.reporting_ces                   = {}
-        self.unverifiable_addresses          = []
         self.filtered_domains                = {}
-        self.unreachable_cetp_addrs          = []
+        self.unverifiable_cetp_addrs         = []
+        self.unverifiable_cetp_senders       = []
+        
         self.conn_table                      = conn_table
         self.ces_params                      = ces_params
         self._loop                           = loop
@@ -72,20 +73,35 @@ class CETPSecurity:
     # CETPSecurity shall have specific 'CES-to-CES' view & aggregated view of all 'CES-to-CES' interactions
 
 
-    def register_as_unreachable_cetp(self, ip_addr, port, proto):
+    def register_unverifiable_cetp_sender(self, ip_addr):
+        if not self.is_unverifiable_cetp_sender(ip_addr):
+            key = ip_addr
+            self.unverifiable_cetp_senders.append(key)
+            self._loop.call_later(30, self.unregister_unverifiable_cetp_sender, ip_addr)
+        
+    def unregister_unverifiable_cetp_sender(self, ip_addr):
+        if self.is_unverifiable_cetp_sender(ip_addr):
+            key = ip_addr
+            self.unverifiable_cetp_senders.remove(key)
+
+    def is_unverifiable_cetp_sender(self, ip_addr):
+        key = ip_addr
+        return key in self.unverifiable_cetp_senders
+
+    def register_unreachable_cetp_addr(self, ip_addr, port, proto):
         if not self.is_unreachable_cetp(ip_addr, port, proto):
             key = (ip_addr, port, proto)
-            self.unreachable_cetp_addrs.append(key)
-            self._loop.call_later(30, self.unregister_as_unreachable_cetp, ip_addr, port, proto)
+            self.unverifiable_cetp_addrs.append(key)
+            self._loop.call_later(30, self.unregister_unreachable_cetp_addr, ip_addr, port, proto)
 
-    def unregister_as_unreachable_cetp(self, ip_addr, port, proto):
+    def unregister_unreachable_cetp_addr(self, ip_addr, port, proto):
         if self.is_unreachable_cetp(ip_addr, port, proto):
             key = (ip_addr, port, proto)
-            self.unreachable_cetp_addrs.remove(key)
+            self.unverifiable_cetp_addrs.remove(key)
             
     def is_unreachable_cetp(self, ip_addr, port, proto):
         key = (ip_addr, port, proto)
-        return key in self.unreachable_cetp_addrs
+        return key in self.unverifiable_cetp_addrs
 
 
     def register_filtered_domains(self, keytype, value, key=None, timeout=None):
