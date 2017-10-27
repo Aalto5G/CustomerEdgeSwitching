@@ -74,6 +74,9 @@ class DNSServer(asyncio.DatagramProtocol):
                 return        
             else:
                 naptr_response_list = self.resolve_naptr(dst_domain)                        # Simulating resolution process for NAPTR response records
+                if len(naptr_response_list)==0:
+                    return
+                
                 # Sanitization of NAPTR response must happen at this place
                 for naptr_resp in naptr_response_list:
                     dest_id, r_cesid, r_ip, r_port, r_transport = naptr_resp                # Assumption: Destination is reachable via one CES only. All list of DNS NAPTR response records point to one remote cesids?

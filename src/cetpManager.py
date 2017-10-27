@@ -12,6 +12,7 @@ import json
 import yaml
 import ssl
 import functools
+import copy
 
 import cetpManager
 import CETP
@@ -42,9 +43,6 @@ class CETPManager:
         self.c2c_register           = {}
         self.cesid                  = cesid                        # Local ces-id
         self.ces_params             = ces_params
-        self.ces_certificate_path   = self.ces_params['certificate']
-        self.ces_privatekey_path    = self.ces_params['private_key']
-        self.ca_certificate_path    = self.ces_params['ca_certificate']                                       # Path of X.509 certificate of trusted CA, for validating the remote node's certificate.
         self.cetpstate_mgr          = ConnectionTable.CETPStateTable()                                        # Records the established CETP transactions (both H2H & C2C). Required for preventing the re-allocation already in-use SST & DST (in CETP transaction).
         self.conn_table             = ConnectionTable.ConnectionTable()
         self.cetp_security          = CETPSecurity.CETPSecurity(loop, self.conn_table, ces_params)
@@ -53,12 +51,20 @@ class CETPManager:
         self.host_register          = PolicyManager.HostRegister()
         self._loop                  = loop
         self.name                   = name
-        self.max_naptrs_per_msg     = ces_params["max_naptrs_per_msg"]
         self._logger                = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPManager)
+        self.read_cetp_params()
         self.local_cetp             = CETPH2H.CETPH2HLocal(cetpstate_mgr=self.cetpstate_mgr, policy_mgr=self.policy_mgr, cetp_mgr=self, \
                                                            cetp_security=self.cetp_security, host_register=self.host_register, conn_table=self.conn_table)
 
+
+    def read_cetp_params(self):
+        self.ces_certificate_path   = self.ces_params['certificate']
+        self.ces_privatekey_path    = self.ces_params['private_key']
+        self.ca_certificate_path    = self.ces_params['ca_certificate']                                       # Path of X.509 certificate of trusted CA, for validating the remote node's certificate.
+        self.max_naptrs_per_msg     = self.ces_params["max_naptrs_per_msg"]
+        self.max_dns_cetp_responses = self.ces_params["max_naptrs_per_sec"]
+        self.allowed_dns            = copy.copy(self.max_dns_cetp_responses)
 
     def create_cetp_endpoint(self, r_cesid, c2c_layer=None, c2c_negotiated=False):
         """ Creates the CETP-H2H layer towards remote CES-ID """
@@ -195,12 +201,28 @@ class CETPManager:
         except Exception as ex:
             self._logger.info("Exception '{}'".format(ex))
 
+    def set_max_dns_naptr_responses(self):
+        self.allowed_dns = copy.copy(self.max_dns_cetp_responses)
+            
+    def dns_threshold_exceeded(self):
+        """ Check to detect DNS flood, AND to prevent CES/CETP processing from subjecting to high loads  """
+        if self.allowed_dns == self.max_dns_cetp_responses:
+            self._loop.call_later(1.0, self.set_max_dns_naptr_responses)
 
+        elif self.allowed_dns ==0:
+            return True
+            
+        self.allowed_dns -= 1
+        return False
+            
+    
     def process_dns_message(self, dns_cb, cb_args, dst_id, r_cesid="", naptr_list=[]):
-        if len(naptr_list)!=0:
-            self.process_outbound_cetp(dns_cb, cb_args, dst_id, r_cesid, naptr_list)
-        else:
-            self.process_local_cetp(dns_cb, cb_args, dst_id)
+        if not self.dns_threshold_exceeded():
+            #print("Threshold not exceeded")
+            if len(naptr_list)!=0:
+                self.process_outbound_cetp(dns_cb, cb_args, dst_id, r_cesid, naptr_list)
+            else:
+                self.process_local_cetp(dns_cb, cb_args, dst_id)
 
     def process_local_cetp(self, dns_cb, cb_args, dst_id):
         cb = (dns_cb, cb_args)

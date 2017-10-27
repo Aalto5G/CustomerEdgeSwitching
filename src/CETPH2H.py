@@ -39,7 +39,7 @@ class CETPH2H:
         self.ongoing_h2h_transactions   = 0
         self.max_session_limit          = 20                        # Dummy value for now, In reality the value shall come from C2C negotiation with remote CES.
         self.h2h_q                      = asyncio.Queue()           # Enqueues the NAPTR responses triggered by the private hosts.
-        self.DNS_Cleanup_Threshold      = 5                         # No. of pending DNS queries gracefully handled in case of C2C termination. 
+        self.nxdomain_resp_threshold      = 5                       # No. of pending DNS queries gracefully handled in case of C2C termination. 
         self.c2c_connectivity           = c2c_negotiated
         self.pending_tasks              = []
         self.rtt_measurement            = []
@@ -58,7 +58,7 @@ class CETPH2H:
         if not self.c2c_connectivity:
             queue_msg = (dst_id, naptr_rrs, cb)
             self.h2h_q.put_nowait(queue_msg)               # Possible exception: If the queue is full, [It will simply drop the message (without waiting for space to be available in the queue]
-            print("Stored in queue")
+            #print("Stored in queue")
         else:
             self.trigger_h2h_negotiation(dst_id, naptr_rrs, cb)
         
@@ -85,7 +85,7 @@ class CETPH2H:
         while True:
             try:
                 queued_data = yield from self.h2h_q.get()
-                print("Via queue")
+                #print("Via queue")
             except Exception as ex:
                 if not self._closure_signal:
                     self._logger.info(" Exception '{}' in H2H-queue towards '{}'".format(ex, self.r_cesid))
@@ -96,7 +96,7 @@ class CETPH2H:
     
     def trigger_h2h_negotiation(self, dst_id, naptr_rr, cb, from_queue=False):
         try:
-            print("Via tasks")
+            #print("Via tasks")
             #if self.ongoing_h2h_transactions < self.max_session_limit:              # Number of simultaneous H2H-transactions are below the upper limit  
             asyncio.ensure_future(self.h2h_transaction_start(cb, dst_id))       # "try, except" within task can consume a task-related exception
             if from_queue:  self.h2h_q.task_done()
@@ -200,7 +200,7 @@ class CETPH2H:
     def resource_cleanup(self):
         """ Deletes the CETPH2H instance towards r_cesid, cancels the pending tasks, and handles the pending <H2H DNS-NAPTR responses. """
         pending_dns_queries = self.h2h_q.qsize()
-        if (pending_dns_queries>0) and (pending_dns_queries < self.DNS_Cleanup_Threshold):          # Issues DNS NXDOMAIN (if pending H2H-DNS queries < N in size)
+        if (pending_dns_queries>0) and (pending_dns_queries < self.nxdomain_resp_threshold):          # Issues DNS NXDOMAIN (if pending H2H-DNS queries < N in size)
             try:
                 queued_data = self.h2h_q.get_nowait()
                 (dst_id, naptr_rr, cb) = queued_data
