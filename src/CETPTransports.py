@@ -253,7 +253,7 @@ class iCESServerTLSTransport(asyncio.Protocol):
 
     def set_c2c_details(self, r_cesid, c2c_layer):
         """ CETPManager uses this method to assign c2c-layer """
-        self.r_cesid = r_cesid
+        self.r_cesid    = r_cesid
         self.c2c_layer  = c2c_layer
 
     def send_cetp(self, msg):

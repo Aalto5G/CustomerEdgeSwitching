@@ -112,6 +112,9 @@ class C2CTransaction(object):
 
     def _create_request_tlv(self, tlv):
         try:
+            import inspect
+            print('caller name:', inspect.stack()[1][3])
+            
             group, code = tlv['group'], tlv['code']
             if group in ["ces", "rloc", "payload"]:
                 func = CETP.SEND_TLV_GROUP[group][code]
@@ -173,7 +176,7 @@ class C2CTransaction(object):
                 return True
             return False
         except Exception as ex:
-            self._logger.error(ex)
+            self._logger.error("Exception in _check_tlv(): {}".format(ex))
             return False
 
     def _check_tlv2(self, tlv, group=[], code=[]):
@@ -185,7 +188,7 @@ class C2CTransaction(object):
                 return True
             return False
         except Exception as ex:
-            self._logger.error(ex)
+            self._logger.error("Exception in _check_tlv2(): {}".format(ex))
             return False
 
     def _get_from_tlvlist(self, tlvlist, group, code = None, ope = ""):
@@ -510,7 +513,7 @@ class oC2CTransaction(C2CTransaction):
             # Signing the CETP header, if required by policy    - Depends on the type of transport layer.
             # self.attach_cetp_signature(tlv_to_send)
             cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
-            #self.pprint(cetp_message)
+            self.pprint(cetp_message)
             self.cetpstate_mgr.add_initiated_transaction((self.sstag,0), self)
             self.last_packet_sent = cetp_message
             self._start_time = time.time()
@@ -575,7 +578,7 @@ class oC2CTransaction(C2CTransaction):
         #try:
         #self._logger.info(" Continuing CES-to-CES session negotiation (SST={} -> DST={}) towards '{}'".format(self.sstag, 0, self.r_cesid))
         #self._logger.info("Inbound packet")
-        #self.pprint(cetp_packet)
+        self.pprint(cetp_packet)
         #self._logger.info(" Outbound policy: ", self.ces_policy.show2())
         negotiation_status = None
         error = False
@@ -674,7 +677,7 @@ class oC2CTransaction(C2CTransaction):
                 cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)        # Send as 'Info' TLV
                 self.last_packet_sent = cetp_message
                 self.cetp_negotiation_history.append(cetp_message)
-                #self.pprint(cetp_message)
+                self.pprint(cetp_message)
                 cetp_packet = json.dumps(cetp_message)
                 return (negotiation_status, cetp_packet)
 
@@ -690,7 +693,7 @@ class oC2CTransaction(C2CTransaction):
                     #self._logger.info(" Responding remote CES with the terminate-TLV")
                     tlvs_to_send = self._create_offer_tlv2(group="ces", code="terminate")
                     cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
-                    #self.pprint(cetp_message)
+                    self.pprint(cetp_message)
                     cetp_packet = json.dumps(cetp_message)
                     negotiation_status = False
                     return (negotiation_status, cetp_packet)
@@ -713,7 +716,7 @@ class oC2CTransaction(C2CTransaction):
                 self.last_packet_sent = cetp_msg
                 self.last_packet_received = self.packet
                 self.cetp_negotiation_history.append(cetp_msg)
-                #self.pprint(cetp_msg)
+                self.pprint(cetp_msg)
                 cetp_packet = json.dumps(cetp_msg)
                 return (negotiation_status, cetp_packet)
 
@@ -726,8 +729,7 @@ class oC2CTransaction(C2CTransaction):
         """ Sends a terminate TLV and closes the connected transport """
         terminate_tlv = self._create_offer_tlv2(group="ces", code="terminate", value=error_tlv)
         if terminate_tlv!=None:
-            tlv_to_send = [terminate_tlv]
-            cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlv_to_send)
+            cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=terminate_tlv)
             cetp_packet = json.dumps(cetp_message)
             self.transport.send_cetp(cetp_packet)
         self.transport.close()
@@ -809,7 +811,7 @@ class oC2CTransaction(C2CTransaction):
             #self._logger.info(" Sending CES keepalive towards '{}' (SST={}, DST={})".format(self.r_cesid, self.sstag, self.dstag))
             keepalive_tlv = self._create_request_tlv2(group="ces", code="keepalive")
             cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=keepalive_tlv)
-            ##self.pprint(cetp_message)
+            #self.pprint(cetp_message)
             self.keepalive_trigger_time = time.time()
             self.keepalive_triggered = True
             self.keepalive_response = None
@@ -830,7 +832,7 @@ class oC2CTransaction(C2CTransaction):
         tlvs_to_send = evidence_tlv
         cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=evidence_tlv)
         cetp_packet = json.dumps(cetp_message)
-        ##self.pprint(cetp_message)
+        #self.pprint(cetp_message)
         self.evidence_acknowledged = False
         self._loop.call_later(2, self.check_evidence_acknowledgment)      # Checking acknowledgement of the sent evidence.
         self.transport.send_cetp(cetp_packet)
@@ -844,7 +846,7 @@ class oC2CTransaction(C2CTransaction):
         tlvs_to_send = host_filter_tlv
         cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
         cetp_packet = json.dumps(cetp_message)
-        ##self.pprint(cetp_message)
+        #self.pprint(cetp_message)
         #self.evidence_acknowledged = False
         #self._loop.call_later(2, self.check_acknowledgement)      # Checking acknowledgement of the sent evidence.
         self.transport.send_cetp(cetp_packet)
@@ -858,7 +860,7 @@ class oC2CTransaction(C2CTransaction):
         tlvs_to_send = host_filter_tlv
         cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
         cetp_packet = json.dumps(cetp_message)
-        ##self.pprint(cetp_message)
+        #self.pprint(cetp_message)
         #self.evidence_acknowledged = False
         #self._loop.call_later(2, self.check_acknowledgement)      # Checking acknowledgement of the sent evidence.
         self.transport.send_cetp(cetp_packet)
@@ -1003,7 +1005,7 @@ class oC2CTransaction(C2CTransaction):
         
         if len(tlvs_to_send)!=0:
             cetp_msg = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
-            ##self.pprint(cetp_msg)
+            #self.pprint(cetp_msg)
             self.last_seen = time.time()
             cetp_packet = json.dumps(cetp_msg)
             transport.send_cetp(cetp_packet)
@@ -1097,7 +1099,7 @@ class iC2CTransaction(C2CTransaction):
         """ Processes the inbound CETP-packet for negotiating the CES-to-CES (CETP) policies """
         #self._logger.info("{}".format(42*'*') )
         #self._logger.info("Inbound packet")
-        #self.pprint(cetp_packet)
+        self.pprint(cetp_packet)
         negotiation_status  = None
         cetp_response       = ""
         #time.sleep(3)
@@ -1171,7 +1173,7 @@ class iC2CTransaction(C2CTransaction):
         
         if error:
             cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=error_tlvs)
-            #self.pprint(cetp_message)
+            self.pprint(cetp_message)
             cetp_packet = json.dumps(cetp_message)
             negotiation_status = False
             return (negotiation_status, cetp_packet)
@@ -1187,7 +1189,7 @@ class iC2CTransaction(C2CTransaction):
                     negotiation_status = True
     
                     cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
-                    #self.pprint(cetp_message)
+                    self.pprint(cetp_message)
                     #self._logger.info(" Negotiated params: {}".format(self.negotiated_parameters()))
                     cetp_packet = json.dumps(cetp_message)
                     self.last_packet_sent = cetp_packet
@@ -1195,7 +1197,7 @@ class iC2CTransaction(C2CTransaction):
                 else:
                     if len(error_tlvs)!=0:
                         cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=error_tlvs)
-                        #self.pprint(cetp_message)
+                        self.pprint(cetp_message)
                         cetp_packet = json.dumps(cetp_message)
                         negotiation_status = False
                         return (negotiation_status, cetp_packet)
@@ -1218,7 +1220,7 @@ class iC2CTransaction(C2CTransaction):
                 negotiation_status = None
                 cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
                 cetp_packet = json.dumps(cetp_message)
-                #self.pprint(cetp_message)
+                self.pprint(cetp_message)
                 return (negotiation_status, cetp_packet)
 
 

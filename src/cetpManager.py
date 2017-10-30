@@ -57,7 +57,6 @@ class CETPManager:
         self.local_cetp             = CETPH2H.CETPH2HLocal(cetpstate_mgr=self.cetpstate_mgr, policy_mgr=self.policy_mgr, cetp_mgr=self, \
                                                            cetp_security=self.cetp_security, host_register=self.host_register, conn_table=self.conn_table)
 
-
     def read_cetp_params(self):
         self.ces_certificate_path   = self.ces_params['certificate']
         self.ces_privatekey_path    = self.ces_params['private_key']
@@ -627,12 +626,12 @@ class CETPManager:
                 c2c_layer = self.create_c2c_layer(r_cesid)
                 h2h_layer = self.create_cetp_endpoint(r_cesid, c2c_layer=c2c_layer, c2c_negotiated=True)
                 c2c_layer.assign_cetp_h2h_layer(h2h_layer)    # Top layer to handle inbound H2H
-                c2c_layer.set_connectivity_params()
+                c2c_layer.set_connectivity()
             else:
                 c2c_layer = self.get_c2c_layer(r_cesid)                 # Gets c2c-layer corresponding to for remote cesid
 
             cetp_transaction._assign_c2c_layer(c2c_layer)
-            c2c_layer.register_c2c_transport(transport, cetp_transaction)
+            c2c_layer.register_c2c(transport, cetp_transaction)
             transport.set_c2c_details(r_cesid, c2c_layer)
             transport.send_cetp(cetp_resp)
 
