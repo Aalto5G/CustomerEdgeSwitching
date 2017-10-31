@@ -10,6 +10,8 @@ CESParameters:
     c2c_establishment_t0: 2
     incomplete_cetp_state_t0: 2
     max_rces_transports: 5
+    max_naptrs_per_msg: 5
+    max_naptrs_per_sec: 4000
     host_filtering_t0: 30
     dp_ttl: 3600
     keepalive_t0: 2
@@ -17,9 +19,9 @@ CESParameters:
     caces: 127.0.0.1
     fw_version: 0.1
     pow_algo: hashcash
-    ces_session_limit: 300
+    ces_session_limit: 3000
     host_sessions: 2
-    max_ces_session_limit: 400
+    max_ces_session_limit: 4000
     max_dp_ttl: 7200
     max_host_ratelimit: 10
     min_keepalive_timeout: 10

@@ -111,13 +111,13 @@
         { "ope":"info", "group": "id", "code": "fqdn", "value":"hosta1.cesa.lte." },
         { "ope":"info", "group": "rloc", "code": "ipv4", "value":"10.0.3.101" },
         { "ope":"info", "group": "payload", "code": "eth" },
-        { "ope":"info", "group": "control", "code": "caep" }
+        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" }
     ],
     "available": [
         { "ope":"info", "group": "id", "code": "fqdn", "value":"hosta1.cesa.lte." },
         { "ope":"info", "group": "rloc", "code": "ipv4", "value":"10.0.3.101" },
         { "ope":"info", "group": "payload", "code": "eth" },
-        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145"  },
+        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" },
         { "ope":"info", "group": "control", "code": "ack" }
     ]
     }
