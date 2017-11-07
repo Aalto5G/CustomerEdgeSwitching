@@ -112,9 +112,6 @@ class C2CTransaction(object):
 
     def _create_request_tlv(self, tlv):
         try:
-            import inspect
-            print('caller name:', inspect.stack()[1][3])
-            
             group, code = tlv['group'], tlv['code']
             if group in ["ces", "rloc", "payload"]:
                 func = CETP.SEND_TLV_GROUP[group][code]
@@ -353,7 +350,7 @@ class C2CTransaction(object):
     def negotiated_parameters(self):
         s = [self.l_cesid, self.r_cesid, self.ttl, self.evidence_format, self.remote_session_limit, self.lrloc, self.rrloc, self.lpayload, self.rpayload]
         return s
-
+        
     def show(self, packet):
         #self._logger.info("CETP Packet")
         for k, v in packet.items():
@@ -362,11 +359,17 @@ class C2CTransaction(object):
             else:
                 print("TLV:")
                 for tlv in v:
+                    ope, group = CETP.PPRINT_OPE[tlv['ope']], CETP.PPRINT_GROUP[tlv['group']]
+                    code = tlv["code"]
+                    if code in CETP.PPRINT_CODE:
+                        code = CETP.PPRINT_CODE[code]
+                    
                     if 'value' in tlv:
-                        print("\t { 'ope':{}, 'group':{}, 'code':{}, 'value':{} }".format(tlv['ope'], tlv['group'],tlv['code'], tlv['value']))
+                        print("\t ['ope':{}, 'group':{}, 'code':{}, 'value':{}]".format(ope, group, code, tlv['value']))
                     else:
-                        print("\t { 'ope':{}, 'group':{}, 'code':{} }".format(tlv['ope'], tlv['group'],tlv['code']))
+                        print("\t ['ope':{}, 'group':{}, 'code':{} ]".format(ope, group, code))
         print("\n")
+        
         
     def show2(self, packet):
         #self._logger.info("CETP Packet")
@@ -380,7 +383,7 @@ class C2CTransaction(object):
         print("\n")
 
     def pprint(self, packet):
-        self.show2(packet)
+        self.show(packet)
 
 
 
@@ -496,7 +499,7 @@ class oC2CTransaction(C2CTransaction):
             
             #self._logger.info(" Starting CES-to-CES session towards '{}' (SST={} -> DST={})".format(self.sstag, self.dstag, self.r_cesid))
             tlvs_to_send = []
-            ##self._logger.debug("Outbound policy: ", self.ces_policy.show2())
+            ##self._logger.debug("Outbound policy: ", self.ces_policy)
             
             # The offered TLVs
             for otlv in self.ces_policy.get_offer():
@@ -579,7 +582,7 @@ class oC2CTransaction(C2CTransaction):
         #self._logger.info(" Continuing CES-to-CES session negotiation (SST={} -> DST={}) towards '{}'".format(self.sstag, 0, self.r_cesid))
         #self._logger.info("Inbound packet")
         self.pprint(cetp_packet)
-        #self._logger.info(" Outbound policy: ", self.ces_policy.show2())
+        ##self._logger.info(" Outbound policy: ", self.ces_policy)
         negotiation_status = None
         error = False
         cetp_resp = ""
@@ -879,10 +882,13 @@ class oC2CTransaction(C2CTransaction):
         now = time.time()
         if self.keepalive_response==None:
             # No keep-alive response
-            self.health_report = False
+            new_health_report = False
             self.missed_keepalives += 1
             self.c2c_layer.report_rtt(self.transport, rtt=2**32)
-            self.c2c_layer.report_transport_health(self.transport, healthy=False)
+            if new_health_report != self.health_report:
+                self.health_report = False
+                self.c2c_layer.report_transport_health(self.transport, healthy=False)                   # Reporting the change in transport status to C2C layer.
+
             
             if self.missed_keepalives <3:
                 self.keepalive_handler  = self._loop.call_later(3.0, self.initiate_keepalive)          # Sending next keepalive-request
@@ -896,8 +902,12 @@ class oC2CTransaction(C2CTransaction):
             self.keepalive_scheduled = False
             rtt = self.keepalive_response_time - self.keepalive_trigger_time
             self.c2c_layer.report_rtt(self.transport, rtt=rtt)                                         # Report RTT
-            self.c2c_layer.report_transport_health(self.transport, healthy=True)
+            new_health_report = True
             
+            if new_health_report != self.health_report:
+                self.health_report = True
+                self.c2c_layer.report_transport_health(self.transport, healthy=True)                   # Reporting the change in transport status to C2C layer.
+
     
     def post_c2c_negotiation(self, packet, transport):
         """ 
@@ -907,7 +917,7 @@ class oC2CTransaction(C2CTransaction):
         
         Remote CES either notes these requests, OR Responds to them with ACKs or Acceptable values.      The response is then verified by CES.
         """
-        #self._logger.info(" Post-C2C negotiation packet from {} (SST={}, DST={})".format(self.r_cesid, self.sstag, self.dstag))
+        #self._logger.info(" Post-C2C negotiation packet from '{}' (SST={}, DST={})".format(self.r_cesid, self.sstag, self.dstag))
         self.packet = packet
         self.transport = transport
         tlvs_to_send = []
@@ -985,12 +995,13 @@ class oC2CTransaction(C2CTransaction):
                 elif self.ces_policy.has_required(received_tlv):                         # TBD: This shall correspond to the requests sent in the last packet to remote CES.
                     # CES will only accept/process the response for the requests it sent to remote CES.
                     if (received_tlv["group"]=="ces") and (received_tlv["code"]=="keepalive"):
-                        self.keepalive_response_time    = time.time()
-                        self.health_report              = True
+                        self.keepalive_response_time    = time.time()                        
                         self.keepalive_response         = True
+
                         if not self.keepalive_triggered:
                             self.c2c_layer.report_rtt(self.transport, last_seen=self.last_seen)
                             self.c2c_layer.report_transport_health(self.transport)
+                            self.health_report              = True
                         
                     else:
                         if self._verify_tlv(received_tlv):
@@ -1209,7 +1220,7 @@ class iC2CTransaction(C2CTransaction):
                         return (negotiation_status, cetp_packet)                    
                     
             else:
-                #self._logger.info(" {} unsatisfied iCES requirements: ".format( len(self.ices_policy.required)-satisfied_requriements) )
+                #self._logger.info(" {} unsatisfied iCES requirements: ".format(len(self.ices_policy_tmp.required)))
                 # Generating Full Query message
                 tlvs_to_send = []
                 for rtlv in self.ices_policy.get_required():            

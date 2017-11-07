@@ -68,6 +68,12 @@ class CETPTLV(object):
     def remove_value(self):
         self.value=None
 
+PPRINT_GROUP = { "id":"id ", "ces":"ces ", "control":"ctrl", "rloc":"rloc", "payload":"payl"}
+PPRINT_OPE   = {"query":"qury", "response":"resp", "info":"info"}
+PPRINT_CODE  = {"cesid":"cesid", "pow":"pwork", "caces":"caces",     "fw_version":"fwVer",    "ttl":"dpttl", 
+                "keepalive_cycle":"kacyc",    "keepalive":"kpalv", "session_limit":"slimt", "evidence_format":"evFmt",
+                "evidence":"evdnc", "certificate":"certf", "caep":"caep "
+                }
 
 CES_CODE_TO_POLICY= {
                     'cesid':'cesid',                       'cesid':'cesid',                         #Contains the CES-ID

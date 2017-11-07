@@ -39,7 +39,7 @@ class CETPH2H:
         self.ongoing_h2h_transactions   = 0
         self.max_session_limit          = 20                        # Dummy value for now, In reality the value shall come from C2C negotiation with remote CES.
         self.h2h_q                      = asyncio.Queue()           # Enqueues the NAPTR responses triggered by the private hosts.
-        self.nxdomain_resp_threshold      = 5                       # No. of pending DNS queries gracefully handled in case of C2C termination. 
+        self.nxdomain_resp_threshold    = 5                         # No. of pending DNS queries gracefully handled in case of C2C termination. 
         self.c2c_connectivity           = c2c_negotiated
         self.pending_tasks              = []
         self.rtt_measurement            = []
@@ -54,7 +54,7 @@ class CETPH2H:
         
     def enqueue_h2h_requests(self, dst_id, naptr_rrs, cb):
         """ This method enqueues the naptr responses triggered by private hosts. """
-        self.c2c.add_naptr_records(naptr_rrs)
+        self.c2c.process_naptr_records(naptr_rrs)
         if not self.c2c_connectivity:
             queue_msg = (dst_id, naptr_rrs, cb)
             self.h2h_q.put_nowait(queue_msg)               # Possible exception: If the queue is full, [It will simply drop the message (without waiting for space to be available in the queue]

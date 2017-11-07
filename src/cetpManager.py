@@ -61,7 +61,7 @@ class CETPManager:
         self.ces_certificate_path   = self.ces_params['certificate']
         self.ces_privatekey_path    = self.ces_params['private_key']
         self.ca_certificate_path    = self.ces_params['ca_certificate']                                       # Path of X.509 certificate of trusted CA, for validating the remote node's certificate.
-        self.max_naptrs_per_msg     = self.ces_params["max_naptrs_per_msg"]
+        self.max_naptrs_per_msg     = self.ces_params["max_naptrs_per_dns"]
         self.max_dns_cetp_responses = self.ces_params["max_naptrs_per_sec"]
         self.allowed_dns            = copy.copy(self.max_dns_cetp_responses)
 
@@ -631,7 +631,7 @@ class CETPManager:
                 c2c_layer = self.get_c2c_layer(r_cesid)                 # Gets c2c-layer corresponding to for remote cesid
 
             cetp_transaction._assign_c2c_layer(c2c_layer)
-            c2c_layer.register_c2c(transport, cetp_transaction)
+            c2c_layer.register_inbound_transport(transport, cetp_transaction)
             transport.set_c2c_details(r_cesid, c2c_layer)
             transport.send_cetp(cetp_resp)
 

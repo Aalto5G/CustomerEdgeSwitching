@@ -322,7 +322,27 @@ class H2HTransaction(object):
                     else:
                         print("\t { 'ope':{}, 'group':{}, 'code':{} }".format(tlv['ope'], tlv['group'],tlv['code']))
         print("\n")
-        
+    
+    def show(self, packet):
+        self._logger.info("CETP Packet")
+        for k, v in packet.items():
+            if k != "TLV":
+                print(str(k)+": "+ str(v))
+            else:
+                print("TLV:")
+                for tlv in v:
+                    ope, group = CETP.PPRINT_OPE[tlv['ope']], CETP.PPRINT_GROUP[tlv['group']]
+                    code = tlv["code"]
+                    if code in CETP.PPRINT_CODE:
+                        code = CETP.PPRINT_CODE[code]
+                    
+                    if 'value' in tlv:
+                        print("\t ['ope':{}, 'group':{}, 'code':{}, 'value':{}]".format(ope, group, code, tlv['value']))
+                    else:
+                        print("\t ['ope':{}, 'group':{}, 'code':{} ]".format(ope, group, code))
+        print("\n")
+
+    
     def show2(self, packet):
         #self._logger.info("CETP Packet")
         for k, v in packet.items():
@@ -335,7 +355,7 @@ class H2HTransaction(object):
         print("\n")
 
     def pprint(self, packet):
-        self.show2(packet)
+        self.show(packet)
 
 
 class H2HTransactionOutbound(H2HTransaction):
