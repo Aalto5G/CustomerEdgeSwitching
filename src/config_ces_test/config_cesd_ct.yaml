@@ -1,32 +1,38 @@
 # CES Configuration Parameters
 
 CESParameters:
-    name: cesc
-    cesid: cesc.demo.lte.
-    certificate: config_cesc/cesc.crt
-    private_key: config_cesc/cesc.key
-    ca_certificate: config_cesc/ca.crt
+    name: cesd
+    cesid: cesd.lte.
+    CETPVersion: 2
+    certificate: config_ces_test/cesd.crt
+    private_key: config_ces_test/cesd.key
+    ca_certificate: config_ces_test/ca.crt
+    c2c_establishment_t0: 2
+    incomplete_cetp_state_t0: 2
+    max_rces_transports: 5
+    max_naptrs_per_sec: 400
+    max_naptrs_per_dns: 5
+    host_filtering_t0: 30
+    keepalive_t0: 2
     dp_ttl: 3600
-    keepalive_timeout: 2
-    keepalive_cycle: 10
-    connection_expiry: 20
+    keepalive_cycle: 150
     caces: 127.0.0.1
     fw_version: 0.1
-    ces_session_limit: 30
-    host_ratelimit: 2
     pow_algo: hashcash
-    max_ces_session_limit: 100
+    ces_session_limit: 300
+    host_sessions: 2
+    max_ces_session_limit: 400
     max_dp_ttl: 7200
     max_host_ratelimit: 10
     min_keepalive_timeout: 10
-
+    
 DNS:
-    soa: cesc.demo.lte.
-    zonefile: db.cesc.demo.lte.
+    soa: cesd.lte.
+    zonefile: db.cesd.lte.
     server:
         loopback:
-            ip: 127.0.0.1
-            port: 55
+            ip: 10.0.3.105
+            port: 53
     timeouts:
         naptr:
             - 0.010
@@ -42,7 +48,7 @@ DNS:
             - 0.200
         any:
             - 0
-            
+
 CETPServers:
     serverNames:
         - server1
@@ -57,8 +63,8 @@ CETPServers:
         port: 49002
         transport: tcp
     server3:
-        ip: 10.1.3.105
+        ip: 10.0.3.105
         port: 49003
         transport: tls
 
-cetp_policy_file: config_cesc/cetp_policies.json
+cetp_policy_file: config_ces_test/cetp_policies_cesd.json

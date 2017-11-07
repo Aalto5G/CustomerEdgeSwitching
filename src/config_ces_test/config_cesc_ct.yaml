@@ -1,12 +1,12 @@
 # CES Configuration Parameters
 
 CESParameters:
-    name: cesa
-    cesid: cesa.lte.
+    name: cesc
+    cesid: cesc.lte.
     CETPVersion: 2
-    certificate: config_cesa/cesa.crt
-    private_key: config_cesa/cesa.key
-    ca_certificate: config_cesa/ca.crt
+    certificate: config_ces_test/cesc.crt
+    private_key: config_ces_test/cesc.key
+    ca_certificate: config_ces_test/ca.crt
     c2c_establishment_t0: 2
     incomplete_cetp_state_t0: 2
     max_rces_transports: 5
@@ -15,7 +15,7 @@ CESParameters:
     host_filtering_t0: 30
     keepalive_t0: 2
     dp_ttl: 3600
-    keepalive_cycle: 15
+    keepalive_cycle: 150
     caces: 127.0.0.1
     fw_version: 0.1
     pow_algo: hashcash
@@ -27,11 +27,11 @@ CESParameters:
     min_keepalive_timeout: 10
     
 DNS:
-    soa: cesa.lte.
-    zonefile: db.cesa.lte.
+    soa: cesc.lte.
+    zonefile: db.cesc.lte.
     server:
         loopback:
-            ip: 10.0.3.101
+            ip: 10.0.3.104
             port: 53
     timeouts:
         naptr:
@@ -55,16 +55,16 @@ CETPServers:
         - server2
         - server3
     server1:
-        ip: 10.0.3.101
-        port: 48001
+        ip: 10.0.3.104
+        port: 49001
         transport: tcp
     server2:
-        ip: 10.0.3.101
-        port: 48002
+        ip: 10.0.3.104
+        port: 49002
         transport: tcp
     server3:
-        ip: 10.0.3.101
-        port: 48003
+        ip: 10.0.3.104
+        port: 49003
         transport: tls
 
-cetp_policy_file: config_cesa/cetp_policies.json
+cetp_policy_file: config_ces_test/cetp_policies_cesc.json
