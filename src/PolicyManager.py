@@ -41,6 +41,9 @@ class HostRegister(object):
             l_fqdn = self.ip_fqdn_map[l_ip]
             return l_fqdn
 
+class Configuration:
+    def __init__(self):
+        pass
 
 class FakeInterfaceDefinition(object):
     """ To be replaced by actual Class defining the CES Network Interfaces """
@@ -279,6 +282,7 @@ class PolicyCETP(object):
     def has_available(self, tlv):
         ope, cmp, group, code, value = self.get_tlv_details(tlv)
         for pol in self.available:
+            # I can check whether policy is notAvailable.
             if (group in pol["group"]) and (code in pol["code"]):
                 return True
         return False

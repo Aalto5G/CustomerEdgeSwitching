@@ -187,10 +187,12 @@ class CETPH2H:
 
     def set_closure_signal(self):
         self._closure_signal = True
+        """
         if len(self.rtt_measurement)>0:
             avg = sum(self.rtt_measurement)/len(self.rtt_measurement)
             print("Min: ", min(self.rtt_measurement)*1000,"ms\t", "Max: ", max(self.rtt_measurement)*1000,"ms")
             print("Average: ", avg*1000,"ms")
+        """
         
     def execute_dns_callback(self, cb, success= False):
         cb_func, cb_args = cb
@@ -202,7 +204,8 @@ class CETPH2H:
         pending_dns_queries = self.h2h_q.qsize()
         if (pending_dns_queries>0) and (pending_dns_queries < self.nxdomain_resp_threshold):          # Issues DNS NXDOMAIN (if pending H2H-DNS queries < N in size)
             try:
-                queued_data = self.h2h_q.get_nowait()
+                self._logger.warning(" Executing DNS NXDOMAIN on the pending h2h-transactions.")
+                queued_data = self.h2h_q.get_nowait()               # Could it be just one or many records ?
                 (dst_id, naptr_rr, cb) = queued_data
                 (cb_func, cb_args) = cb
                 (dns_q, addr) = cb_args

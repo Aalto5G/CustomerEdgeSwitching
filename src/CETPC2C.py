@@ -246,14 +246,14 @@ class CETPC2CLayer:
             cetp_msg = json.loads(msg)
             inbound_sstag, inbound_dstag, ver = cetp_msg['SST'], cetp_msg['DST'], cetp_msg['VER']
             sstag, dstag    = inbound_dstag, inbound_sstag
-            cetp_ver = self.ces_params["CETPVersion"]
+            acceptable_ver = self.ces_params["CETPVersion"]
+            
+            if ver!=acceptable_ver:
+                self._logger.info(" CETP version is not supported.")
+                return False
             
             if ( (sstag==0) and (dstag ==0)) or (sstag < 0) or (dstag < 0):
                 self._logger.error(" Session tag values are invalid")
-                return False
-            
-            if ver!=cetp_ver:
-                self._logger.info(" CETP version is not supported.")
                 return False
             
             return (sstag, dstag, cetp_msg)
@@ -585,6 +585,7 @@ class CETPC2CLayer:
         """ Closes the transport connection """
         c2c_transaction = self.get_c2c_transaction(transport)
         c2c_transaction.set_terminated()
+        c2c_transaction.send_cetp_terminate()
         c2c_transaction.terminate_transport()
         
     def report_evidence(self, h_sstag, h_dstag, r_hostid, r_cesid, misbehavior_evidence):

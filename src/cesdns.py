@@ -134,8 +134,12 @@ class DNSServer(asyncio.DatagramProtocol):
         self.naptr_records['hostb1.cesb.lte.']              = ('hostb1.cesb.lte.',          'cesb.lte.', '10.0.3.103', '49001', 'tcp')
         self.naptr_records['hostb2.cesb.lte.']              = ('hostb2.cesb.lte.',          'cesb.lte.', '10.0.3.103', '49002', 'tcp')
         self.naptr_records['srv1.hostb1.cesb.lte.']         = ('srv1.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49001', 'tcp')
-        #self.naptr_records['srv2.hostb1.cesb.lte.']         = ('srv2.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49002', 'tcp')
-        self.naptr_records['srv2.hostb1.cesb.lte.']         = ('srv2.hostb1.cesb.lte.',     'cesc.lte.', '10.0.3.103', '49001', 'tcp')
+        self.naptr_records['srv2.hostb1.cesb.lte.']         = ('srv2.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49002', 'tcp')
+        self.naptr_records['hostc1.cesc.lte.']              = ('hostc1.cesc.lte.',          'cesc.lte.', '10.0.3.104', '49001', 'tcp')
+        self.naptr_records['hostd1.cesd.lte.']              = ('hostd1.cesd.lte.',          'cesd.lte.', '10.0.3.105', '49001', 'tcp')
+        self.naptr_records['hoste1.cese.lte.']              = ('hoste1.cese.lte.',          'cese.lte.', '10.0.3.106', '49001', 'tcp')
+        self.naptr_records['hostf1.cesf.lte.']              = ('hostf1.cesf.lte.',          'cesf.lte.', '10.0.3.107', '49001', 'tcp')
+        #self.naptr_records['srv2.hostb1.cesb.lte.']         = ('srv2.hostb1.cesb.lte.',     'cesc.lte.', '10.0.3.103', '49001', 'tcp')
         self.naptr_records['raimo.cesb.lte.']               = ('raimo.cesb.lte.',           'cesb.lte.', '10.0.3.103', '49001', 'tcp')
         self.naptr_records['raimo2.cesb.lte.']              = ('raimo2.cesb.lte.',          'cesb.lte.', '10.0.3.103', '49002', 'tcp')
         self.naptr_records['www.google.com.']               = ('www.google.com.',           'cesd.lte.', '10.0.3.103', '49001', 'tcp')
@@ -143,9 +147,9 @@ class DNSServer(asyncio.DatagramProtocol):
         self.naptr_records['test.']                         = ('test.',                     'cesa.lte.', '10.0.3.101', '48001', 'tcp')
         
         # Just for the sake of testing
-        self.naptr_records['hostc1.cesb.lte.']              = ('hostb1.cesb.lte.',          'cesc.lte.', '10.0.3.103', '49001', 'tcp')
-        self.naptr_records['hostd1.cesb.lte.']              = ('hostb1.cesb.lte.',          'cesd.lte.', '10.0.3.103', '49001', 'tcp')
-        self.naptr_records['hoste1.cesb.lte.']              = ('hostb1.cesb.lte.',          'cese.lte.', '10.0.3.103', '49001', 'tcp')
+        #self.naptr_records['hostc1.cesb.lte.']              = ('hostb1.cesb.lte.',          'cesc.lte.', '10.0.3.103', '49001', 'tcp')
+        #self.naptr_records['hostd1.cesb.lte.']              = ('hostb1.cesb.lte.',          'cesd.lte.', '10.0.3.103', '49001', 'tcp')
+        #self.naptr_records['hoste1.cesb.lte.']              = ('hostb1.cesb.lte.',          'cese.lte.', '10.0.3.103', '49001', 'tcp')
         
         
         

@@ -58,12 +58,16 @@ class CETPManager:
                                                            cetp_security=self.cetp_security, host_register=self.host_register, conn_table=self.conn_table)
 
     def read_cetp_params(self):
-        self.ces_certificate_path   = self.ces_params['certificate']
-        self.ces_privatekey_path    = self.ces_params['private_key']
-        self.ca_certificate_path    = self.ces_params['ca_certificate']                                       # Path of X.509 certificate of trusted CA, for validating the remote node's certificate.
-        self.max_naptrs_per_msg     = self.ces_params["max_naptrs_per_dns"]
-        self.max_dns_cetp_responses = self.ces_params["max_naptrs_per_sec"]
-        self.allowed_dns            = copy.copy(self.max_dns_cetp_responses)
+        try:
+            self.ces_certificate_path   = self.ces_params['certificate']
+            self.ces_privatekey_path    = self.ces_params['private_key']
+            self.ca_certificate_path    = self.ces_params['ca_certificate']                                       # Path of X.509 certificate of trusted CA, for validating the remote node's certificate.
+            self.max_naptrs_per_msg     = self.ces_params["max_naptrs_per_dns"]
+            self.max_dns_cetp_responses = self.ces_params["max_naptrs_per_sec"]
+            self.allowed_dns            = copy.copy(self.max_dns_cetp_responses)
+        except Exception as ex:
+            self._logger.error("Exception '{}' in reading config file".format(ex))
+        
 
     def create_cetp_endpoint(self, r_cesid, c2c_layer=None, c2c_negotiated=False):
         """ Creates the CETP-H2H layer towards remote CES-ID """
