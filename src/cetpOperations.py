@@ -954,7 +954,7 @@ def send_ctrl_qos(**kwargs):
             new_tlv["value"] = ""
     return [new_tlv]
 
-def send_ctrl_ack(**kwargs):
+def send_ack(**kwargs):
     tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
     #policy_code = CETP.CES_CODE_TO_POLICY[code]
     new_tlv = copy.copy(tlv)
@@ -962,8 +962,9 @@ def send_ctrl_ack(**kwargs):
         if 'value' in new_tlv:
             del new_tlv["value"]
     else:
+        val = random.randint(0,2**32)
         if not ('value' in new_tlv):
-            new_tlv["value"] = ""
+            new_tlv["value"] = val
     return [new_tlv]
 
 def send_ctrl_os_version(**kwargs):
@@ -1148,7 +1149,7 @@ def response_ctrl_qos(**kwargs):
         print("Exception in response_ctrl_qos()", ex)
         return None
 
-def response_ctrl_ack(**kwargs):
+def response_ack(**kwargs):
     try:
         tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
         new_tlv = copy.deepcopy(tlv)
@@ -1160,7 +1161,7 @@ def response_ctrl_ack(**kwargs):
             new_tlv["value"] = response_value
         return [new_tlv]
     except Exception as ex:
-        print("Exception in response_ctrl_ack()", ex)
+        print("Exception in response_ack()", ex)
         return None
 
     
@@ -1318,7 +1319,7 @@ def verify_ctrl_qos(**kwargs):
             return False
     return True
 
-def verify_ctrl_ack(**kwargs):
+def verify_ack(**kwargs):
     tlv, code = kwargs["tlv"], kwargs["code"]
     #policy_code = CETP.CONTROL_CODES[code]
     if 'cmp' in tlv:
