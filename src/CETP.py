@@ -72,7 +72,7 @@ PPRINT_GROUP = { "id":"id ", "ces":"ces ", "control":"ctrl", "rloc":"rloc", "pay
 PPRINT_OPE   = {"query":"qury", "response":"resp", "info":"info"}
 PPRINT_CODE  = {"cesid":"cesid", "pow":"pwork", "caces":"caces",     "fw_version":"fwVer",    "ttl":"dpttl", 
                 "keepalive_cycle":"kacyc",    "keepalive":"kpalv", "session_limit":"slimt", "evidence_format":"evFmt",
-                "evidence":"evdnc", "certificate":"certf", "caep":"caep "
+                "evidence":"evdnc", "certificate":"certf", "caep":"caep ", "ack": "ack  ", "ipv4":"ipv4 ", "ipv6":"ipv6 ", "eth": "eth  "
                 }
 
 CES_CODE_TO_POLICY= {
@@ -250,7 +250,7 @@ RESPONSE_TLV_CONTROl_CODE = {"dstep":cetpOperations.response_ctrl_dstep,
                              "dp_ttl":cetpOperations.response_ctrl_dp_ttl,
                              "dp_keepalive_cycle":cetpOperations.response_ctrl_dp_keepalive_cycle,
                              "qos":cetpOperations.response_ctrl_qos,
-                             "ack":cetpOperations.response_ctrl_ack,
+                             "ack":cetpOperations.response_ack,
                              "os_version":cetpOperations.response_ctrl_os_version,
                              "policy_caching":cetpOperations.response_ctrl_policy_caching,
                              "dp_proto":cetpOperations.response_ctrl_dp_proto,
@@ -292,7 +292,7 @@ VERIFY_TLV_CONTROl_CODE = {"dstep":cetpOperations.verify_ctrl_dstep,
                       "dp_ttl":cetpOperations.verify_ctrl_dp_ttl,
                       "dp_keepalive_cycle":cetpOperations.verify_ctrl_dp_keepalive_cycle,
                       "qos":cetpOperations.verify_ctrl_qos,
-                      "ack":cetpOperations.verify_ctrl_ack,
+                      "ack":cetpOperations.verify_ack,
                       "os_version":cetpOperations.verify_ctrl_os_version,
                       "policy_caching":cetpOperations.verify_ctrl_policy_caching,
                       "dp_proto":cetpOperations.verify_ctrl_dp_proto,

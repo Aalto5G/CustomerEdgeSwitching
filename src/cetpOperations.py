@@ -6,6 +6,7 @@ import hashcash
 import hashlib
 import time
 import copy
+import random
 import json
 import CETP
 import C2CTransaction
@@ -523,9 +524,9 @@ def verify_ces_keepalive(**kwargs):
         
         value = tlv["value"]
         if value == "":
-            transaction.keepalive_response_time = time.time()
-            transaction.health_report = True
-            transaction.keepalive_response = True
+            #transaction.keepalive_response_time = time.time()
+            transaction.transport_health = True
+            #transaction.keepalive_response = True
         
         return True
     except Exception as ex:
@@ -959,8 +960,11 @@ def send_ack(**kwargs):
     #policy_code = CETP.CES_CODE_TO_POLICY[code]
     new_tlv = copy.copy(tlv)
     if query==True:
-        if 'value' in new_tlv:
-            del new_tlv["value"]
+        val = random.randint(0,2**32)
+        if 'value' not in new_tlv:
+            new_tlv["value"] = ""
+        new_tlv["value"] = val
+        
     else:
         val = random.randint(0,2**32)
         if not ('value' in new_tlv):
@@ -1155,10 +1159,6 @@ def response_ack(**kwargs):
         new_tlv = copy.deepcopy(tlv)
         ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
         new_tlv['ope'] = 'info'
-        if response_value==None:
-            new_tlv["value"] = ""
-        else:
-            new_tlv["value"] = response_value
         return [new_tlv]
     except Exception as ex:
         print("Exception in response_ack()", ex)
