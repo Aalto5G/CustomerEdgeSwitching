@@ -314,7 +314,7 @@ class CETPC2CLayer:
                 (r_ip, r_port), proto = transport.remotepeer, transport.proto
                 self.register_unreachable_cetp_addr(r_ip, r_port, proto)                
                 transport.close()
-                self.unregister_transport(transport)
+                #self.unregister_transport(transport)
                 del(transport)
                 
             elif status == None:

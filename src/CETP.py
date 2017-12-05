@@ -72,7 +72,7 @@ PPRINT_GROUP = { "id":"id ", "ces":"ces ", "control":"ctrl", "rloc":"rloc", "pay
 PPRINT_OPE   = {"query":"qury", "response":"resp", "info":"info"}
 PPRINT_CODE  = {"cesid":"cesid", "pow":"pwork", "caces":"caces",     "fw_version":"fwVer",    "ttl":"dpttl", 
                 "keepalive_cycle":"kacyc",    "keepalive":"kpalv", "session_limit":"slimt", "evidence_format":"evFmt",
-                "evidence":"evdnc", "certificate":"certf", "caep":"caep ", "ack": "ack  ", "ipv4":"ipv4 ", "ipv6":"ipv6 ", "eth": "eth  "
+                "evidence":"evdnc", "certificate":"certf", "caep":"caep ", "ack": "ack  ", "ipv4":"ipv4 ", "ipv6":"ipv6 ", "eth": "eth  ", "gre": "gre  "
                 }
 
 CES_CODE_TO_POLICY= {

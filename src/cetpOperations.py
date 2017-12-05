@@ -253,7 +253,8 @@ def response_ces_ttl(**kwargs):
                 negotiated_ttl = local_ttl
             else:
                 negotiated_ttl = remote_default_dp_ttl
-                
+            
+            transaction.add_negotiated_params(code, negotiated_ttl)
             transaction.ttl = negotiated_ttl
             tlv["value"] = negotiated_ttl
     
@@ -491,8 +492,10 @@ def verify_ces_ttl(**kwargs):
         
         if local_ttl < remote_default_dp_ttl:
             transaction.ttl = local_ttl
+            transaction.add_negotiated_params(code, local_ttl)
         else:
             transaction.ttl = remote_default_dp_ttl
+            transaction.add_negotiated_params(code, remote_default_dp_ttl)
         
         return True
         
@@ -577,7 +580,8 @@ def verify_ces_session_limit(**kwargs):
         if remote_ces_session_count > local_session_limit:
             print("Invalid # of {} simultaneous H2H transactions.".format(ces_session_limit))
             return False
-
+        
+        transaction.add_negotiated_params(code, remote_ces_session_count)
         transaction.remote_session_limit = remote_ces_session_count                # Remote CES shall not forward more than these simultaneous sessions towards this CES
         return True
     
@@ -655,6 +659,7 @@ def verify_ces_evidence_format(**kwargs):
         local_evidence_format = l_value
         
         if remote_evidence_format in local_evidence_format:
+            transaction.add_negotiated_params(code, remote_evidence_format)
             transaction.evidence_format = remote_evidence_format
             return True
         else:
@@ -716,7 +721,7 @@ def send_rloc(**kwargs):
     else:
         #Create an offer TLV
         group, code = tlv["group"], tlv["code"]
-        ret_list = interfaces.get_interface(rloc_type=code)
+        ret_list = interfaces.get_interface_rlocs(rloc_type=code)
         for p in range(0, len(ret_list)):
             new_tlv = copy.deepcopy(tlv)
             new_tlv["value"] = ret_list[p]      # pref, order, rloc, iface_alias
@@ -739,13 +744,15 @@ def response_rloc(**kwargs):
     try:
         tlv, policy, interfaces = kwargs["tlv"], kwargs["policy"], kwargs["interfaces"]
         ret_tlvs = []
+        
         new_tlv = copy.deepcopy(tlv)
-        ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-        ret_list = interfaces.get_interface(rloc_type=code)             # Value comes from dataplane/interface definitions
+        ret = policy.get_available_policy(new_tlv)
+        ope, cmp, group, code, response_value = ret        
+        ret_list = interfaces.get_interface_rlocs(rloc_type=code)             # Value comes from dataplane-interface definitions
         
         if len(ret_list)==0:
             new_tlv = copy.deepcopy(tlv)
-            new_tlv["cmp"] = "notAvailable"      # pref, order, rloc, iface_alias
+            new_tlv["cmp"] = "notAvailable"
             new_tlv['ope'] = 'info'
             ret_tlvs.append(new_tlv)
         else:
@@ -762,25 +769,39 @@ def response_rloc(**kwargs):
         return None
 
 def response_payload(**kwargs):
-    tlv, policy = kwargs["tlv"], kwargs["policy"]
-    new_tlv = copy.deepcopy(tlv)
-    ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-    new_tlv['ope'] = 'info'
+    try:
+        tlv, policy = kwargs["tlv"], kwargs["policy"]
+        new_tlv = copy.deepcopy(tlv)
+        ret = policy.get_available_policy(new_tlv)
+        new_tlv["ope"] = "info"
+        
+        if ret is None:                                 # Meaning that TLV is not supported by CES
+            new_tlv["cmp"]=="notAvailable"
+            return [new_tlv]
+        
+        ope, cmp, group, code, response_value = ret
+        
+        if cmp=="notAvailable":
+            new_tlv["cmp"]=="notAvailable"
+        else:
+            response_value = ""                         # Some value or ID assigned by policy
+            #new_tlv["value"] = response_value
+        return [new_tlv]
     
-    #print("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nresponse_value: ", response_value)
-    
-    if (ope, cmp, group, code, response_value) ==(None, None, None, None, None) or (cmp=="notAvailable"):
-        new_tlv["cmp"]=="notAvailable"
-    else:
-        new_tlv["value"] = response_value
-    return [new_tlv]
+    except Exception as ex:
+        print("Exception in response_payload(): ", ex)
+        return None
 
 
 def verify_rloc(**kwargs):
     try:
         #Check whether you have this interface.
         tlv, code, policy, interfaces = kwargs["tlv"], kwargs["code"], kwargs["policy"], kwargs["interfaces"]
+        if 'value' not in tlv:
+            return False
+        
         rrloc = tlv["value"]
+        #print("rrloc: ", rrloc)
         
         if len(rrloc)==0:
             return False
@@ -788,12 +809,7 @@ def verify_rloc(**kwargs):
             return False
         
         r_pref, r_order, r_rloc, r_iface = rrloc
-        ope, cmp, group, code, response_value = policy.get_available_policy(tlv)
-        if response_value==None:
-            (l_pref, l_order, l_rloc, l_iface) = interfaces.get_interface(rloc_type=code)
-        
-        #if l_iface!=r_iface:
-        #    return False
+
         if code=="ipv4":
             if not CETP.is_IPv4(r_rloc):
                 print(" Address provided is not IPv4")
@@ -1154,17 +1170,23 @@ def response_ctrl_qos(**kwargs):
         return None
 
 def response_ack(**kwargs):
+    """ Policy-based provisioning of ACK value. """
     try:
-        tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+        tlv, code, policy, post_c2c = kwargs["tlv"], kwargs["code"], kwargs["policy"], kwargs["post_c2c"]
         new_tlv = copy.deepcopy(tlv)
-        ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
+        
+        if post_c2c is not True:
+            ret = policy.get_available_policy(new_tlv)
+            if ret == None:
+                new_tlv["notAvailable"]
+        
         new_tlv['ope'] = 'info'
         return [new_tlv]
+    
     except Exception as ex:
         print("Exception in response_ack()", ex)
         return None
 
-    
 def response_ctrl_os_version(**kwargs):
     try:
         tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]

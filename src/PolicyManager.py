@@ -54,24 +54,27 @@ class FakeInterfaceDefinition(object):
 
     def register_interfaces(self, config_file):
         #r  = pref, order, rloc_type, rloc, iface
-        r1, r2, r3 = None, None, None
+        rs = []
+
         if self.cesid=="cesa.lte.":
             r1 = 100, 80, "ipv4", "10.0.3.101",         "ISP"
             r2 = 100, 60, "ipv4", "10.1.3.101",         "IXP"
             r3 = 100, 40, "ipv6", "11:22:33:44:55:66:77:01", "ICP"
+            rs = [r1, r2, r3]
         else:
             r1 = 100, 80, "ipv4", "10.0.3.103",         "ISP"
             r2 = 100, 60, "ipv4", "10.1.3.103",         "IXP"
             r3 = 100, 40, "ipv6", "11:22:33:44:55:66:77:03", "ICP"
+            rs = [r1, r2, r3]
             
-        self._interfaces.append(r1)
-        self._interfaces.append(r2)
-        self._interfaces.append(r3)
+        for r in rs:
+            self._interfaces.append(r)
+
                         
     def get_interfaces(self):
         self._interfaces
         
-    def get_interface(self, rloc_type=None, iface=None):
+    def get_interface_rlocs(self, rloc_type=None, iface=None):
         """ Returns the list of interfaces defined for an RLOC type """
         ret_list = []
         for ifaces in self._interfaces:
@@ -221,12 +224,19 @@ class PolicyCETP(object):
         # setting value for CETP can be handled in CETP transaction module
 
     def get_available_policy(self, tlv):
-        ope, cmp, group, code, value = self.get_tlv_details(tlv)
+        ret = self.get_tlv_details(tlv)
+        i_ope, i_cmp, i_group, i_code, i_value = ret
+        found = False
+        
         for rtlv in self.available:
-            if (rtlv["group"] == tlv["group"]) and (rtlv["code"]==tlv["code"]):
-                ope, cmp, group, code, value = self.get_tlv_details(rtlv)
-                return ope, cmp, group, code, value
-        return (ope, cmp, group, code, value)
+            if rtlv["group"] == i_group and rtlv["code"]== i_code:
+                found = True
+                a_ope, a_cmp, a_group, a_code, a_value = self.get_tlv_details(rtlv)
+                return a_ope, a_cmp, a_group, a_code, a_value
+        
+        if not found:
+            return None
+    
 
     def get_policy_to_enforce(self, tlv):
         ope, cmp, group, code, value = self.get_tlv_details(tlv)
@@ -237,24 +247,19 @@ class PolicyCETP(object):
     
     def get_tlv_details(self, tlv):
         ope, cmp, group, code, value = None, None, None, None, None
-        # group, code, cmp, ext, value
-        try:
-            if "ope" in tlv:
-                group = tlv["ope"]            
-            if "group" in tlv:
-                group = tlv["group"]
-            if "code" in tlv:
-                code  = tlv["code"]
-            if "cmp" in tlv:
-                cmp   = tlv["cmp"]
-            if 'value' in tlv:
-                value = tlv['value']
-                
-            return (ope, cmp, group, code, value)
-        
-        except Exception as ex:
-            self._logger.info("Exception: {}".format(ex))
-            return (ope, cmp, group, code, value)
+        if "ope" in tlv:
+            ope = tlv["ope"]            
+        if "group" in tlv:
+            group = tlv["group"]
+        if "code" in tlv:
+            code  = tlv["code"]
+        if "cmp" in tlv:
+            cmp   = tlv["cmp"]
+        if 'value' in tlv:
+            value = tlv['value']
+            
+        return (ope, cmp, group, code, value)
+
     
     def is_mandatory_required(self, tlv):
         ope, cmp, group, code, value = self.get_tlv_details(tlv)

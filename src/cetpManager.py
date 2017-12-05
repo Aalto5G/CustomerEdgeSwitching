@@ -588,7 +588,7 @@ class CETPManager:
             self._logger.error(" Exception in pre-processing the received message.")
             return
 
-    
+
     def process_inbound_message(self, msg, transport):
         """ Processes first few packets from a newly connected 'endpoint',
         Upon successful negotiation of C2C policies, it assigns CETP-H2H and CETP-C2C layer to the remote CETP endpoint
@@ -596,7 +596,7 @@ class CETPManager:
         cetp_msg = self._pre_process(msg)
         if cetp_msg == None:
             ip_addr, port = transport.remotepeer
-            self.cetp_security.register_unverifiable_cetp_sender(ip_addr)
+            self.register_unverifiable_cetp_sender(ip_addr)
             transport.close()
             return
         
@@ -609,7 +609,7 @@ class CETPManager:
                 transport.send_cetp(cetp_resp)
                 
             ip_addr, port = transport.remotepeer
-            self.cetp_security.register_unverifiable_cetp_sender(ip_addr)
+            self.register_unverifiable_cetp_sender(ip_addr)
             self._logger.error(" CES-to-CES negotiation failed with remote edge. Closing transport ")
             transport.close()
             return
@@ -655,6 +655,10 @@ class CETPManager:
             response = ic2c_transaction.process_c2c_transaction(cetp_msg)
             return response
 
+
+    def register_unverifiable_cetp_sender(self, ip_addr):
+        self.cetp_security.register_unverifiable_cetp_sender(ip_addr)
+    
 
 
 
