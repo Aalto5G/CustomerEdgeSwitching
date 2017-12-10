@@ -8,7 +8,7 @@ The project has been developed in Ubuntu 16.04 environment, using python3, and i
 ## Installing dependencies
 <br> apt-get update </br>
 <br> apt-get install build-essential python3-dev python3-pip </br>
-<br> python3-aiohttp python3-yaml python3-dnspython </br>
+<br> apt-get install python3-aiohttp python3-yaml python3-dnspython </br>
 
 
 ## How to Run
