@@ -342,8 +342,62 @@ class CETPManager:
             self._logger.info("Exception '{}' in terminating session".format(ex))
 
 
+    def _process_session_terminate_message(self, r_cesid):
+        """ Terminate all H2H sessions to/from a remote-CESID """
+        keytype = ConnectionTable.KEY_MAP_REMOTE_CESID
+        key = r_cesid
+        
+        if self.conn_table.has(keytype, key):
+            conn_list = self.conn_table.get(keytype, key)
+            self._logger.warning(" Terminating all H2H sessions towards {}".format(r_cesid))
+            
+            for num in range(0, len(conn_list)):
+                conn = conn_list[0]
+                
+                if conn.connectiontype=="CONNECTION_H2H":
+                    self.conn_table.delete(conn)
+                    sstag, dstag = conn.sstag, conn.dstag
+                    h2h_transaction = self.cetpstate_mgr.get_established_transaction((sstag,dstag))
+                    self.cetpstate_mgr.remove_established_transaction((sstag,dstag))
+                    
+            self._logger.info("Closed all H2H session with CES '{}'".format(r_cesid))
+
+
+    def _process_session_terminate_message2(self, r_cesid, tag_list):
+        """ Terminate all H2H sessions to/from a remote-CESID """
+        keytype = ConnectionTable.KEY_MAP_REMOTE_CESID
+        key = r_cesid
+        
+        if self.conn_table.has(keytype, key):
+            conn_list = self.conn_table.get(keytype, key)
+            self._logger.warning(" Terminating H2H sessions towards {}".format(r_cesid))
+            
+            for num in range(0, len(conn_list)):
+                conn = conn_list[0]
+                sstag, dstag = conn.sstag, conn.dstag
+                
+                if conn.connectiontype=="CONNECTION_H2H" and ((dstag, sstag) in tag_list):          #Flipped the (SST, DST) order to match the sender perspective
+                    self.conn_table.delete(conn)
+                    h2h_transaction = self.cetpstate_mgr.get_established_transaction((sstag,dstag))
+                    self.cetpstate_mgr.remove_established_transaction((sstag,dstag))
+                    
+            self._logger.info("Closed all H2H session with CES '{}'".format(r_cesid))
+
+
+    def terminate_sessions_by_tags(self, tags_list):
+        """ Terminates CETP sessions identified as a list of (SST, DST) pairs """
+        try:
+            for tags in tags_list:
+                sstag, dstag = tags
+                self.terminate_session_by_tags(sstag, dstag)
+                        
+        except Exception as ex:
+            self._logger.info("Exception '{}' in terminate_sessions_by_tags()".format(ex))
+            return
+
+
     def terminate_session_by_tags(self, sstag, dstag):
-        """ Terminates a particular CETP session idnetified by its tags """
+        """ Terminates a CETP session identified by its tags """
         try:
             if (sstag!=0) and (dstag!=0):
                 if self.cetpstate_mgr.has_established_transaction((sstag, dstag)):
@@ -477,16 +531,24 @@ class CETPManager:
         if self.conn_table.has(keytype, key):
             conn_list = self.conn_table.get(keytype, key)
             total_connections = len(conn_list)
+            self._logger.debug("Terminating all H2HTransaction states towards {}".format(r_cesid))
+            h2h_tags = []
+            
             for num in range(0, total_connections):
                 conn = conn_list[0]
                 self.conn_table.delete(conn)
                 
                 if conn.connectiontype=="CONNECTION_H2H":
-                    self._logger.debug("Terminating H2HTransaction state")
                     sstag, dstag = conn.sstag, conn.dstag
                     h2h_transaction = self.cetpstate_mgr.get_established_transaction((sstag,dstag))
                     self.cetpstate_mgr.remove_established_transaction((sstag,dstag))
-                    h2h_transaction.terminate_session()
+                    h2h_tags.append((sstag, dstag))
+                    
+            if len(h2h_tags)>0:
+                if self.has_c2c_layer(r_cesid):
+                    c2c_layer = self.get_c2c_layer(r_cesid)
+                    c2c_layer.close_all_h2h_sessions()
+
 
 
     def register_server_endpoint(self, ep):
@@ -651,7 +713,7 @@ class CETPManager:
             proto     = transport.proto
             ic2c_transaction = C2CTransaction.iC2CTransaction(self._loop, r_addr=peer_addr, sstag=sstag, dstag=sstag, l_cesid=self.cesid, policy_mgr=self.policy_mgr, \
                                                                cetpstate_mgr=self.cetpstate_mgr, ces_params=self.ces_params, proto=proto, transport=transport, \
-                                                               cetp_security=self.cetp_security, interfaces=self.interfaces, conn_table=self.conn_table)
+                                                               cetp_security=self.cetp_security, interfaces=self.interfaces, conn_table=self.conn_table, cetp_mgr=self)
             response = ic2c_transaction.process_c2c_transaction(cetp_msg)
             return response
 
@@ -688,7 +750,7 @@ def test_local_cetp(cetp_mgr):
 @asyncio.coroutine
 def test_terminate_cetp_c2c_signalling(cetp_mgr):
     """ Terminate C2C signalling between two CES nodes """
-    sender_info, naptr_records, l_hostid, l_hostip = setup_for_cetp_negotiation()
+    sender_info, naptr_records, l_hostid, l_hostip = setup_for_cetp_negotiation(cetp_mgr)
     dst_id, r_cesid, r_ip, r_port, r_proto = "", "", "", "", ""
     yield from asyncio.sleep(0.5)
     
@@ -701,13 +763,14 @@ def test_terminate_cetp_c2c_signalling(cetp_mgr):
     yield from asyncio.sleep(0.5)
     
     #cetp_mgr.terminate_cetp_c2c_signalling(r_cesid, terminate_h2h=False)
-    cetp_mgr.terminate_cetp_c2c_signalling(r_cesid, terminate_h2h=True)
+    #cetp_mgr.terminate_cetp_c2c_signalling(r_cesid, terminate_h2h=True)
+    cetp_mgr.terminate_rces_h2h_sessions(r_cesid)
 
 
 @asyncio.coroutine    
 def test_h2h_session_termination(cetp_mgr):
     """ Tests termination of H2H-CETP sessions based on different parameters: Local host-ID, Local host-IP, remote host-ID and (sender-ID, dst-ID) pair. """
-    sender_info, naptr_records, l_hostid, l_hostip = setup_for_cetp_negotiation()
+    sender_info, naptr_records, l_hostid, l_hostip = setup_for_cetp_negotiation(cetp_mgr)
     dst_id, r_cesid, r_ip, r_port, r_proto = "", "", "", "", ""
     yield from asyncio.sleep(0.5)
 
@@ -733,7 +796,7 @@ def test_h2h_session_termination(cetp_mgr):
 @asyncio.coroutine
 def test_drop_connection(cetp_mgr):
     """ Checks whether CETPSecurity module can block connection requests to/from undesired parties. """
-    sender_info, naptr_records, l_hostid, l_hostip = setup_for_cetp_negotiation()
+    sender_info, naptr_records, l_hostid, l_hostip = setup_for_cetp_negotiation(cetp_mgr)
     dst_id, r_cesid, r_ip, r_port, r_proto = "", "", "", "", ""
     yield from asyncio.sleep(0.5)
     
@@ -813,11 +876,11 @@ def test_func(loop):
     if cetp_mgr==None:
         return
     
-    test_cetp_layering(cetp_mgr)
+    #test_cetp_layering(cetp_mgr)
     #asyncio.ensure_future(test_local_cetp(cetp_mgr))
     #asyncio.ensure_future(test_h2h_session_termination(cetp_mgr))
     #asyncio.ensure_future(test_drop_connection(cetp_mgr))
-    #asyncio.ensure_future(test_terminate_cetp_c2c_signalling(cetp_mgr))
+    asyncio.ensure_future(test_terminate_cetp_c2c_signalling(cetp_mgr))
     
 
 if __name__ == "__main__":

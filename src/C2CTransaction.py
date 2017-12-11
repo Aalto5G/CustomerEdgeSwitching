@@ -76,7 +76,8 @@ class C2CTransaction(object):
         terminate_tlv = {}
         terminate_tlv['ope'], terminate_tlv['group'], terminate_tlv['code'], terminate_tlv['value'] = "info", "ces", "terminate", ""
         if err_tlv is not None:
-            terminate_tlv['value'] = err_tlv
+            value = {"error_tlv": err_tlv}
+            terminate_tlv['value'] = value
         return terminate_tlv
 
     def _create_offer_tlv(self, tlv):
@@ -255,6 +256,8 @@ class C2CTransaction(object):
             lrloc_tlvs += lrloc_tlv
                 
         l_rlocs, r_rlocs = self._filter_rlocs_list(lrloc_tlvs, rrloc_tlvs)       # Matches & Verifies the payload in the TLVs, and Removes duplicate RLOCs (on sender and receiver side)
+        self.add_negotiated_params("lrlocs", l_rlocs)
+        self.add_negotiated_params("rrlocs", r_rlocs)
         return (l_rlocs, r_rlocs)
     
 
@@ -356,18 +359,23 @@ class C2CTransaction(object):
         r_payloads = _build_list(recv_tlvlist)
         l_payloads = list(set(l_payloads))
         r_payloads = list(set(r_payloads))
-        (l_payloads, l_payloads) = _filter(l_payloads, r_payloads)
+        (l_payloads, r_payloads) = _filter(l_payloads, r_payloads)
+        
+        self.add_negotiated_params("lpayloads", l_payloads)
+        self.add_negotiated_params("rpayloads", r_payloads)
+        
         return (l_payloads, r_payloads)
     
     def add_negotiated_params(self, code, value):
         self.negotiated_params[code] = value
     
-    def negotiated_parameters(self):
-        #s = [self.l_cesid, self.r_cesid, self.ttl, self.evidence_format, self.remote_session_limit, self.lrloc, self.rrloc, self.lpayload, self.rpayload]
-        print("New functions: ", self.negotiated_params)
+    def get_negotiated_params(self):
+        return self.negotiated_params
         
-        s = [self.l_cesid, self.r_cesid, self.ttl, self.remote_session_limit, self.lrloc, self.rrloc, self.lpayload, self.rpayload]
-        return s
+    def get_negotiated_parameter(self, key=None):
+        if key is not None:
+            if key in self.negotiated_params:
+                return negotiated_params[key]
         
     def show(self, packet):
         s = ""
@@ -416,7 +424,7 @@ class oC2CTransaction(C2CTransaction):
     Also contains methods to facilitate signalling in the post-c2c negotiation phase between CES nodes.
     """
     def __init__(self, loop, l_cesid="", r_cesid="", c_sstag=0, c_dstag=0, cetpstate_mgr=None, policy_client=None, policy_mgr=None, proto="tls", ces_params=None, \
-                 cetp_security=None, transport=None, interfaces=None, c2c_layer=None, conn_table=None, direction="outbound", name="oC2CTransaction"):
+                 cetp_security=None, transport=None, interfaces=None, c2c_layer=None, conn_table=None, cetp_mgr=None, direction="outbound", name="oC2CTransaction"):
         self._loop                  = loop
         self.l_cesid                = l_cesid
         self.r_cesid                = r_cesid
@@ -448,6 +456,7 @@ class oC2CTransaction(C2CTransaction):
         self.keepalive_trigger_time = time.time()
         self._start_time            = time.time()
         self.name                   = name
+        self.cetp_mgr                   = cetp_mgr
         self._logger                = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_oC2CTransaction)
         self.cetp_negotiation_history  = []
@@ -673,7 +682,7 @@ class oC2CTransaction(C2CTransaction):
                     return (negotiation_status, "")
                 else:
                     self._logger.error(" Responding remote CES with the terminate-TLV")
-                    tlvs_to_send = self._create_offer_tlv2(group="ces", code="terminate")
+                    tlvs_to_send = [self._get_terminate_tlv()]
                     cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
                     self.pprint(cetp_message, m="Outbound Msg")
                     cetp_packet = self.get_cetp_packet(cetp_message)
@@ -703,7 +712,7 @@ class oC2CTransaction(C2CTransaction):
                     self.unregister_handler.cancel()            
                     
                     if self.dstag!=0:
-                        tlvs_to_send = self._create_offer_tlv2(group="ces", code="terminate")
+                        tlvs_to_send = [self._get_terminate_tlv()]
                         cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
                         self.pprint(cetp_message)
                         cetp_packet = self.get_cetp_packet(cetp_message)
@@ -722,13 +731,12 @@ class oC2CTransaction(C2CTransaction):
         try:
             self.lrloc, self.rrloc          = self._get_dp_connection_rlocs()
             self.lpayload, self.rpayload    = self._get_dp_connection_payloads()
-            #print("Negotiated params: {}".format(self.negotiated_parameters()))
+            #self._logger.info("Negotiated params: {}".format(self.get_negotiated_params()))
             
             if len(self.lrloc)==0 or len(self.rrloc)==0 or len(self.lpayload)==0 or len(self.rpayload)==0:
                 self._logger.error("C2C negotiation didn't provide info to create C2C-DP-Connection. ")
                 return False
             
-            self._logger.info("Negotiated params: {}".format(self.negotiated_parameters()))
             keytype = ConnectionTable.KEY_MAP_RCESID_C2C
             key = self.r_cesid
             if not self.conn_table.has(keytype, key):
@@ -891,12 +899,27 @@ class oC2CTransaction(C2CTransaction):
         self.send_post_c2c(tlvs_to_send)        
         
     def drop_connection_to_local_domain(self, l_domain):
-        #self._logger.info(" Preventing remote CES '{}' from forwarind traffic to '{}'.".format(self.r_cesid, l_domain))
+        #self._logger.info(" Preventing remote CES '{}' from forwarding traffic to '{}'.".format(self.r_cesid, l_domain))
         blocking_msg = {"local_domain": l_domain}             # misbehavior_evidence="FSecure-MalwarePayload"
         blocking_payload = json.dumps(blocking_msg)
         host_filter_tlv = self._create_request_tlv2(group="ces", code="host_filtering", value=blocking_payload)
         tlvs_to_send = host_filter_tlv
         self.send_post_c2c(tlvs_to_send)        
+
+    def drop_all_h2h_sessions(self):
+        self._logger.warning(" Closing all H2H sessions with remote CES '{}'.".format(self.r_cesid))
+        h2h_sessions = {"sessions": '*' }
+        host_filter_tlv = self._create_offer_tlv2(group="ces", code="terminate", value=h2h_sessions)
+        tlvs_to_send = host_filter_tlv
+        self.send_post_c2c_msg(tlvs_to_send)        
+
+    def drop_h2h_sessions(self, tags_list):
+        """ Provide a list of (SST, DST) pairs for H2H sessions that shall be closed """
+        self._logger.warning(" Closing all H2H sessions with remote CES '{}'.".format(self.r_cesid))
+        h2h_sessions = {"sessions": tags_list }
+        host_filter_tlv = self._create_offer_tlv2(group="ces", code="terminate", value=h2h_sessions)
+        tlvs_to_send = host_filter_tlv
+        self.send_post_c2c_msg(tlvs_to_send)
         
     def get_ack_request(self):
         tlv = self._create_request_tlv2(group="ces", code="ack")
@@ -954,6 +977,39 @@ class oC2CTransaction(C2CTransaction):
             if tlv["code"]== code:
                 return True
         return False
+
+    def _get_value(self, tlv):
+        if 'value' in tlv:
+            return tlv["value"]
+        else:
+            return None
+            
+    def _process_terminate_tlv(self, received_tlv, transport):
+        """ Processing the received TLV to terminate 1 or more H2H sessions """
+        value = self._get_value(received_tlv)
+            
+        if (value is None) or (value is ''): 
+            self._logger.info(" Terminate received with value: {}".format(received_tlv['value']) )
+            self.set_terminated()
+            transport.close()
+        
+        else:
+            if 'sessions' in value:
+                h2h_sessions = value["sessions"]
+                if h2h_sessions == "*":
+                    self._logger.warning(" Request to close all the H2H sessions.")
+                    self.cetp_mgr._process_session_terminate_message(self.r_cesid)
+                    
+                elif type(h2h_sessions)==type(list()):
+                    self._logger.warning(" Request to close H2H sessions.".format(len(h2h_sessions)))
+                    self.cetp_mgr._process_session_terminate_message(self.r_cesid, h2h_sessions)
+            
+            elif 'tlv' in value:
+                self.set_terminated()
+                transport.close()
+            
+        
+            
     
     def post_c2c_negotiation(self, packet, transport):
         """ 
@@ -1028,10 +1084,7 @@ class oC2CTransaction(C2CTransaction):
             if self._check_tlv(received_tlv, ope="info") and self._check_tlv(received_tlv, group="ces"):
                 
                 if self._check_tlv(received_tlv, code="terminate"):
-                    #self._logger.info(" Terminate received with value: {}".format(received_tlv['value']) )
-                    # Check value field in CETPOperations, to determine more possible terminate options.
-                    self.set_terminated()
-                    transport.close()
+                    self._process_terminate_tlv(received_tlv, transport)
                     
             # Processing the inbound request TLVs
             elif self._check_tlv(received_tlv, ope="query") and self._check_tlv(received_tlv, group="ces"):
@@ -1106,7 +1159,7 @@ LOGLEVEL_iC2CTransaction        = logging.INFO
 
 class iC2CTransaction(C2CTransaction):
     def __init__(self, loop, sstag=0, dstag=0, l_cesid="", r_cesid="", l_addr=(), r_addr=(), policy_mgr= None, policy_client=None, cetpstate_mgr= None, ces_params=None, \
-                 cetp_security=None, interfaces=None, conn_table=None, proto="tcp", transport=None, name="iC2CTransaction"):
+                 cetp_security=None, interfaces=None, conn_table=None, proto="tcp", transport=None, cetp_mgr=None, name="iC2CTransaction"):
         self._loop                      = loop
         self.local_addr                 = l_addr
         self.remote_addr                = r_addr
@@ -1126,6 +1179,7 @@ class iC2CTransaction(C2CTransaction):
         self.conn_table                 = conn_table
         self.transport_health           = True
         self.c2c_negotiation_status     = False
+        self.cetp_mgr                   = cetp_mgr
         self.r_ces_requirements         = []
         self.last_seen                  = time.time()
         self.keepalive_trigger_time     = time.time()
@@ -1258,6 +1312,8 @@ class iC2CTransaction(C2CTransaction):
             if self._is_ready():
                 # Create CETP connection
                 if self._create_connection():
+                    self.add_negotiated_params("lcesid", self.l_cesid)
+                    self.add_negotiated_params("rcesid", self.r_cesid)
                     self.sstag = self.generate_session_tags(self.dstag)
                     #self._logger.info("{}".format(30*'*') )
                     #self._logger.info("C2C-policy negotiation succeeded -> Created stateful transaction (SST={}, DST={})".format(self.sstag, self.dstag))
@@ -1303,13 +1359,12 @@ class iC2CTransaction(C2CTransaction):
         try:
             self.lrloc, self.rrloc          = self._get_dp_connection_rlocs()
             self.lpayload, self.rpayload    = self._get_dp_connection_payloads()
-            #print("Negotiated params: {}".format(self.negotiated_parameters()))
+            #self._logger.info(" Negotiated params: {}".format(self.get_negotiated_params()))            
             
             if len(self.lrloc)==0 or len(self.rrloc)==0 or len(self.lpayload)==0 or len(self.rpayload)==0:
                 self._logger.error("C2C negotiation didn't provide info to create a C2C-DP-Connection.")
                 return False
             
-            self._logger.info(" Negotiated params: {}".format(self.negotiated_parameters()))            
             keytype = ConnectionTable.KEY_MAP_RCESID_C2C
             key = self.r_cesid
             if not self.conn_table.has(keytype, key):
@@ -1324,7 +1379,7 @@ class iC2CTransaction(C2CTransaction):
     def _export_to_stateful(self):
         new_transaction = oC2CTransaction(self._loop, l_cesid=self.l_cesid, r_cesid=self.r_cesid, c_sstag=self.sstag, c_dstag=self.dstag, policy_mgr= self.policy_mgr, \
                                           cetpstate_mgr=self.cetpstate_mgr, ces_params=self.ces_params, proto=self.proto, transport=self.transport, direction="inbound", \
-                                          cetp_security=self.cetp_security, conn_table=self.conn_table)
+                                          cetp_security=self.cetp_security, conn_table=self.conn_table, cetp_mgr=self.cetp_mgr)
         
         new_transaction.ces_policy              = self.ces_policy
         new_transaction.c2c_negotiation_status  = True

@@ -385,6 +385,7 @@ class H2HTransactionOutbound(H2HTransaction):
         self.start_time         = time.time()
         self._logger.setLevel(LOGLEVEL_H2HTransactionOutbound)
         self.h2h_negotiation_status = False
+        self.terminated         = False
         self.cetp_negotiation_history   = []
         self.rtt_time           = rtt_time
 
@@ -728,6 +729,9 @@ class H2HTransactionOutbound(H2HTransaction):
         """ Sends a terminate TLV and closes the established transaction """
         self.terminate_session()
         self._execute_dns_callback(resolution=False)
+        
+    def set_terminated(self):
+        self.terminated = True
 
     def create_transaction_in_dp(self, cetp_msg):
         #self.create_dataplane_entry(sst, dst, info)
@@ -779,6 +783,7 @@ class H2HTransactionInbound(H2HTransaction):
         self.cetp_security      = cetp_security
         self.ces_params         = ces_params
         self.name               = name
+        self.terminated         = False
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HTransactionInbound)
 

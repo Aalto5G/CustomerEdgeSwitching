@@ -218,7 +218,7 @@ class CETPC2CLayer:
         """ Initiates/Continues CES-to-CES negotiation """
         c2c_transaction  = C2CTransaction.oC2CTransaction(self._loop, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetpstate_mgr=self.cetpstate_mgr, transport=transport_obj, \
                                                           policy_mgr=self.policy_mgr, proto=transport_obj.proto, ces_params=self.ces_params, cetp_security=self.cetp_security, \
-                                                          interfaces=self.interfaces, c2c_layer=self, conn_table=self.conn_table)
+                                                          interfaces=self.interfaces, c2c_layer=self, conn_table=self.conn_table, cetp_mgr=self.cetp_mgr)
         
         self._add_c2c_transactions(c2c_transaction)
         cetp_resp = yield from c2c_transaction.initiate_c2c_negotiation()
@@ -600,10 +600,18 @@ class CETPC2CLayer:
     def drop_connection_to_local_domain(self, l_domain):
         c2c_transaction = self.get_active_c2c_link()
         c2c_transaction.drop_connection_to_local_domain(l_domain)
+
+    def close_all_h2h_sessions(self):
+        c2c_transaction = self.get_active_c2c_link()
+        c2c_transaction.drop_all_h2h_sessions()
+
+    def close_h2h_sessions(self, h2h_tags):
+        c2c_transaction = self.get_active_c2c_link()
+        c2c_transaction.drop_h2h_sessions(h2h_tags)
         
     def get_active_c2c_link(self):
         """ Returns c2c-transaction corresponding to an active signalling transport """
-        transport = self._select_transport2()
+        transport = self._select_transport()
         c2c_transaction = self.get_c2c_transaction(transport)
         return c2c_transaction
     

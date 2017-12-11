@@ -487,7 +487,8 @@ def verify_ces_ttl(**kwargs):
             return False
 
         #Compares the DP-TTL value offered by local CES, with remote CES offer, and selects the most restrictive value
-        group, code, cmp, ext, l_value = policy.get_available_policy(tlv)
+        ret = policy.get_available_policy(tlv)
+        l_group, l_code, l_cmp, l_ext, l_value = ret
         local_ttl = int(l_value)
         
         if local_ttl < remote_default_dp_ttl:
@@ -1185,6 +1186,18 @@ def response_ack(**kwargs):
     
     except Exception as ex:
         print("Exception in response_ack()", ex)
+        return None
+
+def response_ctrl_ack(**kwargs):
+    """ Policy-based provisioning of ACK value. """
+    try:
+        tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+        new_tlv = copy.deepcopy(tlv)
+        new_tlv['ope'] = 'info'
+        return [new_tlv]
+    
+    except Exception as ex:
+        print("Exception in response_ctrl_ack()", ex)
         return None
 
 def response_ctrl_os_version(**kwargs):
