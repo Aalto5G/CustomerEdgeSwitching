@@ -52,9 +52,13 @@ class CETPC2CLayer:
         self.established_transports     = {}
         self.transport_rtt              = {}
         self.transport_lastseen         = {}  
+        self.record_connected_transports = []
         self.c2c_connectivity           = False                             # Indicates the last known connectivity status b/w CES nodes
         self._closure_signal            = False
         self.active_transport           = None
+        self.c2c_transaction            = None
+        self.c2c_initiated              = False
+        
         self.active_transport_cb        = None
         self._logger                    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPC2CLayer)
@@ -121,35 +125,17 @@ class CETPC2CLayer:
     def has_verified_cp_rlocs(self, key):
         return key in self.verified_cp_irlocs
 
-    def _add_c2c_transactions(self, c2c_transaction):
-        self.c2c_transaction_list.append(c2c_transaction)
-    
-    def _remove_c2c_transactions(self, c2c_transaction):
-        if c2c_transaction in self.c2c_transaction_list:
-            self.c2c_transaction_list.remove(c2c_transaction)
-        
     def get_c2c_transaction(self, transport):
-        if transport in self.established_transports:
-            return self.established_transports[transport]
+        return self.c2c_transaction
     
-    def _add_c2c_transport_binding(self, c2c_transaction, transport):
-        self.established_transports[transport] = c2c_transaction
-    
-    def _remove_c2c_transport_binding(self, transport):
-        if transport in self.established_transports:
-            del self.established_transports[transport]
-
-    def register_c2c(self, transport, c2c_transaction):
+    def register_c2c(self, c2c_transaction):
         """ Registers the C2C-Transaction established on a CETPTransport, AND their binding """
-        self._add_c2c_transactions(c2c_transaction)
-        self._add_c2c_transport_binding(c2c_transaction, transport)
+        self.c2c_transaction = c2c_transaction
         
     def unregister_c2c(self, transport):
         """ Removes the C2C-Transaction established on a CETPTransport, AND their binding """
         if transport in self.established_transports:
             c2c_transaction = self.get_c2c_transaction(transport)
-            self._remove_c2c_transactions(c2c_transaction)
-            self._remove_c2c_transport_binding(transport)
             c2c_transaction.set_terminated()                            # To terminate the tasks scheduled within c2c-transaction.
             
     def assign_cetp_h2h_layer(self, cetp_h2h):
@@ -220,7 +206,7 @@ class CETPC2CLayer:
                                                           policy_mgr=self.policy_mgr, proto=transport_obj.proto, ces_params=self.ces_params, cetp_security=self.cetp_security, \
                                                           interfaces=self.interfaces, c2c_layer=self, conn_table=self.conn_table, cetp_mgr=self.cetp_mgr)
         
-        self._add_c2c_transactions(c2c_transaction)
+        self.c2c_transaction = c2c_transaction
         cetp_resp = yield from c2c_transaction.initiate_c2c_negotiation()
         if cetp_resp!=None:
             transport_obj.send_cetp(cetp_resp)
@@ -228,15 +214,11 @@ class CETPC2CLayer:
     
     def is_c2c_transaction(self, sstag, dstag):
         """ Determines whether CETP message belongs to an ongoing or completed C2C Transaction of this C2C layer """
-        for c2c_transaction in self.c2c_transaction_list:
-            c_sst, c_dst = c2c_transaction.sstag, c2c_transaction.dstag
-            if (c_sst == sstag) & (c_dst == dstag):                                 # CETP message on a connected transaction, i.e. for C2C feedback & keepalive etc.
-                return True                                                         # TBD - searching in a list of C2CTransaction, than an iterating for loop.
-
-        for c2c_transaction in self.c2c_transaction_list:
-            c_sst, c_dst = c2c_transaction.sstag, c2c_transaction.dstag
-            if ( (c_sst == sstag) and (c_dst==0) and (dstag!=0) ):                  # Ongoing C2CTransaction - completed at iCES, but still in-complete at oCES
-                return True
+        c_sstag, c_dstag = self.c2c_transaction.sstag, self.c2c_transaction.dstag
+        if (c_sstag==sstag) and (c_dstag==dstag): 
+            return True
+        if (c_sstag==sstag) and (c_dstag==0) and (dstag!=0):                        # Ongoing C2CTransaction - completed at iCES, but still in-complete at oCES
+            return True
         return False
 
 
@@ -300,13 +282,18 @@ class CETPC2CLayer:
             result = o_c2c.continue_c2c_negotiation(cetp_msg, transport)
             (status, cetp_resp) = result
             
+            print("Test success")
             if status == True:
-                self._remove_pre_connected(transport)
-                self._record_verified_transport(transport, status)
-                self._add_c2c_transport_binding(o_c2c, transport)
-                self._check_active_transport(transport)
+                for it in range(0, len(self.record_connected_transports)):
+                    t = self.record_connected_transports[it]
+                    self._remove_pre_connected(t)
+                    self._record_verified_transport(t, status)
+                    self._check_active_transport(t)
+                    print("Active choosen", t)
+                    self.record_connected_transports.remove(t)
+                    
                 self._trigger_cetp_h2h()
-                
+            
             elif status == False:
                 if len(cetp_resp) > 0:  transport.send_cetp(cetp_resp)
                 self._logger.debug(" Close the transport endpoint towards {}.".format(self.r_cesid))
@@ -385,7 +372,16 @@ class CETPC2CLayer:
         if status == True:
             self._logger.debug(" CETP Transport is connected -> Exchange C2C policies.")
             self.register_connected_transport(transport)
-            asyncio.ensure_future(self.initiate_c2c_transaction(transport))
+            self.record_connected_transports.append(transport)
+            
+            if self.c2c_transaction is None:
+                if self.c2c_initiated is False:
+                    self._logger.info(" CETP-C2C layer is yet to establish with '{}'".format(self.r_cesid))
+                    asyncio.ensure_future(self.initiate_c2c_transaction(transport))
+            else:
+                c2c_established = True
+                self._record_verified_transport(transport, c2c_established)
+                
         else:
             self._logger.info(" CETP Transport is disconnected.")
             self.unregister_c2c(transport)
@@ -407,6 +403,9 @@ class CETPC2CLayer:
         self._remove_initiated_transport(transport)
         self._add_connected_transport(transport)
         #print("Number of connected transports: ", len(self.connected_transports))
+        
+    def run_legacy_on_c2c_completion_function(self, transport):
+        self._check_active_transport(transport)
             
     def unregister_transport(self, transport):
         """ Unregisters the CETP Transport AND launches resource cleanup if all CETPtransport are down """
@@ -423,11 +422,6 @@ class CETPC2CLayer:
             self.cetp_mgr.remove_cetp_endpoint(self.r_cesid)
             self.resource_cleanup()
 
-    def register_inbound_transport(self, transport, cetp_transaction):
-        """ Method used by CETPManager to register a transport connected at CETPService to this C2C layer """
-        self.register_c2c(transport, cetp_transaction)
-        self.register_connected_transport(transport)
-        self._check_active_transport(transport)
 
     """ ***********************   ********************************************** ********************* *********
     ****  Functions for selecting Active transport b/w CES nodes AND for handling transport-layer failover *****

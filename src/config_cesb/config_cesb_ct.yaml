@@ -57,11 +57,11 @@ CETPServers:
     server1:
         ip: 10.0.3.103
         port: 49001
-        transport: tcp
+        transport: tls
     server2:
         ip: 10.0.3.103
         port: 49002
-        transport: tcp
+        transport: tls
     server3:
         ip: 10.0.3.103
         port: 49003

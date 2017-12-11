@@ -62,8 +62,7 @@ class oCESTCPTransport(asyncio.Protocol):
                     remote_id = v
                     if (remote_id==r_cesid) or (remote_id+'.'==r_cesid):
                         print(" Successful TLS connection to '{}'".format(self.r_cesid))
-                        return True
-                    
+                        return True                    
         
     def report_c2c_negotiation(self, status):
         """ Method used by C2CLayer to report success of C2C-Negotiation """
@@ -260,6 +259,14 @@ class iCESServerTLSTransport(asyncio.Protocol):
             self.close()
         else:
             self._loop.call_later(self.c2c_negotiation_t0, self.is_c2c_negotiated)     # Schedules a check for C2C-policy negotiation.
+        
+        remote_id = self.get_remote_id()
+        if remote_id is None:
+            self.close()
+            return
+        else:
+            self.r_cesid = remote_id
+            self.cetp_mgr.report_connected_transport(self, self.r_cesid)
 
 
     def is_c2c_negotiated(self):
@@ -269,6 +276,18 @@ class iCESServerTLSTransport(asyncio.Protocol):
             ip_addr, port = self.remotepeer
             self.cetp_security.register_unverifiable_cetp_sender(ip_addr)
             self.close()
+
+    def get_remote_id(self):
+        ssl_obj = self.transport.get_extra_info('ssl_object')
+        crt = ssl_obj.getpeercert()
+        subject_ids = crt.get('subject', ())
+        
+        for sub in subject_ids:
+            for k,v in sub:
+                if k == 'commonName':
+                    remote_id = v+'.'
+                    return remote_id
+        return None
 
     def set_c2c_details(self, r_cesid, c2c_layer):
         """ CETPManager uses this method to assign c2c-layer """
