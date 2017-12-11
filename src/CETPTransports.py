@@ -30,14 +30,14 @@ class oCESTCPTransport(asyncio.Protocol):
         self.r_cesid                    = r_cesid
         self.ces_params                 = ces_params
         self._loop                      = loop
-        self.name                       = name+proto
-        self._logger                    = logging.getLogger(name)
         self.transport                  = None
         self.is_connected               = False
         self.c2c_negotiated             = False
         self.remotepeer                 = remote_addr
         self.data_buffer                = b''
         self.c2c_establishment_t0       = int(ces_params['c2c_establishment_t0'])           # In seconds
+        self.name                       = name+proto
+        self._logger                    = logging.getLogger(self.name)
         self._logger.setLevel(LOGLEVEL_oCESTCPTransport)
 
     def connection_made(self, transport):
@@ -45,6 +45,25 @@ class oCESTCPTransport(asyncio.Protocol):
         self._logger.info('Connected to {}'.format(self.remotepeer))
         self.ces_layer.report_connectivity(self)                        # Reporting the connectivity to C2C layer.
         self.is_connected = True
+        if self.proto == "tls":
+            verified = self.verify_identity(self.r_cesid)
+            if not verified:
+                print("Failed to verify identity")
+                self.close()
+        
+    def verify_identity(self, r_cesid):
+        ssl_obj = self.transport.get_extra_info('ssl_object')
+        crt = ssl_obj.getpeercert()
+        subject_ids = crt.get('subject', ())
+        
+        for sub in subject_ids:
+            for k,v in sub:
+                if k == 'commonName':
+                    remote_id = v
+                    if (remote_id==r_cesid) or (remote_id+'.'==r_cesid):
+                        print(" Successful TLS connection to '{}'".format(self.r_cesid))
+                        return True
+                    
         
     def report_c2c_negotiation(self, status):
         """ Method used by C2CLayer to report success of C2C-Negotiation """

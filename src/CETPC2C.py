@@ -339,27 +339,27 @@ class CETPC2CLayer:
             
             if proto == "tls":
                 sc = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+                sc.check_hostname = False
+                #sc.verify_mode = ssl.CERT_NONE
                 sc.verify_mode = ssl.CERT_REQUIRED
-                sc.load_cert_chain(self.ces_certificate_path, self.ces_privatekey_path)
                 sc.load_verify_locations(self.ca_certificate_path)
-                #sc.check_hostname = True
+                sc.load_cert_chain(self.ces_certificate_path, self.ces_privatekey_path)
                 coro = self._loop.create_connection(lambda: transport_ins, ip_addr, port, ssl=sc)
-            
+
             elif proto == "tcp":
                 coro = self._loop.create_connection(lambda: transport_ins, ip_addr, port)
             
             try:
-                
                 self.initiated_transports.append(transport_ins)
                 connect_task = asyncio.ensure_future(coro)
                 yield from asyncio.wait_for(connect_task, timeout)
-                
+                                
                 connection_time = time.time() - triggered_at
                 c2c_timeout = timeout - connection_time
                 self._loop.call_later(c2c_timeout, self.is_c2c_negotiated, transport_ins, ip_addr, port, proto, timeout)
 
             except Exception as ex:
-                self._logger.error(" Exception in {} transport towards '{}'".format(proto, self.r_cesid))                  # ex.errno == 111 -- means connection RST received
+                self._logger.error(" Exception in '{}' transport towards '{}'".format(proto, self.r_cesid))                  # ex.errno == 111 -- means connection RST received
                 self.unregister_transport(transport_ins)
                 self.register_unreachable_cetp_addr(ip_addr, port, proto)
 
