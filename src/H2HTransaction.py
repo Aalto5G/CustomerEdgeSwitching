@@ -60,7 +60,8 @@ class H2HTransaction(object):
         group, code = tlv['group'], tlv['code']
         if (group!="control") or ((group=="control") and (code in CETP.CONTROL_CODES)):
             func = CETP.SEND_TLV_GROUP[group][code]
-            tlv = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, interfaces=self.interfaces, query=False)
+            tlv = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, transaction=self, policy=self.policy, interfaces=self.interfaces, \
+                       h2h_session=True, query=False)
         return tlv          # shall use try, except here.
 
     def _create_offer_tlv2(self, group=None, code=None, value=None):
@@ -73,7 +74,8 @@ class H2HTransaction(object):
         
         if group in ["control", "rloc", "payload"]:
             func = CETP.SEND_TLV_GROUP[group][code]
-            tlv = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, interfaces=self.interfaces, query=False)
+            tlv = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, transaction=self, policy=self.policy, interfaces=self.interfaces, \
+                       h2h_session=True, query=False)
         return tlv
 
     def _create_request_tlv(self, tlv):
@@ -81,7 +83,8 @@ class H2HTransaction(object):
         #print(self.policy)
         if (group!="control") or ((group=="control") and (code in CETP.CONTROL_CODES)):
             func = CETP.SEND_TLV_GROUP[group][code]
-            tlv  = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, interfaces=self.interfaces, query=True)
+            tlv  = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, transaction=self, policy=self.policy, interfaces=self.interfaces, \
+                        h2h_session=True, query=True)
             return tlv
 
     def _create_request_tlv2(self, group=None, code=None):
@@ -89,14 +92,15 @@ class H2HTransaction(object):
         tlv['group'], tlv['code'] = group, code
         if (group!="control") or ((group=="control") and (code in CETP.CONTROL_CODES)):
             func = CETP.SEND_TLV_GROUP[group][code]
-            tlv  = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, interfaces=self.interfaces, query=True)
+            tlv  = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, transaction=self, policy=self.policy, interfaces=self.interfaces, \
+                        h2h_session=True, query=True)
             return tlv
     
     def _create_response_tlv(self, tlv):
         group, code = tlv['group'], tlv['code']
         if (group!="control") or ((group=="control") and (code in CETP.CONTROL_CODES)):
             func = CETP.RESPONSE_TLV_GROUP[group][code]
-            tlv  = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, interfaces=self.interfaces)
+            tlv  = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, transaction=self, policy=self.policy, interfaces=self.interfaces, h2h_session=True)
             return tlv
 
     def _verify_tlv(self, tlv, policy=None):
@@ -104,9 +108,9 @@ class H2HTransaction(object):
         if (group!="control") or ((group=="control") and (code in CETP.CONTROL_CODES)):
             func   = CETP.VERIFY_TLV_GROUP[group][code]
             if policy!=None:
-                result = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=policy, interfaces=self.interfaces)
+                result = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, transaction=self, policy=policy, interfaces=self.interfaces, h2h_session=True)
             else:
-                result = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, interfaces=self.interfaces)
+                result = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, transaction=self, policy=self.policy, interfaces=self.interfaces, h2h_session=True)
             return result
 
     def _check_tlv(self, tlv, ope=None, cmp=None, group=None, code=None):
@@ -310,53 +314,55 @@ class H2HTransaction(object):
                     return sstag
                 
     def show(self, packet):
-        #self._logger.info("CETP Packet")
+        s = ""
         for k, v in packet.items():
             if k != "TLV":
-                print(str(k)+": "+ str(v))
+                s += str(k)+": "+ str(v) + "\n"
             else:
-                print("TLV:")
-                for tlv in v:
-                    if 'value' in tlv:
-                        print("\t { 'ope':{}, 'group':{}, 'code':{}, 'value':{} }".format(tlv['ope'], tlv['group'],tlv['code'], tlv['value']))
-                    else:
-                        print("\t { 'ope':{}, 'group':{}, 'code':{} }".format(tlv['ope'], tlv['group'],tlv['code']))
-        print("\n")
-    
-    def show(self, packet):
-        self._logger.info("CETP Packet")
-        for k, v in packet.items():
-            if k != "TLV":
-                print(str(k)+": "+ str(v))
-            else:
-                print("TLV:")
+                s+=k+":\n"
                 for tlv in v:
                     ope, group = CETP.PPRINT_OPE[tlv['ope']], CETP.PPRINT_GROUP[tlv['group']]
                     code = tlv["code"]
                     if code in CETP.PPRINT_CODE:
                         code = CETP.PPRINT_CODE[code]
                     
+                    s += "\t ['ope':{}, 'group':{}, 'code':{}".format(ope, group, code)
+                    
+                    if 'cmp' in tlv:
+                        s += ", 'cmp':{}".format(tlv['cmp'])
                     if 'value' in tlv:
-                        print("\t ['ope':{}, 'group':{}, 'code':{}, 'value':{}]".format(ope, group, code, tlv['value']))
-                    else:
-                        print("\t ['ope':{}, 'group':{}, 'code':{} ]".format(ope, group, code))
-        print("\n")
-
-    
+                        s += ", 'value':{}".format(tlv['value'])                   
+                    s += " ]\n"
+        return s
+        
     def show2(self, packet):
-        #self._logger.info("CETP Packet")
+        s = ""
         for k, v in packet.items():
             if k != "TLV":
-                print(str(k)+": "+ str(v))
+                s += str(k)+": "+ str(v)+ "\n"
             else:
-                print("TLV:")
+                s += k+":\n"
                 for tlv in v:
-                    print("\t", tlv)
-        print("\n")
+                    s += "\t"+ str(tlv)+"\n"
+                s += "\n"
 
-    def pprint(self, packet):
-        self.show(packet)
-
+    def pprint(self, packet, m=None):
+        if m!=None:
+            self._logger.info("\n"+m)
+        s = self.show(packet)
+        print(s, "\n")
+        
+    
+    def get_negotiated_rlocs(self):
+        l_rlocs, rrlocs = self.cetp_h2h.get_negotiated_rlocs()
+        self.negotiated_lrlocs = l_rlocs
+        self.negotiated_rrlocs = r_rlocs
+    
+    def get_negotiated_lrlocs(self):
+        self.get_negotiated_rlocs()
+        return self.negotiated_lrlocs
+        
+    
 
 class H2HTransactionOutbound(H2HTransaction):
     def __init__(self, loop=None, sstag=0, dstag=0, cb=None, host_ip="", src_id="", dst_id="", l_cesid="", r_cesid="", policy_mgr= None, host_register=None, cetp_security=None, \

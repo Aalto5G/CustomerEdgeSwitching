@@ -714,6 +714,17 @@ def verify_ces_pow(**kwargs):
 def send_rloc(**kwargs):
     tlv, code, query, policy, interfaces = kwargs["tlv"], kwargs["code"], kwargs["query"], kwargs["policy"], kwargs["interfaces"]
     ret_tlvs = []
+    h2h_session = False
+    
+    """
+    if 'h2h_session' in kwargs:
+        h2h_session = kwargs['h2h_session']
+        
+    if h2h_session is True:
+        transaction = kwargs['transaction']
+        l_rlocs = transaction.get_negotiated_lrlocs()
+    """
+        
     #new_tlv = copy.deepcopy(tlv)
     if query==True:
         if 'value' in tlv:

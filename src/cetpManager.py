@@ -110,6 +110,271 @@ class CETPManager:
         for cesid, cetp_ep in self._cetp_endpoints.items():
             cetp_ep.handle_interrupt()
 
+    
+    """ Methods for processing outbound requests """
+
+    def process_dns_message(self, dns_cb, cb_args, dst_id, r_cesid="", naptr_list=[]):
+        if not self.dns_threshold_exceeded():
+            #print("Threshold not exceeded")
+            if len(naptr_list)!=0:
+                self.process_outbound_cetp(dns_cb, cb_args, dst_id, r_cesid, naptr_list)
+            else:
+                self.process_local_cetp(dns_cb, cb_args, dst_id)
+
+    def process_local_cetp(self, dns_cb, cb_args, dst_id):
+        cb = (dns_cb, cb_args)
+        self.local_cetp.consume_h2h_requests(dst_id, cb)
+
+    def process_outbound_cetp(self, dns_cb, cb_args, dst_id, r_cesid, naptr_list):
+        """ Gets/Creates the CETPH2H instance AND enqueues the NAPTR response for handling the H2H transactions """
+        try:
+            if self.has_cetp_endpoint(r_cesid):
+                ep = self.get_cetp_endpoint(r_cesid)
+                ep.enqueue_h2h_requests(dst_id, naptr_list, (dns_cb, cb_args))                            # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
+            else:
+                sanitized_naptrs = self._pre_check(naptr_list)
+                if sanitized_naptrs == None:
+                    self._logger.info(" Cannot initiate CETP endpoint towards '{}'".format(r_cesid))
+                    return
+                else:
+                    self._logger.info(" Initiating a CETP-Endpoint towards '{}': ".format(r_cesid))
+                    ep = self.create_cetp_endpoint(r_cesid)
+                    ep.create_cetp_c2c_layer()
+                    ep.enqueue_h2h_requests(dst_id, sanitized_naptrs, (dns_cb, cb_args))                  # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
+    
+        except Exception as ex:
+            self._logger.info("Exception in '{}'".format(ex))
+            return
+
+
+
+    """ Methods for CETP Listening service """
+
+    def register_server_endpoint(self, ep):
+        self._serverEndpoints.append(ep)
+        
+    def get_server_endpoints(self):
+        """ Provides list of all CETP server endpoints """
+        return self._serverEndpoints
+        
+    def close_server_endpoint(self, ep):
+        """ Stops the listening CETP service on (ip, port, proto) """
+        if ep in self.get_server_endpoints():
+            self._serverEndpoints.remove(ep)
+            ep.close()
+
+    def close_server_endpoints(self):
+        """ Stops the listening CETP service on all server endpoints """
+        for server_ep in self.get_server_endpoints():
+            self.close_server_endpoint(server_ep)
+
+    def initiate_cetp_service(self, server_ip, server_port, proto):
+        """ Creates CETPServer Endpoint for accepting connections from remote CES """
+        try:
+            self._logger.info("Initiating CETPServer on {} protocol @ {}.{}".format(proto, server_ip, server_port))
+            if proto == "tcp":
+                coro = self._loop.create_server(lambda: CETPTransports.iCESServerTCPTransport(self._loop, self.ces_params, cetp_mgr=self),\
+                                                 host=server_ip, port=server_port)             # Not utilizing any pre-created objects.
+                
+            elif proto == "tls":
+                sc = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+                sc.verify_mode = ssl.CERT_REQUIRED
+                sc.load_cert_chain(self.ces_certificate_path, self.ces_privatekey_path)
+                #sc.check_hostname = True
+                sc.load_verify_locations(self.ca_certificate_path)
+                coro = self._loop.create_server(lambda: CETPTransports.iCESServerTLSTransport(self._loop, self.ces_params, self.ces_certificate_path, self.ca_certificate_path, \
+                                                                                             cetp_mgr=self), host=server_ip, port=server_port, ssl=sc)
+                
+            server = self._loop.run_until_complete(coro)            # Returns the server
+            self.register_server_endpoint(server)
+            self._logger.info(' CETP Server is listening on {} protocol: {}:{}'.format(proto, server_ip, server_port))
+                
+        except Exception as ex:
+            self._logger.warning(" Failed to create CETP server on {} protocol @ {}:{}".format(proto, server_ip, server_port))
+            self._logger.warning(ex)
+
+
+
+    """ Methods to enforce stability limits """
+
+    def set_max_dns_naptr_responses(self):
+        self.allowed_dns = copy.copy(self.max_dns_cetp_responses)
+            
+    def dns_threshold_exceeded(self):
+        """ Check to detect DNS flood, AND to prevent CES/CETP processing from subjecting to high loads  """
+        if self.allowed_dns == self.max_dns_cetp_responses:
+            self._loop.call_later(1.0, self.set_max_dns_naptr_responses)
+
+        elif self.allowed_dns ==0:
+            return True
+            
+        self.allowed_dns -= 1
+        return False
+    
+
+    def _pre_check(self, naptr_rrs):
+        """ Sanitizes the naptr responses: 1) Checks the number of NAPTR records in DNS response.
+            2) Filters out the NAPTRs that recently failed connectivity.    3) Assures that all NAPTRs belong to the same r_cesid.
+        """
+        try:
+            if len(naptr_rrs) > self.max_naptrs_per_msg:
+                return None                                                     # > 10 naptr_rrs could create high traffic flood
+            
+            remove_naptrs =  []
+            for n_rr in naptr_rrs:
+                dst_id, r_cesid, r_ip, r_port, r_proto = n_rr                   # Assumption: All NAPTRs point towards one 'r_cesid'.    (Destination domain is reachable via one CES only)
+                key = (r_ip, r_port, r_proto)
+                
+                if self.cetp_security.is_unreachable_cetp(r_ip, r_port, r_proto):
+                    remove_naptrs.append(n_rr)
+            
+            if len(remove_naptrs)==0:
+                return naptr_rrs
+            else:
+                for p in remove_naptrs:
+                    naptr_rrs.remove(p)
+                
+                if len(naptr_rrs)==0:
+                    return None
+                
+                return naptr_rrs
+        
+        except:
+            return None
+
+
+    """ Methods to register/unregister the C2CLayer. """
+    
+    def has_c2c_layer(self, r_cesid):
+        return r_cesid in self.c2c_register
+
+    def get_c2c_layer(self, r_cesid):
+        return self.c2c_register[r_cesid]
+
+    def create_c2c_layer(self, r_cesid="", cetp_h2h=None):
+        """ Creates a C2CLayer for a remote CES-ID """
+        cetp_c2c = CETPC2C.CETPC2CLayer(self._loop, l_cesid=self.cesid, r_cesid=r_cesid, cetpstate_mgr= self.cetpstate_mgr, policy_mgr=self.policy_mgr, conn_table=self.conn_table, \
+                                        ces_params=self.ces_params, cetp_security=self.cetp_security, cetp_mgr=self, cetp_h2h=cetp_h2h, interfaces=self.interfaces)
+        
+        self.register_c2c_layer(r_cesid, cetp_c2c)
+        return cetp_c2c
+    
+    def register_c2c_layer(self, r_cesid, c2c_layer):
+        self.c2c_register[r_cesid] = c2c_layer
+        
+    def remove_c2c_layer(self, r_cesid):
+        if self.has_c2c_layer(r_cesid):
+            del self.c2c_register[r_cesid]
+            
+    def get_all_c2c_layers(self):
+        c2c_layers = []
+        for cesid, c2clayer in self.c2c_register.items():
+            c2c_layers.append(c2clayer)
+        return c2c_layers
+
+    
+    
+    """ Methods to handle the inbound CETP message on a newly connected transport. """
+
+    def _pre_process(self, msg):
+        """ Pre-processes the received packet for validity of session tags & CETP version """
+        try:
+            cetp_msg = json.loads(msg)
+            inbound_sstag, inbound_dstag, ver = cetp_msg['SST'], cetp_msg['DST'], cetp_msg['VER']
+            sstag, dstag    = inbound_dstag, inbound_sstag
+            
+            if ver!= self.ces_params["CETPVersion"]:
+                self._logger.info(" CETP version is not supported.")
+                return
+            
+            if ( (sstag < 0) or (dstag < 0) or ((sstag==0) and (dstag ==0)) or (inbound_sstag == 0)):
+                self._logger.info(" Session tag values are invalid")
+                return
+            
+            if inbound_dstag !=0:
+                self._logger.debug(" Possible Attack scanning the session tag sapce?")       # First inbound CETP message shall have DST=0
+                return
+        
+            return cetp_msg
+        except Exception as ex:
+            self._logger.error(" Exception in pre-processing the received message.")
+            return
+
+
+    def process_inbound_message(self, msg, transport):
+        """ Processes first few packets from a newly connected 'endpoint',
+        Upon successful negotiation of C2C policies, it assigns CETP-H2H and CETP-C2C layer to the remote CETP endpoint
+        """
+        cetp_msg = self._pre_process(msg)
+        if cetp_msg == None:
+            ip_addr, port = transport.remotepeer
+            self.register_unverifiable_cetp_sender(ip_addr)
+            transport.close()
+            return
+        
+        response = self.prcoess_c2c_negotiation(cetp_msg, transport)
+        status, cetp_resp = response
+        
+        if status == False:
+            if len(cetp_resp) !=0:
+                self._logger.debug(" Sending CETP error_response.")
+                transport.send_cetp(cetp_resp)
+                
+            ip_addr, port = transport.remotepeer
+            self.register_unverifiable_cetp_sender(ip_addr)
+            self._logger.error(" CES-to-CES negotiation failed with remote edge. Closing transport ")
+            transport.close()
+            return
+            
+        elif status == None:
+            self._logger.info(" CES-to-CES negotiation not completed yet -> Send the response packet.")
+            transport.send_cetp(cetp_resp)
+        
+        elif status==True:
+            self._logger.debug(" CES-to-CES policies are negotiated")
+            tmp_cetp = json.loads(cetp_resp)
+            sstag, dstag = tmp_cetp['SST'], tmp_cetp['DST']
+            cetp_transaction = self.cetpstate_mgr.get_established_transaction((sstag, dstag))
+            r_cesid = cetp_transaction.get_remote_cesid()
+            
+            if not self.has_c2c_layer(r_cesid): 
+                self._logger.info("Create CETP-H2H and CETP-C2C layer")
+                c2c_layer = self.create_c2c_layer(r_cesid)
+                h2h_layer = self.create_cetp_endpoint(r_cesid, c2c_layer=c2c_layer, c2c_negotiated=True)
+                c2c_layer.assign_cetp_h2h_layer(h2h_layer)    # Top layer to handle inbound H2H
+                c2c_layer.set_connectivity()
+            else:
+                c2c_layer = self.get_c2c_layer(r_cesid)                 # Gets c2c-layer corresponding to for remote cesid
+
+            cetp_transaction._assign_c2c_layer(c2c_layer)
+            c2c_layer.register_inbound_transport(transport, cetp_transaction)
+            transport.set_c2c_details(r_cesid, c2c_layer)
+            transport.send_cetp(cetp_resp)
+
+
+    def prcoess_c2c_negotiation(self, cetp_msg, transport):
+        """ Checks whether inbound message is part of existing or new CETP-C2C negotiation from a legitimate node... """ 
+        inbound_sstag, inbound_dstag = cetp_msg['SST'], cetp_msg['DST']
+        sstag, dstag    = inbound_dstag, inbound_sstag
+        
+        if not self.cetpstate_mgr.has_initiated_transaction( (sstag, dstag)):
+            self._logger.info("No C2CTransaction exists -> Initiating inbound C2CTransaction (SST={} -> DST={})".format(inbound_sstag, inbound_dstag))
+            peer_addr = transport.remotepeer
+            proto     = transport.proto
+            ic2c_transaction = C2CTransaction.iC2CTransaction(self._loop, r_addr=peer_addr, sstag=sstag, dstag=sstag, l_cesid=self.cesid, policy_mgr=self.policy_mgr, \
+                                                               cetpstate_mgr=self.cetpstate_mgr, ces_params=self.ces_params, proto=proto, transport=transport, \
+                                                               cetp_security=self.cetp_security, interfaces=self.interfaces, conn_table=self.conn_table, cetp_mgr=self)
+            response = ic2c_transaction.process_c2c_transaction(cetp_msg)
+            return response
+
+
+    def register_unverifiable_cetp_sender(self, ip_addr):
+        """ Records an IP address that failed to identify itself as CES node """
+        self.cetp_security.register_unverifiable_cetp_sender(ip_addr)
+    
+    
+    
+    """ Functions/methods supported by CETPManager API, for example to allow, drop or terminate CETP signalling towards a host, service or CES node """
 
     def block_connections_to_local_domain(self, l_domain="", r_cesid=""):
         """ Informs remote CES to block (future) connections towards the local domain of this CES """
@@ -203,84 +468,6 @@ class CETPManager:
         except Exception as ex:
             self._logger.info("Exception '{}'".format(ex))
 
-    def set_max_dns_naptr_responses(self):
-        self.allowed_dns = copy.copy(self.max_dns_cetp_responses)
-            
-    def dns_threshold_exceeded(self):
-        """ Check to detect DNS flood, AND to prevent CES/CETP processing from subjecting to high loads  """
-        if self.allowed_dns == self.max_dns_cetp_responses:
-            self._loop.call_later(1.0, self.set_max_dns_naptr_responses)
-
-        elif self.allowed_dns ==0:
-            return True
-            
-        self.allowed_dns -= 1
-        return False
-            
-    
-    def process_dns_message(self, dns_cb, cb_args, dst_id, r_cesid="", naptr_list=[]):
-        if not self.dns_threshold_exceeded():
-            #print("Threshold not exceeded")
-            if len(naptr_list)!=0:
-                self.process_outbound_cetp(dns_cb, cb_args, dst_id, r_cesid, naptr_list)
-            else:
-                self.process_local_cetp(dns_cb, cb_args, dst_id)
-
-    def process_local_cetp(self, dns_cb, cb_args, dst_id):
-        cb = (dns_cb, cb_args)
-        self.local_cetp.consume_h2h_requests(dst_id, cb)
-
-    def process_outbound_cetp(self, dns_cb, cb_args, dst_id, r_cesid, naptr_list):
-        """ Gets/Creates the CETPH2H instance AND enqueues the NAPTR response for handling the H2H transactions """
-        try:
-            if self.has_cetp_endpoint(r_cesid):
-                ep = self.get_cetp_endpoint(r_cesid)
-                ep.enqueue_h2h_requests(dst_id, naptr_list, (dns_cb, cb_args))                            # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
-            else:
-                sanitized_naptrs = self._pre_check(naptr_list)
-                if sanitized_naptrs == None:
-                    self._logger.info(" Cannot initiate CETP endpoint towards '{}'".format(r_cesid))
-                    return
-                else:
-                    self._logger.info(" Initiating a CETP-Endpoint towards '{}': ".format(r_cesid))
-                    ep = self.create_cetp_endpoint(r_cesid)
-                    ep.create_cetp_c2c_layer()
-                    ep.enqueue_h2h_requests(dst_id, sanitized_naptrs, (dns_cb, cb_args))                  # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
-    
-        except Exception as ex:
-            self._logger.info("Exception in '{}'".format(ex))
-            return
-
-
-    def _pre_check(self, naptr_rrs):
-        """ Sanitizes the naptr responses: 1) Checks the number of NAPTR records in DNS response.
-            2) Filters out the NAPTRs that recently failed connectivity.    3) Assures that all NAPTRs belong to the same r_cesid.
-        """
-        try:
-            if len(naptr_rrs) > self.max_naptrs_per_msg:
-                return None                                                     # > 10 naptr_rrs could create high traffic flood
-            
-            remove_naptrs =  []
-            for n_rr in naptr_rrs:
-                dst_id, r_cesid, r_ip, r_port, r_proto = n_rr                   # Assumption: All NAPTRs point towards one 'r_cesid'.    (Destination domain is reachable via one CES only)
-                key = (r_ip, r_port, r_proto)
-                
-                if self.cetp_security.is_unreachable_cetp(r_ip, r_port, r_proto):
-                    remove_naptrs.append(n_rr)
-            
-            if len(remove_naptrs)==0:
-                return naptr_rrs
-            else:
-                for p in remove_naptrs:
-                    naptr_rrs.remove(p)
-                
-                if len(naptr_rrs)==0:
-                    return None
-                
-                return naptr_rrs
-        
-        except:
-            return None
 
 
     def terminate_cetp_c2c_signalling(self, r_cesid="", terminate_h2h=False):
@@ -300,10 +487,6 @@ class CETPManager:
         except Exception as ex:
             self._logger.info("Exception '{}' in terminating cetp signalling channel to '{}'".format(ex))
 
-    
-    def test_func(self):
-        #self.send_evidence(sstag=200, dstag=100, evidence="FSecureMalware")
-        pass
     
     def send_evidence(self, sstag=0, dstag=0, lip="", lpip="", evidence=""):
         """ The method is used to send misbehavior evidence observed by the dataplane to a remote CES 
@@ -335,8 +518,6 @@ class CETPManager:
                 c2c_layer = self.get_c2c_layer(r_cesid)
                 c2c_layer.report_evidence(sstag, dstag, r_hostid, r_cesid, evidence)
             
-            
-        
         except Exception as ex:
             self._logger.info("Exception '{}' in terminating session".format(ex))
 
@@ -548,178 +729,6 @@ class CETPManager:
                     c2c_layer = self.get_c2c_layer(r_cesid)
                     c2c_layer.close_all_h2h_sessions()
 
-
-
-    def register_server_endpoint(self, ep):
-        self._serverEndpoints.append(ep)
-        
-    def get_server_endpoints(self):
-        """ Provides list of all CETP server endpoints """
-        return self._serverEndpoints
-        
-    def close_server_endpoint(self, ep):
-        """ Stops the listening CETP service on (ip, port, proto) """
-        if ep in self.get_server_endpoints():
-            self._serverEndpoints.remove(ep)
-            ep.close()
-
-    def close_server_endpoints(self):
-        """ Stops the listening CETP service on all server endpoints """
-        for server_ep in self.get_server_endpoints():
-            self.close_server_endpoint(server_ep)
-
-    def initiate_cetp_service(self, server_ip, server_port, proto):
-        """ Creates CETPServer Endpoint for accepting connections from remote CES """
-        try:
-            self._logger.info("Initiating CETPServer on {} protocol @ {}.{}".format(proto, server_ip, server_port))
-            if proto == "tcp":
-                coro = self._loop.create_server(lambda: CETPTransports.iCESServerTCPTransport(self._loop, self.ces_params, cetp_mgr=self),\
-                                                 host=server_ip, port=server_port)             # Not utilizing any pre-created objects.
-                
-            elif proto == "tls":
-                sc = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
-                sc.verify_mode = ssl.CERT_REQUIRED
-                sc.load_cert_chain(self.ces_certificate_path, self.ces_privatekey_path)
-                #sc.check_hostname = True
-                sc.load_verify_locations(self.ca_certificate_path)
-                coro = self._loop.create_server(lambda: CETPTransports.iCESServerTLSTransport(self._loop, self.ces_params, self.ces_certificate_path, self.ca_certificate_path, \
-                                                                                             cetp_mgr=self), host=server_ip, port=server_port, ssl=sc)
-                
-            server = self._loop.run_until_complete(coro)            # Returns the server
-            self.register_server_endpoint(server)
-            self._logger.info(' CETP Server is listening on {} protocol: {}:{}'.format(proto, server_ip, server_port))
-                
-        except Exception as ex:
-            self._logger.warning(" Failed to create CETP server on {} protocol @ {}:{}".format(proto, server_ip, server_port))
-            self._logger.warning(ex)
-
-
-    # Functions to register/unregister the C2CLayer AND handle newly connected remote endpoints.
-    def has_c2c_layer(self, r_cesid):
-        return r_cesid in self.c2c_register
-
-    def get_c2c_layer(self, r_cesid):
-        return self.c2c_register[r_cesid]
-
-    def create_c2c_layer(self, r_cesid="", cetp_h2h=None):
-        """ Creates a C2CLayer for a remote CES-ID """
-        cetp_c2c = CETPC2C.CETPC2CLayer(self._loop, l_cesid=self.cesid, r_cesid=r_cesid, cetpstate_mgr= self.cetpstate_mgr, policy_mgr=self.policy_mgr, conn_table=self.conn_table, \
-                                        ces_params=self.ces_params, cetp_security=self.cetp_security, cetp_mgr=self, cetp_h2h=cetp_h2h, interfaces=self.interfaces)
-        
-        self.register_c2c_layer(r_cesid, cetp_c2c)
-        return cetp_c2c
-    
-    def register_c2c_layer(self, r_cesid, c2c_layer):
-        self.c2c_register[r_cesid] = c2c_layer
-        
-    def remove_c2c_layer(self, r_cesid):
-        if self.has_c2c_layer(r_cesid):
-            del self.c2c_register[r_cesid]
-            
-    def get_all_c2c_layers(self):
-        c2c_layers = []
-        for cesid, c2clayer in self.c2c_register.items():
-            c2c_layers.append(c2clayer)
-        return c2c_layers
-
-    def remote_endpoint_malicious_history(self, ip_addr):
-        return False
-
-    def _pre_process(self, msg):
-        """ Pre-processes the received packet for validity of session tags & CETP version """
-        try:
-            cetp_msg = json.loads(msg)
-            inbound_sstag, inbound_dstag, ver = cetp_msg['SST'], cetp_msg['DST'], cetp_msg['VER']
-            sstag, dstag    = inbound_dstag, inbound_sstag
-            
-            if ver!= self.ces_params["CETPVersion"]:
-                self._logger.info(" CETP version is not supported.")
-                return
-            
-            if ( (sstag < 0) or (dstag < 0) or ((sstag==0) and (dstag ==0)) or (inbound_sstag == 0)):
-                self._logger.info(" Session tag values are invalid")
-                return
-            
-            if inbound_dstag !=0:
-                self._logger.debug(" Possible Attack scanning the session tag sapce?")       # First inbound CETP message shall have DST=0
-                return
-        
-            return cetp_msg
-        except Exception as ex:
-            self._logger.error(" Exception in pre-processing the received message.")
-            return
-
-
-    def process_inbound_message(self, msg, transport):
-        """ Processes first few packets from a newly connected 'endpoint',
-        Upon successful negotiation of C2C policies, it assigns CETP-H2H and CETP-C2C layer to the remote CETP endpoint
-        """
-        cetp_msg = self._pre_process(msg)
-        if cetp_msg == None:
-            ip_addr, port = transport.remotepeer
-            self.register_unverifiable_cetp_sender(ip_addr)
-            transport.close()
-            return
-        
-        response = self.prcoess_c2c_negotiation(cetp_msg, transport)
-        status, cetp_resp = response
-        
-        if status == False:
-            if len(cetp_resp) !=0:
-                self._logger.debug(" Sending CETP error_response.")
-                transport.send_cetp(cetp_resp)
-                
-            ip_addr, port = transport.remotepeer
-            self.register_unverifiable_cetp_sender(ip_addr)
-            self._logger.error(" CES-to-CES negotiation failed with remote edge. Closing transport ")
-            transport.close()
-            return
-            
-        elif status == None:
-            self._logger.info(" CES-to-CES negotiation not completed yet -> Send the response packet.")
-            transport.send_cetp(cetp_resp)
-        
-        elif status==True:
-            self._logger.debug(" CES-to-CES policies are negotiated")
-            tmp_cetp = json.loads(cetp_resp)
-            sstag, dstag = tmp_cetp['SST'], tmp_cetp['DST']
-            cetp_transaction = self.cetpstate_mgr.get_established_transaction((sstag, dstag))
-            r_cesid = cetp_transaction.get_remote_cesid()
-            
-            if not self.has_c2c_layer(r_cesid): 
-                self._logger.info("Create CETP-H2H and CETP-C2C layer")
-                c2c_layer = self.create_c2c_layer(r_cesid)
-                h2h_layer = self.create_cetp_endpoint(r_cesid, c2c_layer=c2c_layer, c2c_negotiated=True)
-                c2c_layer.assign_cetp_h2h_layer(h2h_layer)    # Top layer to handle inbound H2H
-                c2c_layer.set_connectivity()
-            else:
-                c2c_layer = self.get_c2c_layer(r_cesid)                 # Gets c2c-layer corresponding to for remote cesid
-
-            cetp_transaction._assign_c2c_layer(c2c_layer)
-            c2c_layer.register_inbound_transport(transport, cetp_transaction)
-            transport.set_c2c_details(r_cesid, c2c_layer)
-            transport.send_cetp(cetp_resp)
-
-
-    def prcoess_c2c_negotiation(self, cetp_msg, transport):
-        """ Checks whether inbound message is part of existing or new CETP-C2C negotiation from a legitimate node... """ 
-        inbound_sstag, inbound_dstag = cetp_msg['SST'], cetp_msg['DST']
-        sstag, dstag    = inbound_dstag, inbound_sstag
-        
-        if not self.cetpstate_mgr.has_initiated_transaction( (sstag, dstag)):
-            self._logger.info("No C2CTransaction exists -> Initiating inbound C2CTransaction (SST={} -> DST={})".format(inbound_sstag, inbound_dstag))
-            peer_addr = transport.remotepeer
-            proto     = transport.proto
-            ic2c_transaction = C2CTransaction.iC2CTransaction(self._loop, r_addr=peer_addr, sstag=sstag, dstag=sstag, l_cesid=self.cesid, policy_mgr=self.policy_mgr, \
-                                                               cetpstate_mgr=self.cetpstate_mgr, ces_params=self.ces_params, proto=proto, transport=transport, \
-                                                               cetp_security=self.cetp_security, interfaces=self.interfaces, conn_table=self.conn_table, cetp_mgr=self)
-            response = ic2c_transaction.process_c2c_transaction(cetp_msg)
-            return response
-
-
-    def register_unverifiable_cetp_sender(self, ip_addr):
-        self.cetp_security.register_unverifiable_cetp_sender(ip_addr)
-    
 
 
 

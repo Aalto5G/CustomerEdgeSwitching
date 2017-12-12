@@ -376,7 +376,17 @@ class C2CTransaction(object):
         if key is not None:
             if key in self.negotiated_params:
                 return negotiated_params[key]
-        
+        return None
+    
+    def get_negotiated_lrlocs(self, key="lrlocs"):
+        lrlocs = self.get_negotiated_lrlocs(key=key)
+        return lrlocs
+    
+    def get_negotiated_rrlocs(self, key="rrlocs"):
+        rrlocs = self.get_negotiated_lrlocs(key=key)
+        return rrlocs
+    
+    
     def show(self, packet):
         s = ""
         for k, v in packet.items():
@@ -400,19 +410,20 @@ class C2CTransaction(object):
         return s
         
     def show2(self, packet):
-        #self._logger.info("CETP Packet")
+        s = ""
         for k, v in packet.items():
             if k != "TLV":
-                print(str(k)+": "+ str(v))
+                s += str(k)+": "+ str(v)+ "\n"
             else:
-                print("TLV:")
+                s += k+":\n"
                 for tlv in v:
-                    print("\t", tlv)
-        print("\n")
+                    s += "\t"+ str(tlv)+"\n"
+                s += "\n"
+
 
     def pprint(self, packet, m=None):
         if m!=None:
-            self._logger.info(m)
+            self._logger.info("\n"+m)
         s = self.show(packet)
         print(s, "\n")
 

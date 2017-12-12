@@ -210,6 +210,11 @@ class CETPC2CLayer:
         """ Returns Boolean True/False, indicating presence of atleast one transport connection b/w CES nodes """
         return self.c2c_connectivity
 
+    def get_negotiated_rlocs(self):
+        c2c_transaction = self.c2c_transaction_list[0]
+        lrlocs = c2c_transaction.get_negotiated_lrlocs()
+        rrlocs = c2c_transaction.get_negotiated_rrlocs()
+        return (lrlocs, rrlocs)
 
     """ CETP related processing """
     

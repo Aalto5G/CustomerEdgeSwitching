@@ -109,7 +109,6 @@ class CETPH2H:
             self._logger.info(" Exception '{}' in consuming H2H request towards {}".format(ex, self.r_cesid))
             if from_queue:  self.h2h_q.task_done()
             
-    
 
     
     def c2c_negotiation_status(self, connected=True):
@@ -177,6 +176,10 @@ class CETPH2H:
         except Exception as ex:
             self._logger.info(" Exception in consuming message from c2c-layer: '{}'".format(ex))
             traceback.print_exc(file=sys.stdout)
+
+
+    def get_negotiated_rlocs(self):
+        return self.c2c.get_negotiated_rlocs()
 
     def update_H2H_transaction_count(self, initiated=True):
         """ To limit the number of H2H transaction to limit agreed in C2C Negotiation """
