@@ -196,6 +196,19 @@ class CETPC2CLayer:
         """ Returns Boolean True/False, indicating presence of atleast one transport connection b/w CES nodes """
         return self.c2c_connectivity
 
+    def get_negotiated_rlocs(self):
+        lrlocs = self.c2c_transaction.get_negotiated_lrlocs()
+        rrlocs = self.c2c_transaction.get_negotiated_rrlocs()
+        return (lrlocs, rrlocs)
+
+    def get_negotiated_payloads(self):
+        lpayloads = self.c2c_transaction.get_negotiated_lpayloads()
+        rpayloads = self.c2c_transaction.get_negotiated_rpayloads()
+        return (lpayloads, rpayloads)
+
+    def get_c2c_dp_connection(self):
+        conn = self.c2c_transaction
+        return conn
 
     """ CETP related processing """
     
@@ -282,7 +295,6 @@ class CETPC2CLayer:
             result = o_c2c.continue_c2c_negotiation(cetp_msg, transport)
             (status, cetp_resp) = result
             
-            print("Test success")
             if status == True:
                 for it in range(0, len(self.record_connected_transports)):
                     t = self.record_connected_transports[it]
@@ -609,12 +621,6 @@ class CETPC2CLayer:
         c2c_transaction = self.get_c2c_transaction(transport)
         return c2c_transaction
     
-    def get_c2c_dp_connection(self):
-        pass
-
-
-
-
 
     """ ***********************    ***********************    ***********************
     ******* Functions to handle interrupt (Ctrl+C) and C2C-relation closure.  *******

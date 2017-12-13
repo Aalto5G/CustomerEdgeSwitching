@@ -123,7 +123,7 @@ class C2CTransaction(object):
         except Exception as ex:
             self._logger.error("Exception in _create_request_tlv() '{}'".format(ex))
             return None
-        
+
     def _create_request_tlv2(self, group=None, code=None, value=None):
         try:
             tlv = {}
@@ -375,7 +375,30 @@ class C2CTransaction(object):
     def get_negotiated_parameter(self, key=None):
         if key is not None:
             if key in self.negotiated_params:
-                return negotiated_params[key]
+                return self.negotiated_params[key]
+
+    def get_negotiated_lrlocs(self):
+        key = "rrlocs"
+        if key in self.negotiated_params:
+            return self.negotiated_params[key]
+
+    def get_negotiated_rrlocs(self):
+        key = "rrlocs"
+        if key in self.negotiated_params:
+            return self.negotiated_params[key]
+
+    def get_negotiated_lpayloads(self):
+        key="lpayloads"
+        if key in self.negotiated_params:
+            return self.negotiated_params[key]
+
+    def get_negotiated_rpayloads(self):
+        key="rpayloads"
+        if key in self.negotiated_params:
+            return self.negotiated_params[key]
+
+    def get_c2c_dp_connection(self):
+        return self.conn
         
     def show(self, packet):
         s = ""
@@ -399,16 +422,18 @@ class C2CTransaction(object):
                     s += " ]\n"
         return s
         
+
     def show2(self, packet):
-        #self._logger.info("CETP Packet")
+        s = ""
         for k, v in packet.items():
             if k != "TLV":
-                print(str(k)+": "+ str(v))
+                s += str(k)+": "+ str(v)+ "\n"
             else:
-                print("TLV:")
+                s += k+":\n"
                 for tlv in v:
-                    print("\t", tlv)
-        print("\n")
+                    s += "\t"+ str(tlv)+"\n"
+                s += "\n"
+
 
     def pprint(self, packet, m=None):
         if m!=None:
@@ -533,6 +558,7 @@ class oC2CTransaction(C2CTransaction):
             self.last_packet_sent = cetp_message
             self._start_time = time.time()
             return cetp_packet
+        
         except Exception as ex:
             self._logger.error(" Exception '{}' in initiating CES-to-CES session towards: '{}'".format(ex, self.r_cesid))
             return None

@@ -111,6 +111,15 @@ class CETPH2H:
             
     
 
+
+    def get_negotiated_rlocs(self):
+        return self.c2c.get_negotiated_rlocs()
+
+    def get_negotiated_payloads(self):
+        return self.c2c.get_negotiated_payloads()
+
+    def get_c2c_dp_connection(self):
+        return self.c2c.get_c2c_dp_connection()
     
     def c2c_negotiation_status(self, connected=True):
         """ Reports that success/failure of C2C-negotiation """

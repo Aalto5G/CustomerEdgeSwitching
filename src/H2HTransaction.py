@@ -55,12 +55,26 @@ class H2HTransaction(object):
         if err_tlv is not None:
             terminate_tlv['value'] = err_tlv
         return terminate_tlv
+
+    def _create_basic_tlv(self, ope=None, cmp=None, group=None, code=None, value=None):
+        try:
+            basic_tlv = {}
+            if ope is not None: basic_tlv["ope"]=ope
+            if cmp is not None: basic_tlv["cmp"]=cmp
+            if group is not None: basic_tlv["group"]=group
+            if code is not None: basic_tlv["code"]=code
+            if value is not None: basic_tlv["value"]=value
+            
+            return basic_tlv
+        except Exception as ex:
+            self._logger.error("Exception in _create_basic_tlv(): '{}'".format(ex))
+            return None
     
     def _create_offer_tlv(self, tlv):
         group, code = tlv['group'], tlv['code']
         if (group!="control") or ((group=="control") and (code in CETP.CONTROL_CODES)):
             func = CETP.SEND_TLV_GROUP[group][code]
-            tlv = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, interfaces=self.interfaces, query=False)
+            tlv = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True, interfaces=self.interfaces, query=False)
         return tlv          # shall use try, except here.
 
     def _create_offer_tlv2(self, group=None, code=None, value=None):
@@ -73,15 +87,32 @@ class H2HTransaction(object):
         
         if group in ["control", "rloc", "payload"]:
             func = CETP.SEND_TLV_GROUP[group][code]
-            tlv = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, interfaces=self.interfaces, query=False)
+            tlv = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True, interfaces=self.interfaces, query=False)
         return tlv
+
+    def _create_offer_tlv3(self, group=None):
+        """ Function to get all the TLVs belonging to a group (of RLOC and Payload) """
+        try:
+            tlv = None
+            if group is "rloc":
+                func = cetpOperations.send_rloc
+            elif group is "payload":
+                func = cetpOperations.send_payload
+            else:
+                return None
+        
+            tlv  = func(tlv=tlv, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True, interfaces=self.interfaces, query=False)
+            return tlv
+        except Exception as ex:
+            self._logger.error("Exception in _create_offer_tlv3() '{}'".format(ex))
+            return None
 
     def _create_request_tlv(self, tlv):
         group, code = tlv['group'], tlv['code']
         #print(self.policy)
         if (group!="control") or ((group=="control") and (code in CETP.CONTROL_CODES)):
             func = CETP.SEND_TLV_GROUP[group][code]
-            tlv  = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, interfaces=self.interfaces, query=True)
+            tlv  = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True, interfaces=self.interfaces, query=True)
             return tlv
 
     def _create_request_tlv2(self, group=None, code=None):
@@ -89,14 +120,32 @@ class H2HTransaction(object):
         tlv['group'], tlv['code'] = group, code
         if (group!="control") or ((group=="control") and (code in CETP.CONTROL_CODES)):
             func = CETP.SEND_TLV_GROUP[group][code]
-            tlv  = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, interfaces=self.interfaces, query=True)
+            tlv  = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True, interfaces=self.interfaces, query=True)
             return tlv
     
+    def _create_request_tlv3(self, group=None):
+        """ Function to request the TLVs belonging to a group (of RLOC and Payload) """
+        try:
+            tlv = None
+            if group is "rloc":
+                func = cetpOperations.send_rloc            
+            elif group is "payload":
+                func = cetpOperations.send_payload
+            else:
+                return None
+            
+            tlv  = func(tlv=tlv, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True, interfaces=self.interfaces, query=True)            
+            return tlv
+        except Exception as ex:
+            self._logger.error("Exception in _create_request_tlv3() '{}'".format(ex))
+            return None
+        
+
     def _create_response_tlv(self, tlv):
         group, code = tlv['group'], tlv['code']
         if (group!="control") or ((group=="control") and (code in CETP.CONTROL_CODES)):
             func = CETP.RESPONSE_TLV_GROUP[group][code]
-            tlv  = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, interfaces=self.interfaces)
+            tlv  = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True,interfaces=self.interfaces)
             return tlv
 
     def _verify_tlv(self, tlv, policy=None):
@@ -104,9 +153,9 @@ class H2HTransaction(object):
         if (group!="control") or ((group=="control") and (code in CETP.CONTROL_CODES)):
             func   = CETP.VERIFY_TLV_GROUP[group][code]
             if policy!=None:
-                result = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=policy, interfaces=self.interfaces)
+                result = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=policy, transaction=self, h2h_session=True, interfaces=self.interfaces)
             else:
-                result = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, interfaces=self.interfaces)
+                result = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True, interfaces=self.interfaces)
             return result
 
     def _check_tlv(self, tlv, ope=None, cmp=None, group=None, code=None):
@@ -123,6 +172,19 @@ class H2HTransaction(object):
             return False
         except:
             return False
+
+    def _check_tlv2(self, tlv, group=[], code=[]):
+        """ Check whether an attribute with given value exists in a TLV"""
+        try:
+            if (group != []) and (tlv["group"] in group):
+                return True
+            if (code != []) and (tlv["code"] in code):
+                return True
+            return False
+        except Exception as ex:
+            self._logger.error("Exception in _check_tlv2(): {}".format(ex))
+            return False
+
         
     def _get_from_tlvlist(self, tlvlist, group, code = None, ope = ""):
         retlist = []
@@ -166,7 +228,7 @@ class H2HTransaction(object):
     def _get_dp_connection_rlocs(self):
         l_rlocs, r_rlocs = [], []
         ope, group = "info", "rloc"
-        rrloc_tlvs = self._get_from_tlvlist(self.received_tlvs, group, ope=ope)
+        rrloc_tlvs = self._get_from_tlvlist(self.received_tlvs, group, ope=ope)         # Get it based on rrlocs
         lrloc_tlvs = []
         
         #print("rrlocs: ", rrloc_tlvs)
@@ -308,54 +370,86 @@ class H2HTransaction(object):
                 """ iCES checks if upon assigning 'sstag' the resulting (SST, DST) pair will lead to a unique transaction. """
                 if not self.cetpstate_mgr.has_established_transaction((sstag, dstag)):                   # Checks connected transactions
                     return sstag
-                
+
+
+
     def show(self, packet):
-        #self._logger.info("CETP Packet")
+        s = ""
         for k, v in packet.items():
             if k != "TLV":
-                print(str(k)+": "+ str(v))
+                s += str(k)+": "+ str(v) + "\n"
             else:
-                print("TLV:")
-                for tlv in v:
-                    if 'value' in tlv:
-                        print("\t { 'ope':{}, 'group':{}, 'code':{}, 'value':{} }".format(tlv['ope'], tlv['group'],tlv['code'], tlv['value']))
-                    else:
-                        print("\t { 'ope':{}, 'group':{}, 'code':{} }".format(tlv['ope'], tlv['group'],tlv['code']))
-        print("\n")
-    
-    def show(self, packet):
-        self._logger.info("CETP Packet")
-        for k, v in packet.items():
-            if k != "TLV":
-                print(str(k)+": "+ str(v))
-            else:
-                print("TLV:")
+                s+=k+":\n"
                 for tlv in v:
                     ope, group = CETP.PPRINT_OPE[tlv['ope']], CETP.PPRINT_GROUP[tlv['group']]
                     code = tlv["code"]
                     if code in CETP.PPRINT_CODE:
                         code = CETP.PPRINT_CODE[code]
                     
+                    s += "\t ['ope':{}, 'group':{}, 'code':{}".format(ope, group, code)
+                    
+                    if 'cmp' in tlv:
+                        s += ", 'cmp':{}".format(tlv['cmp'])
                     if 'value' in tlv:
-                        print("\t ['ope':{}, 'group':{}, 'code':{}, 'value':{}]".format(ope, group, code, tlv['value']))
-                    else:
-                        print("\t ['ope':{}, 'group':{}, 'code':{} ]".format(ope, group, code))
-        print("\n")
-
-    
+                        s += ", 'value':{}".format(tlv['value'])                   
+                    s += " ]\n"
+        return s
+        
     def show2(self, packet):
-        #self._logger.info("CETP Packet")
+        s = ""
         for k, v in packet.items():
             if k != "TLV":
-                print(str(k)+": "+ str(v))
+                s += str(k)+": "+ str(v)+ "\n"
             else:
-                print("TLV:")
+                s += k+":\n"
                 for tlv in v:
-                    print("\t", tlv)
-        print("\n")
+                    s += "\t"+ str(tlv)+"\n"
+                s += "\n"
 
-    def pprint(self, packet):
-        self.show(packet)
+    def pprint(self, packet, m=None):
+        if m!=None:
+            self._logger.info("\n"+m)
+        s = self.show(packet)
+        print(s, "\n")
+        
+    
+    def get_negotiated_rlocs(self):
+        l_rlocs, r_rlocs = self.cetp_h2h.get_negotiated_rlocs()
+        self.negotiated_lrlocs = l_rlocs
+        self.negotiated_rrlocs = r_rlocs
+    
+    def get_negotiated_lrlocs(self):
+        self.get_negotiated_rlocs()
+        return self.negotiated_lrlocs
+
+    def get_negotiated_rrlocs(self):
+        self.get_negotiated_rlocs()
+        return self.negotiated_rrlocs
+
+    def append_rlocs(self, tlvlist):
+        self.append_negotiated_rlocs_offer(tlvlist)
+        self.append_negotiated_rlocs_request(tlvlist)
+
+    def append_negotiated_rlocs_offer(self, tlvlist):
+        tlv = self._create_offer_tlv3(group="rloc")
+        tlvlist += tlv
+
+    def append_negotiated_rlocs_request(self, tlvlist):
+        tlv = self._create_request_tlv3(group="rloc")
+        tlvlist += tlv
+    
+    def append_payloads(self, tlvlist):
+        self.append_negotiated_payloads_offers(tlvlist)
+        self.append_negotiated_payloads_request(tlvlist)
+        
+    def append_negotiated_payloads_request(self, tlvlist):
+        tlv = self._create_request_tlv3(group="payload")
+        tlvlist += tlv
+
+    def append_negotiated_payloads_offers(self, tlvlist):
+        tlv = self._create_offer_tlv3(group="payload")
+        tlvlist += tlv
+        
 
 
 class H2HTransactionOutbound(H2HTransaction):
@@ -460,9 +554,12 @@ class H2HTransactionOutbound(H2HTransaction):
             ret_tlv = self._create_request_tlv(rtlv)
             tlvs_to_send += ret_tlv
         
+        self.append_rlocs(tlvs_to_send)
+        #self.append_payloads(tlvs_to_send)
+        
         cetp_msg = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
         cetp_packet = json.dumps(cetp_msg)
-        #self.pprint(cetp_msg)
+        self.pprint(cetp_msg, m="Outbound H2H CETP")
         self.last_packet_sent = cetp_packet
         self.cetp_negotiation_history.append(cetp_packet)
         self.cetpstate_mgr.add_initiated_transaction((self.sstag,0), self)                # Registering the H2H state
@@ -474,6 +571,8 @@ class H2HTransactionOutbound(H2HTransaction):
         #    #self._logger.info("Exception in start_cetp_processing(): {}".format(msg))
         #    return None
         #policies = yield from self.get_policies_from_PolicySystem(r_id, r_cesid)
+
+
 
     def append_dstep_info(self):
         dstep_tlv = {}
@@ -535,14 +634,32 @@ class H2HTransactionOutbound(H2HTransaction):
                         if ret_tlv != None:
                             tlvs_to_send += ret_tlv
                             continue
-                                                
-                    if self._check_tlv(received_tlv, cmp="optional"):
-                        #self._logger.info(" An optional requirement {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
-                        ret_tlv = self._get_unavailable_response(received_tlv)
-                        tlvs_to_send.append(ret_tlv)
+                                                    
+                        if self._check_tlv(received_tlv, cmp="optional"):
+                            #self._logger.info(" An optional requirement {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
+                            ret_tlv = self._get_unavailable_response(received_tlv)
+                            tlvs_to_send.append(ret_tlv)
+                        else:
+                            #self._logger.error(" A required TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
+                            error = True
+                            break
+                    
                     else:
-                        error = True
-                        break
+                        if self._check_tlv2(received_tlv, group=["rloc", "payload"]):
+                            ret_tlv = self._create_response_tlv(received_tlv)
+                            if ret_tlv != None:
+                                tlvs_to_send += ret_tlv
+                                continue
+                        
+                        if self._check_tlv(received_tlv, cmp="optional"):
+                            #self._logger.info(" An optional requirement TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
+                            ret_tlv = self._get_unavailable_response(received_tlv)
+                            tlvs_to_send.append(ret_tlv)
+                        else:
+                            #self._logger.error(" A required TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
+                            error = True
+                            break
+
     
             #A CETP response message is processed for: Policy Matching and TLV Verification. The message can have: 1) Less than required TLVs; 2) TLVs with wrong value; 3) a notAvailable TLV; OR 4) a terminate TLV.
             elif self._check_tlv(received_tlv, ope="info"):
@@ -564,9 +681,17 @@ class H2HTransactionOutbound(H2HTransaction):
                             tlvs_to_send.append(self._get_terminate_tlv(err_tlv=received_tlv))
                             error=True
                             break
+                        
                 elif not self.opolicy.has_required(received_tlv):
-                    #self._logger.info("Unrequrested TLV is received")
-                    pass
+                    if self._check_tlv2(received_tlv, group=["rloc", "payload"]):
+                        if not self._verify_tlv(received_tlv):
+                            error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
+                            error = True
+                            break
+                        
+                    else:
+                        self._logger.warning("Unrequested TLV is received")
+                        pass
                 
                 
         # Evaluation of Policy Matching
@@ -610,8 +735,10 @@ class H2HTransactionOutbound(H2HTransaction):
                 for rtlv in self.opolicy.get_required():
                     ret_tlv = self._create_request_tlv(rtlv)
                     tlvs_to_send += ret_tlv
-            
+                
                 tlvs_to_send.append(self.append_dstep_info())
+                #self.append_negotiated_payloads_request(tlvs_to_send)
+                self.append_negotiated_rlocs_request(tlvs_to_send)
                 cetp_msg = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)           # Sending 'response' as 'info'
                 self.last_packet_sent = cetp_msg
                 self.last_packet_received = self.packet
@@ -652,16 +779,25 @@ class H2HTransactionOutbound(H2HTransaction):
     def _create_connection(self):
         """ Extract the negotiated parameters to create a connection state """
         try:
+            print(111)
             self.lfqdn, self.rfqdn          = self.src_id, self.dst_id                  #self._create_connection_get_fqdns()
+            print(111)
             self.lip                        = self.host_ip
+            print(111)
             self.lpip                       = self._allocate_proxy_address(self.lip)
+            print(111)
             self.lrloc, self.rrloc          = self._get_dp_connection_rlocs()
+            print(111)
             self.lpayload, self.rpayload    = self._get_dp_connection_payloads()
+            print(111)
             self.lid, self.rid              = None, None
+            
+            print(111)
     
             if len(self.lrloc)==0 or len(self.rrloc)==0 or len(self.lpayload)==0 or len(self.rpayload)==0:
                     #self._logger.info("CETP negotiation failed to create H2H-DP Connection. ")
                     return False
+            print(111)
             
             negotiated_params = [self.lfqdn, self.rfqdn, self.lid, self.rid, self.lip, self.lpip, self.lrloc, self.rrloc, self.lpayload, self.rpayload]
             #self._logger.info("Negotiated params: {}".format(negotiated_params))
@@ -876,8 +1012,7 @@ class H2HTransactionInbound(H2HTransaction):
         """ Processes the inbound CETP-packet for negotiating the H2H policies """
         #try:
         #self._logger.info("{}".format(42*'*') )
-        #self._logger.info("Inbound packet:")
-        #self.pprint(cetp_packet)
+        self.pprint(cetp_packet, m="H2H Inbound packet")
         
         if not self._pre_process(cetp_packet):
             #self._logger.info("Inbound packet failed the pre-processing()")
@@ -892,20 +1027,37 @@ class H2HTransactionInbound(H2HTransaction):
             if self._check_tlv(received_tlv, ope="query"):
                 if self.ipolicy.has_available(received_tlv):
                     ret_tlv = self._create_response_tlv(received_tlv)
-                    
                     if ret_tlv != None:
                         tlvs_to_send += ret_tlv
                         continue
                     
-                if self._check_tlv(received_tlv, cmp="optional"):
-                    #self._logger.info(" An optional requirement TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
-                    ret_tlv = self._get_unavailable_response(received_tlv)
-                    tlvs_to_send.append(ret_tlv)
+                    if self._check_tlv(received_tlv, cmp="optional"):
+                        #self._logger.info(" An optional requirement TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
+                        ret_tlv = self._get_unavailable_response(received_tlv)
+                        tlvs_to_send.append(ret_tlv)
+                    else:
+                        #self._logger.info(" A required TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
+                        error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
+                        error = True
+                        break
+                
                 else:
-                    #self._logger.info(" A required TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
-                    error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
-                    error = True
-                    break
+                    if self._check_tlv2(received_tlv, group=["rloc", "payload"]):
+                        ret_tlv = self._create_response_tlv(received_tlv)
+                        if ret_tlv != None:
+                            tlvs_to_send += ret_tlv
+                            continue
+                    
+                    if self._check_tlv(received_tlv, cmp="optional"):
+                        #self._logger.info(" An optional requirement TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
+                        ret_tlv = self._get_unavailable_response(received_tlv)
+                        tlvs_to_send.append(ret_tlv)
+                    else:
+                        #self._logger.info(" A required TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
+                        error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
+                        error = True
+                        break
+                    
                         
             # Checks whether the sender's offer met the policy requirements of destination, and the Offer can be verified.
             elif self._check_tlv(received_tlv, ope="info"):
@@ -926,8 +1078,14 @@ class H2HTransactionInbound(H2HTransaction):
                             error = True
                             break
                 else:
-                    #self._logger.debug("Non-requested TLV {} is received: ".format(received_tlv))
-                    pass
+                    if self._check_tlv2(received_tlv, group=["rloc", "payload"]):
+                        if not self._verify_tlv(received_tlv):
+                            error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
+                            error = True
+                            break
+                    else:
+                        #self._logger.info(" A Non-requested TLV {} is received: ".format(received_tlv))
+                        pass
 
     
         if error:
@@ -976,6 +1134,8 @@ class H2HTransactionInbound(H2HTransaction):
                     ret_tlv = self._create_request_tlv(rtlv)
                     tlvs_to_send += ret_tlv
                 
+                self.append_negotiated_rlocs_request(tlvs_to_send)
+                #self.append_negotiated_payloads_request(tlvs_to_send)
                 cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
                 #self._logger.info("Response packet:")
                 #self.pprint(cetp_message)

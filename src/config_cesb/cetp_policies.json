@@ -147,13 +147,11 @@
 "policy": {
     "request": [
         { "ope":"query", "group": "id", "code": "fqdn" },
-        { "ope":"query", "group": "rloc", "code": "ipv4" },
         { "ope":"query", "group": "payload", "code": "eth" },
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "available": [
         { "ope":"info", "group": "id", "code": "fqdn", "value":"srv1.hostb1.cesb.lte." },
-        { "ope":"info", "group": "rloc", "code": "ipv4" },
         { "ope":"info", "group": "payload", "code": "eth" },
         { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145"  },
         { "ope":"info", "group": "control", "code": "ack" }
