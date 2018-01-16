@@ -216,84 +216,6 @@ class H2HTransaction(object):
             return False
 
 
-    def get_local_rloc(self, rrloc_tlv, policy):
-        """ Extracts local RLOCs from ces-policy """
-        lrloc_tlv = None
-        if policy.has_available(rrloc_tlv):
-            lrloc_tlv = self._create_offer_tlv(rrloc_tlv)
-        
-        return lrloc_tlv
-
-
-    def _get_dp_connection_rlocs(self):
-        l_rlocs, r_rlocs = [], []
-        ope, group = "info", "rloc"
-        rrloc_tlvs = self._get_from_tlvlist(self.received_tlvs, group, ope=ope)         # Get it based on rrlocs
-        lrloc_tlvs = []
-        
-        #print("rrlocs: ", rrloc_tlvs)
-        for rrloc_tlv in rrloc_tlvs:
-            lrloc_tlv = self.get_local_rloc(rrloc_tlv, self.policy)
-            lrloc_tlvs += lrloc_tlv
-                
-        l_rlocs, r_rlocs = self._filter_rlocs_list(lrloc_tlvs, rrloc_tlvs)       # Matches & Verifies the payload in the TLVs, and Removes duplicate RLOCs (on sender and receiver side)
-        return (l_rlocs, r_rlocs)
-    
-
-    def _filter_rlocs_list(self, lrlocs_list, rrlocs_list):
-        """ Extracts matching RLOCs b/w Local and Remote CES """
-        
-        def _build_list(tlvlist):
-            """ Builds list of rloc_tlv values for comparison """
-            retlist = []
-            for p in tlvlist:
-                if 'cmp' in p:
-                    if p['cmp']=="notAvailable":
-                        continue
-                    
-                pref, order, addr, alias = p["value"]
-                addrtype = p["code"]
-                if addrtype == "ipv4":
-                    if CETP.is_IPv4(addr):
-                        retlist.append((order, pref, addrtype, addr, alias))
-                elif addrtype == "ipv6":
-                    if CETP.is_IPv6(addr):
-                        retlist.append((order, pref, addrtype, addr, alias))
-
-            return retlist
-    
-
-        def _filter(base_rloc, cmp_rloc):
-            """ Compares the local and remote RLOCs to filter unmatching RLOCs """ 
-            lrlocs, rrlocs = [], []
-            for p in range(0, len(base_rloc)):
-                prloc = base_rloc[p]
-                p_addrtype, p_alias = prloc[2], prloc[4]
-                #self.logger.debug("# Evaluating p rloc: %s" % (str(prloc)))
-                for q in range(0, len(cmp_rloc)):
-                    qrloc = cmp_rloc[q]
-                    q_addrtype, q_alias = qrloc[2], qrloc[4]
-                    #self.logger.debug(">>> Evaluating q rloc: %s" % (str(qrloc)))
-                    if p_addrtype == q_addrtype and p_alias == q_alias:
-                        lrlocs.append(prloc)
-                        rrlocs.append(qrloc)
-                    
-            return (lrlocs, rrlocs)
-
-
-        lrlocs_list = _build_list(lrlocs_list)
-        rrlocs_list = _build_list(rrlocs_list)
-        lrlocs_list = list(set(lrlocs_list))        # Removes the duplicated RLOCs information in a list
-        rrlocs_list = list(set(rrlocs_list))
-        #print("Filtered Local_RLOCs_list & Remote_RLOCs_list: ", lrlocs_list, rrlocs_list)
-        lrlocs, rrlocs = _filter(lrlocs_list, rrlocs_list)
-        lrlocs = sorted(lrlocs, key=lambda s:s[0], reverse=True)
-        rrlocs = sorted(rrlocs, key=lambda s:s[0], reverse=True)
-        return (lrlocs, rrlocs)
-
-
-
-
     def _get_dp_connection_payloads(self):
         l_payloads, r_payloads = [], []
         group, ope = "payload", "info"
@@ -410,47 +332,8 @@ class H2HTransaction(object):
         if m!=None:
             self._logger.info("\n"+m)
         s = self.show(packet)
-        print(s, "\n")
-        
+        print(s, "\n")   
     
-    def get_negotiated_rlocs(self):
-        l_rlocs, r_rlocs = self.cetp_h2h.get_negotiated_rlocs()
-        self.negotiated_lrlocs = l_rlocs
-        self.negotiated_rrlocs = r_rlocs
-    
-    def get_negotiated_lrlocs(self):
-        self.get_negotiated_rlocs()
-        return self.negotiated_lrlocs
-
-    def get_negotiated_rrlocs(self):
-        self.get_negotiated_rlocs()
-        return self.negotiated_rrlocs
-
-    def append_rlocs(self, tlvlist):
-        self.append_negotiated_rlocs_offer(tlvlist)
-        self.append_negotiated_rlocs_request(tlvlist)
-
-    def append_negotiated_rlocs_offer(self, tlvlist):
-        tlv = self._create_offer_tlv3(group="rloc")
-        tlvlist += tlv
-
-    def append_negotiated_rlocs_request(self, tlvlist):
-        tlv = self._create_request_tlv3(group="rloc")
-        tlvlist += tlv
-    
-    def append_payloads(self, tlvlist):
-        self.append_negotiated_payloads_offers(tlvlist)
-        self.append_negotiated_payloads_request(tlvlist)
-        
-    def append_negotiated_payloads_request(self, tlvlist):
-        tlv = self._create_request_tlv3(group="payload")
-        tlvlist += tlv
-
-    def append_negotiated_payloads_offers(self, tlvlist):
-        tlv = self._create_offer_tlv3(group="payload")
-        tlvlist += tlv
-        
-
 
 class H2HTransactionOutbound(H2HTransaction):
     def __init__(self, loop=None, sstag=0, dstag=0, cb=None, host_ip="", src_id="", dst_id="", l_cesid="", r_cesid="", policy_mgr= None, host_register=None, cetp_security=None, \
@@ -539,7 +422,7 @@ class H2HTransactionOutbound(H2HTransaction):
         tlvs_to_send = []
         dstep_tlv = self.append_dstep_info()
         tlvs_to_send.append(dstep_tlv)
-        #self._logger.info("outbound policy: {}".format(self.opolicy))
+        self._logger.info("outbound policy: {}".format(self.opolicy))
 
         # Check if sender supports the id_type as of the destination-id, otherwise maybe not even initiate a transaction? or initiate with a default ID-type?
         # And regardless of id_type being used, FQDN of host shall be made part of the messages exchanged?
@@ -553,9 +436,6 @@ class H2HTransactionOutbound(H2HTransaction):
         for rtlv in self.opolicy.get_required():
             ret_tlv = self._create_request_tlv(rtlv)
             tlvs_to_send += ret_tlv
-        
-        self.append_rlocs(tlvs_to_send)
-        #self.append_payloads(tlvs_to_send)
         
         cetp_msg = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
         cetp_packet = json.dumps(cetp_msg)
@@ -615,6 +495,7 @@ class H2HTransactionOutbound(H2HTransaction):
         tlvs_to_send, error_tlvs = [], []
         error = False
         self.rtt += 1
+        self.pprint(cetp_packet, m="Inbound Response")
 
         if self.rtt > NEGOTIATION_RTT_THRESHOLD:                                        # Prevents infinite-exchange of CETP policies.
             self.cetpstate_mgr.remove_initiated_transaction((self.sstag, self.dstag))
@@ -711,7 +592,7 @@ class H2HTransactionOutbound(H2HTransaction):
                 cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)        # Send as 'Info' TLV
                 self.last_packet_sent = cetp_message
                 self.cetp_negotiation_history.append(cetp_message)
-                #self.pprint(cetp_message)
+                self.pprint(cetp_message, m="oCES Packet")
                 cetp_packet = json.dumps(cetp_message)
                 self.send_cetp(cetp_packet)
                 return False
@@ -779,31 +660,17 @@ class H2HTransactionOutbound(H2HTransaction):
     def _create_connection(self):
         """ Extract the negotiated parameters to create a connection state """
         try:
-            print(111)
             self.lfqdn, self.rfqdn          = self.src_id, self.dst_id                  #self._create_connection_get_fqdns()
-            print(111)
             self.lip                        = self.host_ip
-            print(111)
             self.lpip                       = self._allocate_proxy_address(self.lip)
-            print(111)
-            self.lrloc, self.rrloc          = self._get_dp_connection_rlocs()
-            print(111)
-            self.lpayload, self.rpayload    = self._get_dp_connection_payloads()
-            print(111)
             self.lid, self.rid              = None, None
             
-            print(111)
-    
-            if len(self.lrloc)==0 or len(self.rrloc)==0 or len(self.lpayload)==0 or len(self.rpayload)==0:
-                    #self._logger.info("CETP negotiation failed to create H2H-DP Connection. ")
-                    return False
-            print(111)
-            
-            negotiated_params = [self.lfqdn, self.rfqdn, self.lid, self.rid, self.lip, self.lpip, self.lrloc, self.rrloc, self.lpayload, self.rpayload]
+            negotiated_params = [self.lfqdn, self.rfqdn, self.lid, self.rid, self.lip, self.lpip]
             #self._logger.info("Negotiated params: {}".format(negotiated_params))
 
-            self.conn = ConnectionTable.H2HConnection(120.0, "outbound", self.lid, self.lip, self.lpip, self.rid, self.lrloc, self.rrloc, self.lfqdn, self.rfqdn, \
-                                                  self.sstag, self.dstag, self.lpayload, self.rpayload, self.r_cesid)
+            self.conn = ConnectionTable.H2HConnection(120.0, self.lid, self.lip, self.lpip, self.rid, self.lfqdn, self.rfqdn, \
+                                                  self.sstag, self.dstag, self.r_cesid, self.conn_table)
+            
             self.conn_table.add(self.conn)
             return self.lpip
     
@@ -944,7 +811,7 @@ class H2HTransactionInbound(H2HTransaction):
             if ver!=2:
                 self._logger.error(" CETP Version is not supported.")
                 return False
-
+            
             for received_tlv in self.received_tlvs:
                 if self._check_tlv(received_tlv, ope="info"):
                     if (received_tlv['group']== "id") and (received_tlv['code']=="fqdn"):
@@ -1012,12 +879,12 @@ class H2HTransactionInbound(H2HTransaction):
         """ Processes the inbound CETP-packet for negotiating the H2H policies """
         #try:
         #self._logger.info("{}".format(42*'*') )
-        self.pprint(cetp_packet, m="H2H Inbound packet")
         
         if not self._pre_process(cetp_packet):
             #self._logger.info("Inbound packet failed the pre-processing()")
             return False
         
+        self.pprint(cetp_packet, m="H2H Inbound packet")
         tlvs_to_send, error_tlvs = [], []
         error = False
         
@@ -1106,7 +973,7 @@ class H2HTransactionInbound(H2HTransaction):
                 
                     cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
                     #self._logger.info("Response packet:")
-                    #self.pprint(cetp_message)
+                    self.pprint(cetp_message, m="iCES Response")
                     cetp_packet = json.dumps(cetp_message)
                     self.last_packet_sent = cetp_packet
                     ##self._logger.info("iCES start_cetp_processing delay: {}".format(now- start_time))
@@ -1156,19 +1023,13 @@ class H2HTransactionInbound(H2HTransaction):
             self.lfqdn, self.rfqdn          = self.src_id, self.dst_id
             self.lip                        = "10.0.3.111"                               # Pick info from host definition
             self.lpip                       = self._allocate_proxy_address(self.lip)          # Get local IP for a domain from Host-register
-            self.lrloc, self.rrloc          = self._get_dp_connection_rlocs()
-            self.lpayload, self.rpayload    = self._get_dp_connection_payloads()
             self.lid, self.rid              = None, None
             
-            if len(self.lrloc)==0 or len(self.rrloc)==0 or len(self.lpayload)==0 or len(self.rpayload)==0:
-                    #self._logger.info("CETP negotiation failed to create H2H-DP-Connection. ")
-                    return False
-            
-            negotiated_params = [self.lfqdn, self.rfqdn, self.lid, self.rid, self.lip, self.lpip, self.lrloc, self.rrloc, self.lpayload, self.rpayload]
+            negotiated_params = [self.lfqdn, self.rfqdn, self.lid, self.rid, self.lip, self.lpip]
             #self._logger.info("Negotiated params: {}".format(negotiated_params))
     
-            conn = ConnectionTable.H2HConnection(120.0, "inbound", self.lid, self.lip, self.lpip, self.rid, self.lrloc, self.rrloc, self.lfqdn, self.rfqdn, \
-                                                 self.sstag, self.dstag, self.lpayload, self.rpayload, self.r_cesid)
+            conn = ConnectionTable.H2HConnection(120.0, self.lid, self.lip, self.lpip, self.rid, self.lfqdn, self.rfqdn, \
+                                                 self.sstag, self.dstag, self.r_cesid, self.conn_table)
             self.conn_table.add(conn)
             return True
         

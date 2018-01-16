@@ -713,60 +713,22 @@ def verify_ces_pow(**kwargs):
 
 def send_rloc(**kwargs):
     ret_tlvs = []
-    h2h_session = False
-    
-    if 'h2h_session' in kwargs:
-        h2h_session = kwargs['h2h_session']
-        
-    if h2h_session is True:
-        tlv, query, policy = kwargs["tlv"], kwargs["query"], kwargs["policy"]
-        transaction = kwargs['transaction']
-        l_rlocs = transaction.get_negotiated_lrlocs()
-        print("send_rloc(): Total connected rlocs with remote end", len(l_rlocs))
-        
-        if l_rlocs is None:
-            print("This shouldn't happen. How is the CES node connected to Remote CES?")
-            return
-            
-        if query is False:
-            # Creating offer TLVs
-            for rloc in l_rlocs:
-                (order, pref, addrtype, addr, alias) = rloc
-                value_to_send = (order, pref, addr, alias)
-                new_tlv = transaction._create_basic_tlv(ope = "info", group = "rloc", code = addrtype)
-                new_tlv["value"] = value_to_send            # pref, order, rloc, iface_alias
-                ret_tlvs.append(new_tlv)
-            
-            return ret_tlvs
-        
-        else:
-            for rloc in l_rlocs:
-                (order, pref, addrtype, addr, alias) = rloc
-                value_to_send = (order, pref, addr, alias)
-                new_tlv = transaction._create_basic_tlv(ope = "query", group = "rloc", code = addrtype)
-                ret_tlvs.append(new_tlv)
-            
-            return ret_tlvs
+    tlv, code, query, policy, interfaces = kwargs["tlv"], kwargs["code"], kwargs["query"], kwargs["policy"], kwargs["interfaces"]
 
+    if query==True:
+        if 'value' in tlv:
+            tlv["value"] = ""
+        return [tlv]
     else:
-        tlv, code, query, policy, interfaces = kwargs["tlv"], kwargs["code"], kwargs["query"], kwargs["policy"], kwargs["interfaces"]
-
-        # Processing for C2C Transaction
-        #new_tlv = copy.deepcopy(tlv)
-        if query==True:
-            if 'value' in tlv:
-                tlv["value"] = ""
-            return [tlv]
-        else:
-            #Create an offer TLV
-            group, code = tlv["group"], tlv["code"]
-            ret_list = interfaces.get_interface_rlocs(rloc_type=code)
-            for p in range(0, len(ret_list)):
-                new_tlv = copy.deepcopy(tlv)
-                new_tlv["value"] = ret_list[p]      # pref, order, rloc, iface_alias
-                ret_tlvs.append(new_tlv)
-            
-            return ret_tlvs
+        #Create an offer TLV
+        group, code = tlv["group"], tlv["code"]
+        ret_list = interfaces.get_interface_rlocs(rloc_type=code)
+        for p in range(0, len(ret_list)):
+            new_tlv = copy.deepcopy(tlv)
+            new_tlv["value"] = ret_list[p]      # pref, order, rloc, iface_alias
+            ret_tlvs.append(new_tlv)
+        
+        return ret_tlvs
 
 
 def send_payload(**kwargs):
@@ -781,56 +743,27 @@ def send_payload(**kwargs):
 
 def response_rloc(**kwargs):
     try:
-        tlv, policy, interfaces = kwargs["tlv"], kwargs["policy"], kwargs["interfaces"]
         ret_tlvs = []
-        h2h_session = False
+        tlv, policy, interfaces = kwargs["tlv"], kwargs["policy"], kwargs["interfaces"]
         
-        if 'h2h_session' in kwargs:
-            h2h_session = kwargs['h2h_session']
-            
-        if h2h_session is True:            
-            transaction = kwargs['transaction']
-            l_rlocs = transaction.get_negotiated_lrlocs()
-            print("response_rloc(): Total connected rlocs with remote end", len(l_rlocs))
-            
-            if l_rlocs is None:
-                print("This shouldn't happen. How is the CES node connected to Remote CES?")
-                return
-
-            ret = policy.get_tlv_details(tlv)
-            i_ope, i_cmp, i_group, i_code, i_value = ret
-                
-            for rloc in l_rlocs:
-                (order, pref, addrtype, addr, alias) = rloc
-                if (addrtype == i_code):
-                    # Creating Response TLV
-                    value_to_send = (order, pref, addr, alias)
-                    new_tlv = transaction._create_basic_tlv(ope = "info", group = "rloc", code = addrtype)
-                    new_tlv["value"] = value_to_send            # pref, order, rloc, iface_alias
-                    ret_tlvs.append(new_tlv)
-            
-            return ret_tlvs
+        new_tlv = copy.deepcopy(tlv)
+        ret = policy.get_available_policy(new_tlv)
+        ope, cmp, group, code, response_value = ret        
+        ret_list = interfaces.get_interface_rlocs(rloc_type=code)             # Value comes from dataplane-interface definitions
         
-        else:
-            # Processing for C2C Transaction 
+        if len(ret_list)==0:
             new_tlv = copy.deepcopy(tlv)
-            ret = policy.get_available_policy(new_tlv)
-            ope, cmp, group, code, response_value = ret        
-            ret_list = interfaces.get_interface_rlocs(rloc_type=code)             # Value comes from dataplane-interface definitions
-            
-            if len(ret_list)==0:
+            new_tlv["cmp"] = "notAvailable"
+            new_tlv['ope'] = 'info'
+            ret_tlvs.append(new_tlv)
+        else:
+            for p in range(0, len(ret_list)):
                 new_tlv = copy.deepcopy(tlv)
-                new_tlv["cmp"] = "notAvailable"
+                new_tlv["value"] = ret_list[p]      # pref, order, rloc, iface_alias
                 new_tlv['ope'] = 'info'
                 ret_tlvs.append(new_tlv)
-            else:
-                for p in range(0, len(ret_list)):
-                    new_tlv = copy.deepcopy(tlv)
-                    new_tlv["value"] = ret_list[p]      # pref, order, rloc, iface_alias
-                    new_tlv['ope'] = 'info'
-                    ret_tlvs.append(new_tlv)
-                
-            return ret_tlvs
+            
+        return ret_tlvs
         
     except Exception as ex:
         print("Exception in response_rloc(): ", ex)
@@ -877,23 +810,6 @@ def verify_rloc(**kwargs):
             return False
         if type(rrloc)!=type(list()):
             return False
-        
-        if 'h2h_session' in kwargs:
-            h2h_session = kwargs['h2h_session']
-        
-            if h2h_session is True:
-                transaction = kwargs['transaction']
-                r_rlocs = transaction.get_negotiated_rrlocs()
-                print(r_rlocs)
-                return True
-                """
-                if rrloc in r_rlocs:
-                    return True
-                else:
-                    print("verify_rloc() failed verification.")
-                    return False
-                """
-        
         
         r_pref, r_order, r_rloc, r_iface = rrloc
 

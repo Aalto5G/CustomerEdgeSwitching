@@ -163,6 +163,11 @@ class C2CConnection:
         self._logger = logging.getLogger("C2CConnection")
         self._logger.setLevel(LOGLEVEL_C2CConnection)
 
+    def get_rlocs(self):
+        return (self.lrloc, self.rrloc)
+
+    def get_payloads(self):
+        return (self.lpayload, self.rpayload)
     
     def lookupkeys(self):
         keys = []
@@ -187,7 +192,7 @@ class C2CConnection:
 
 
 class H2HConnection:
-    def __init__(self, timeout, direction, lid, lip, lpip, rid, lrloc, rrloc, lfqdn, rfqdn, sstag, dstag, lpayload, rpayload, r_cesid):
+    def __init__(self, timeout, lid, lip, lpip, rid, lfqdn, rfqdn, sstag, dstag, r_cesid, conn_table):
         """
         Initialize a H2HConnection object.
         
@@ -200,15 +205,14 @@ class H2HConnection:
         @param lrloc: The local RLOC of the connection -> [(int:order, int:preference, int:addrtype, str:addrvalue)]
         @param rrloc: The remote RLOC of the connection -> [(int:order, int:preference, int:addrtype, str:addrvalue)]
         """
-        self.timeout, self.direction             = timeout, direction
+        self.timeout             = timeout
         self.lid, self.lip, self.lpip, self.rid  = lid, lip, lpip, rid
-        self.lrloc, self.rrloc = lrloc, rrloc
         self.localFQDN, self.remoteFQDN = lfqdn, rfqdn
         self.sstag, self.dstag = sstag, dstag
-        self.lpayload, self.rpayload = lpayload, rpayload
         self.r_cesid=r_cesid
-        
+        self.conn_table = conn_table        
         self.connectiontype = "CONNECTION_H2H"
+        
         #self._set_address_family(lip=lip)
         #self.remote_af = AF_INET
         #self._set_encapsulation()
@@ -217,6 +221,15 @@ class H2HConnection:
         self._logger = logging.getLogger("H2HConnection")
         self._logger.setLevel(LOGLEVEL_H2HConnection)
         self._logger.debug("Connection tags: {} -> {}".format(sstag, dstag))
+
+    def _get_connection_params(self):
+        keytype     = KEY_MAP_RCESID_C2C
+        key         = self.r_cesid
+        c2c_conn    = self.conn_table.get(keytype, key)
+        
+        self.lrloc, self.rrloc          = c2c_conn.get_rlocs()
+        self.lpayload, self.rpayload    = c2c_conn.get_payloads()
+
 
     
     def lookupkeys(self):
