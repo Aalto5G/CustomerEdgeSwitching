@@ -14,6 +14,7 @@ import cetpManager
 import C2CTransaction
 import H2HTransaction
 import CETPC2C
+import statistics
 
 LOGLEVEL_CETPH2H             = logging.INFO
 LOGLEVEL_CETPH2HLocal        = logging.INFO
@@ -191,10 +192,14 @@ class CETPH2H:
     def set_closure_signal(self):
         self._closure_signal = True
         """
-        if len(self.rtt_measurement)>0:
+        if len(self.rtt_measurement)>1:
+            self.rtt_measurement = self.rtt_measurement[1:]
             avg = sum(self.rtt_measurement)/len(self.rtt_measurement)
             print("Min: ", min(self.rtt_measurement)*1000,"ms\t", "Max: ", max(self.rtt_measurement)*1000,"ms")
             print("Average: ", avg*1000,"ms")
+            print("Median: ", statistics.median(self.rtt_measurement)*1000,"ms")
+            
+            print(self.rtt_measurement)
         """
         
     def execute_dns_callback(self, cb, success= False):

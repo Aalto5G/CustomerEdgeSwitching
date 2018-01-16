@@ -64,6 +64,7 @@ class CETPManager:
             self.max_naptrs_per_msg     = self.ces_params["max_naptrs_per_dns"]
             self.max_dns_cetp_responses = self.ces_params["max_naptrs_per_sec"]
             self.allowed_dns            = copy.copy(self.max_dns_cetp_responses)
+            print(self.allowed_dns)
         except Exception as ex:
             self._logger.error("Exception '{}' in reading config file".format(ex))
         

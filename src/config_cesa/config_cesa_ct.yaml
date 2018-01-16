@@ -25,7 +25,8 @@ CESParameters:
     max_dp_ttl: 7200
     max_host_ratelimit: 10
     min_keepalive_timeout: 10
-    
+    max_naptrs_per_dns: 300
+
 DNS:
     soa: cesa.lte.
     zonefile: db.cesa.lte.
