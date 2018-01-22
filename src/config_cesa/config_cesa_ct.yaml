@@ -13,8 +13,11 @@ CESParameters:
     max_naptrs_per_sec: 400
     max_naptrs_per_dns: 5
     host_filtering_t0: 30
-    keepalive_t0: 2
     dp_ttl: 3600
+    keepalive_idle_t0: 15
+    keepalive_count: 3
+    keepalive_interval: 2
+    keepalive_t0: 2
     keepalive_cycle: 15
     caces: 127.0.0.1
     fw_version: 0.1

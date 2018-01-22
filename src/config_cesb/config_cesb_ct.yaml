@@ -15,6 +15,9 @@ CESParameters:
     host_filtering_t0: 30
     dp_ttl: 3600
     keepalive_t0: 2
+    keepalive_idle_t0: 15
+    keepalive_count: 3
+    keepalive_interval: 2
     keepalive_cycle: 30
     caces: 127.0.0.1
     fw_version: 0.1
