@@ -306,7 +306,6 @@ class CETPManager:
                 c2c_layer.assign_cetp_h2h_layer(h2h_layer)    # Top layer to handle inbound H2H
                 c2c_layer.register_c2c(cetp_transaction)
                 c2c_layer.set_connectivity()
-                c2c_layer.run_legacy_on_c2c_completion_function(transport)
                 transport.send_cetp(cetp_resp)
                 
                 connected_transports = self.record_inbound_transports[r_cesid]
@@ -349,7 +348,6 @@ class CETPManager:
         else:
             c2c_layer = self.get_c2c_layer(r_cesid)                 # Gets c2c-layer for remote cesid
             c2c_layer.register_connected_transport(transport)
-            c2c_layer.run_legacy_on_c2c_completion_function(transport)
             transport.set_c2c_details(r_cesid, c2c_layer)
             
 

@@ -59,11 +59,11 @@ class H2HTransaction(object):
     def _create_basic_tlv(self, ope=None, cmp=None, group=None, code=None, value=None):
         try:
             basic_tlv = {}
-            if ope is not None: basic_tlv["ope"]=ope
-            if cmp is not None: basic_tlv["cmp"]=cmp
-            if group is not None: basic_tlv["group"]=group
-            if code is not None: basic_tlv["code"]=code
-            if value is not None: basic_tlv["value"]=value
+            if ope is not None:     basic_tlv["ope"]    = ope
+            if cmp is not None:     basic_tlv["cmp"]    = cmp
+            if group is not None:   basic_tlv["group"]  = group
+            if code is not None:    basic_tlv["code"]   = code
+            if value is not None:   basic_tlv["value"]  = value
             
             return basic_tlv
         except Exception as ex:

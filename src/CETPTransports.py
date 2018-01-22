@@ -42,6 +42,7 @@ class oCESTCPTransport(asyncio.Protocol):
 
     def connection_made(self, transport):
         self.transport = transport
+        self.set_keepalive_params()
         self._logger.info('Connected to {}'.format(self.remotepeer))
         self.ces_layer.report_connectivity(self)                        # Reporting the connectivity to C2C layer.
         self.is_connected = True
@@ -50,6 +51,17 @@ class oCESTCPTransport(asyncio.Protocol):
             if not verified:
                 print("Failed to verify identity")
                 self.close()
+                
+    def set_keepalive_params(self):
+        self.socket = self.transport.get_extra_info('socket')
+        after_idle_sec  = int(self.ces_params["keepalive_idle_t0"])
+        interval_sec    = int(self.ces_params["keepalive_count"])
+        max_fails       = int(self.ces_params["keepalive_interval"])
+
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, after_idle_sec)
+        self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, interval_sec)
+        self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, max_fails)
         
     def verify_identity(self, r_cesid):
         ssl_obj = self.transport.get_extra_info('ssl_object')
@@ -111,7 +123,10 @@ class oCESTCPTransport(asyncio.Protocol):
             self._logger.info(" Remote CES '{}'closed the transport connection".format(self.r_cesid))
             self.ces_layer.report_connectivity(self, status=False)
             self.is_connected=False
-        # process exc
+            
+            if type(exc) == TimeoutError:
+                print("Connection timedout")
+
 
     def close(self):
         """ Closes the connection towards remote CES """
@@ -131,6 +146,7 @@ class iCESServerTCPTransport(asyncio.Protocol):
         self.c2c_layer       = None                     # C2C-layer assigned by CETPManager on completion of C2C-negotiation
         self.r_cesid         = None
         self.is_connected    = False
+        self.ces_params      = ces_params
         self._logger         = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_iCESTCPServerTransport)
         self.data_buffer     = b''
@@ -138,6 +154,7 @@ class iCESServerTCPTransport(asyncio.Protocol):
         
     def connection_made(self, transport):
         self.transport = transport
+        self.set_keepalive_params()
         self.remotepeer = transport.get_extra_info('peername')
         self._logger.info('Connection from {}'.format(self.remotepeer))
         ip_addr, port = self.remotepeer
@@ -148,6 +165,17 @@ class iCESServerTCPTransport(asyncio.Protocol):
             self.close()
         else:
             self._loop.call_later(self.c2c_negotiation_t0, self.is_c2c_negotiated)     # Schedules a check for C2C-policy negotiation.
+
+    def set_keepalive_params(self):
+        self.socket = self.transport.get_extra_info('socket')
+        after_idle_sec  = int(self.ces_params["keepalive_idle_t0"])
+        interval_sec    = int(self.ces_params["keepalive_count"])
+        max_fails       = int(self.ces_params["keepalive_interval"])
+
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, after_idle_sec)
+        self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, interval_sec)
+        self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, max_fails)
 
          
     def is_c2c_negotiated(self):
@@ -215,6 +243,10 @@ class iCESServerTCPTransport(asyncio.Protocol):
         if self.is_connected:
             self._logger.info(" Remote endpoint closed the connection")
             self.clean_resources()
+            
+            if type(ex) == TimeoutError:
+                print("Connection timedout")
+
 
     def close(self):
         """ Closes the connection with the remote CES """
@@ -242,6 +274,7 @@ class iCESServerTLSTransport(asyncio.Protocol):
         self.c2c_layer       = None                     # C2C-layer assigned by CETPManager on completion of C2C-negotiation
         self.r_cesid         = None
         self.is_connected    = False
+        self.ces_params      = ces_params
         self._logger         = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_iCESTLSServerTransport)
         self.data_buffer     = b''
@@ -249,6 +282,7 @@ class iCESServerTLSTransport(asyncio.Protocol):
         
     def connection_made(self, transport):
         self.transport = transport
+        self.set_keepalive_params()
         self.remotepeer = transport.get_extra_info('peername')
         self._logger.info('Connection from {}'.format(self.remotepeer))
         ip_addr, port = self.remotepeer
@@ -268,6 +302,16 @@ class iCESServerTLSTransport(asyncio.Protocol):
             self.r_cesid = remote_id
             self.cetp_mgr.report_connected_transport(self, self.r_cesid)
 
+    def set_keepalive_params(self):
+        self.socket = self.transport.get_extra_info('socket')
+        after_idle_sec  = int(self.ces_params["keepalive_idle_t0"])
+        interval_sec    = int(self.ces_params["keepalive_count"])
+        max_fails       = int(self.ces_params["keepalive_interval"])
+
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, after_idle_sec)
+        self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, interval_sec)
+        self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, max_fails)
 
     def is_c2c_negotiated(self):
         """ Terminates transport connection if C2C negotiation doesn't complete in t<To """        
@@ -342,6 +386,10 @@ class iCESServerTLSTransport(asyncio.Protocol):
         if self.is_connected:
             self._logger.info(" Remote endpoint closed the connection")
             self.clean_resources()
+            
+            if type(ex) == TimeoutError:
+                print("Connection timedout")
+
 
     def close(self):
         """ Closes the connection with the remote CES """
