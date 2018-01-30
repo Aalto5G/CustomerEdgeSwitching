@@ -702,7 +702,7 @@ class oC2CTransaction(C2CTransaction):
         else:
             if self._is_ready():
                 if self._create_connection():
-                    #self._logger.info(" '{}'\n C2C policy negotiation succeeded in {} RTT".format(30*'#', self.rtt))
+                    self._logger.info(" '{}'\n C2C policy negotiation succeeded in {} RTT".format(30*'#', self.rtt))
                     self._set_established_cetp()
                     negotiation_status = True
                     return (negotiation_status, "")

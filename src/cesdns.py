@@ -133,7 +133,7 @@ class DNSServer(asyncio.DatagramProtocol):
         self.naptr_records['srv2.hosta1.cesa.lte.']         = ('srv2.hosta1.cesa.lte.',     'cesa.lte.', '10.0.3.101', '48002', 'tls')
         self.naptr_records['hostb1.cesb.lte.']              = ('hostb1.cesb.lte.',          'cesb.lte.', '10.0.3.103', '49001', 'tls')
         self.naptr_records['hostb2.cesb.lte.']              = ('hostb2.cesb.lte.',          'cesb.lte.', '10.0.3.103', '49002', 'tls')
-        self.naptr_records['srv1.hostb1.cesb.lte.']         = ('srv1.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49003', 'tls')
+        self.naptr_records['srv1.hostb1.cesb.lte.']         = ('srv1.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49001', 'tls')
         self.naptr_records['srv2.hostb1.cesb.lte.']         = ('srv2.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49002', 'tls')
         self.naptr_records['hostc1.cesc.lte.']              = ('hostc1.cesc.lte.',          'cesc.lte.', '10.0.3.104', '49001', 'tls')
         self.naptr_records['hostd1.cesd.lte.']              = ('hostd1.cesd.lte.',          'cesd.lte.', '10.0.3.105', '49001', 'tls')

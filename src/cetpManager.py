@@ -184,7 +184,7 @@ class CETPManager:
             self._logger.info("Initiating CETPServer on {} protocol @ {}.{}".format(proto, server_ip, server_port))
             if proto == "tcp":
                 coro = self._loop.create_server(lambda: CETPTransports.iCESServerTCPTransport(self._loop, self.ces_params, cetp_mgr=self),\
-                                                 host=server_ip, port=server_port)             # Not utilizing any pre-created objects.
+                                                 host=server_ip, port=server_port)
                 
             elif proto == "tls":
                 sc = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
@@ -197,11 +197,10 @@ class CETPManager:
                 
             server = self._loop.run_until_complete(coro)            # Returns the server
             self.register_server_endpoint(server)
-            self._logger.info(' CETP Server is listening on {} protocol: {}:{}'.format(proto, server_ip, server_port))
+            self._logger.info(" CETP Server is listening on '{}' protocol: {}:{}".format(proto.upper(), server_ip, server_port))
                 
         except Exception as ex:
-            self._logger.warning(" Failed to create CETP server on {} protocol @ {}:{}".format(proto, server_ip, server_port))
-            self._logger.warning(ex)
+            self._logger.warning(" Exception {} in creating CETP server on {} protocol @ {}:{}".format(ex, proto, server_ip, server_port))
 
 
 
@@ -277,7 +276,7 @@ class CETPManager:
         status, cetp_resp = response
         
         if status == False:
-            if len(cetp_resp) !=0:
+            if len(cetp_resp) != 0:
                 self._logger.debug(" Sending CETP error_response.")
                 transport.send_cetp(cetp_resp)
                 
@@ -288,8 +287,9 @@ class CETPManager:
             return
             
         elif status == None:
-            self._logger.info(" CES-to-CES negotiation not completed yet -> Send the response packet.")
-            transport.send_cetp(cetp_resp)
+            if len(cetp_resp) != 0:
+                self._logger.info(" CES-to-CES negotiation not completed yet -> Send the response packet.")
+                transport.send_cetp(cetp_resp)
         
         elif status==True:
             self._logger.debug(" CES-to-CES policies are negotiated")

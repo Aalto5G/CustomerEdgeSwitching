@@ -484,22 +484,25 @@ class H2HTransactionOutbound(H2HTransaction):
             return False
 
 
-    def continue_cetp_processing(self, cetp_packet, transport):
+    def continue_cetp_processing(self, cetp_packet):
         #try:
+        error = False
+        cetp_resp = None
+        
         if not self._pre_process(cetp_packet):
             #self._logger.info(" Inbound packet failed in pre_processing.")
-            return None
+            return (None, cetp_resp)
         
         ##self._logger.info("Continue establishing H2H session towards '{}' ({} -> {})".format(self.dst_id, self.sstag, 0))
         ##self._logger.info("Host policy: {}".format(self.opolicy))
-        tlvs_to_send, error_tlvs = [], []
-        error = False
         self.rtt += 1
+        tlvs_to_send, error_tlvs = [], []
         self.pprint(cetp_packet, m="Inbound Response")
 
         if self.rtt > NEGOTIATION_RTT_THRESHOLD:                                        # Prevents infinite-exchange of CETP policies.
             self.cetpstate_mgr.remove_initiated_transaction((self.sstag, self.dstag))
-            return False
+            return (False, cetp_resp)
+        
         """
         Processing logic:
             If pre-processing determined that inbound packet is (or contains) a request message, oCES sends response & issue local CES policy queries.
@@ -585,7 +588,7 @@ class H2HTransactionOutbound(H2HTransaction):
             self._execute_dns_callback(resolution=False)
 
             if self.dstag==0:
-                return False
+                return (False, cetp_resp)
             else:
                 # Return terminate packet to remote end, as it has completed the transaction
                 #self._logger.info(" Responding remote CES with the terminate-TLV")
@@ -594,10 +597,9 @@ class H2HTransactionOutbound(H2HTransaction):
                 self.cetp_negotiation_history.append(cetp_message)
                 self.pprint(cetp_message, m="oCES Packet")
                 cetp_packet = json.dumps(cetp_message)
-                self.send_cetp(cetp_packet)
-                return False
+                return (False, cetp_packet)
         else:
-            if (len(self.opolicy_tmp.required)==0) and (self.dstag!=0):
+            if len(self.opolicy_tmp.required)==0 and (self.dstag!=0):
                 #self._logger.info(" H2H policy negotiation succeeded in {} RTT".format(self.rtt))
                 #self._logger.info("{}".format(42*'*') )
                 self.h2h_negotiation_status = True
@@ -605,9 +607,9 @@ class H2HTransactionOutbound(H2HTransaction):
                 self.rtt_time.append(time.time()-self.start_time)
                 #print(self.rtt_time)
                 if not self._cetp_established(cetp_packet):
-                    return False
+                    return (False, cetp_resp)
 
-                return True
+                return (True, cetp_resp)
             else:
                 #self._logger.info(" Inbound packet didn't meet all the policy requirements of sender-host")
                 #self._logger.debug("A more LAX version may allow another negotiation round")
@@ -626,8 +628,7 @@ class H2HTransactionOutbound(H2HTransaction):
                 self.cetp_negotiation_history.append(cetp_msg)
                 #self.pprint(cetp_msg)
                 cetp_packet = json.dumps(cetp_msg)
-                self.send_cetp(cetp_packet)
-                return None
+                return (None, cetp_packet)
 
         #except Exception as msg:
         #    #self._logger.info(" Exception in negotiating CETP-H2H session: {}".format(msg))
@@ -745,8 +746,9 @@ class H2HTransactionOutbound(H2HTransaction):
         #yield from self.policy_client.send(r_hostid, r_cesid)
         pass
 
-    def post_h2h_negotiation(self, cetp_packet, transport):
-        """ Processes a CETP packet received on a negotiated H2H session.     e.g. a 'terminate' CETP message, or change ratelimit of dataplane connection. 
+    def post_h2h_negotiation(self, cetp_packet):
+        """ 
+        Processes a CETP packet received on a negotiated H2H session.     e.g. a 'terminate' CETP message, or change ratelimit of dataplane connection. 
         """
         #self._logger.info(" Post-H2H negotiation packet on (SST={}, DST={})".format(self.sstag, self.dstag))
         self.packet = cetp_packet
@@ -867,6 +869,8 @@ class H2HTransactionInbound(H2HTransaction):
             return False
         return True
 
+    def send_cetp(self, cetp_packet):
+        self.cetp_h2h.send(cetp_packet)
     
     def get_tlv(self, recv_tlv_lst, group=None, code=None):
         for tlv in recv_tlv_lst:
@@ -875,7 +879,7 @@ class H2HTransactionInbound(H2HTransaction):
         return None
 
     @asyncio.coroutine
-    def start_cetp_processing(self, cetp_packet, transport):
+    def start_cetp_processing(self, cetp_packet):
         """ Processes the inbound CETP-packet for negotiating the H2H policies """
         #try:
         #self._logger.info("{}".format(42*'*') )
@@ -959,7 +963,7 @@ class H2HTransactionInbound(H2HTransaction):
             cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=error_tlvs)
             ##self.pprint(cetp_message)
             cetp_packet = json.dumps(cetp_message)
-            transport.send_cetp(cetp_packet)
+            self.send_cetp(cetp_packet)
             return False
             # Future item:     Return value shall allow CETPLayering to distinguish (Failure due to policy mismatch from wrong value and hence blacklisting subsequent interactions) OR shall this be handled internally?
         else:
@@ -977,7 +981,7 @@ class H2HTransactionInbound(H2HTransaction):
                     cetp_packet = json.dumps(cetp_message)
                     self.last_packet_sent = cetp_packet
                     ##self._logger.info("iCES start_cetp_processing delay: {}".format(now- start_time))
-                    transport.send_cetp(cetp_packet)
+                    self.send_cetp(cetp_packet)
                     return True
                 else:
                     if len(error_tlvs)!=0:
@@ -1007,7 +1011,7 @@ class H2HTransactionInbound(H2HTransaction):
                 #self._logger.info("Response packet:")
                 #self.pprint(cetp_message)
                 cetp_packet = json.dumps(cetp_message)
-                transport.send_cetp(cetp_packet)
+                self.send_cetp(cetp_packet)
                 return None
     
         #except Exception as msg:

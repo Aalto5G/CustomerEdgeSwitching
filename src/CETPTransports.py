@@ -94,47 +94,57 @@ class oCESTCPTransport(asyncio.Protocol):
         return to_send
 
     def data_received(self, data):
-        """Asyncio coroutine for received data"""
-        self.buffer_and_parse_stream(data)
-    
-    def buffer_and_parse_stream(self, data):
-        """ 
-        1. Appends received data to a buffer;          2. Parses the stream into CETP messages, based on length field;
-        3. invokes CETP process to handle message;     4. Removes processed data from the buffer.
+        """Asyncio executed callback for received data. We append the received data to a buffer """
+        self.data_buffer = self.data_buffer + data
+        self._process_data(data)
+
+    def _extract_message(self):
         """
-        self.data_buffer = self.data_buffer+data
+        1. Parses the data buffer into CETP messages, based on length field.
+        2. Removes the processed data from the buffer.
+        """
+        cetp_msg = None
+        len_field = self.data_buffer[0:CETP_LEN_FIELD]                                      # Reading length field in buffered data
+        msg_length = int.from_bytes(len_field, byteorder='big')
+        
+        if len(self.data_buffer) >= (CETP_LEN_FIELD + msg_length):
+            cetp_data = self.data_buffer[CETP_LEN_FIELD:CETP_LEN_FIELD+msg_length]
+            self.data_buffer = self.data_buffer[CETP_LEN_FIELD+msg_length:]                 # Moving ahead in the buffered data
+            cetp_msg = cetp_data.decode()
+            
+        return cetp_msg
+
+    def _process_data(self, data):
+        """ Invokes C2C method to handle the inbound message """
         while True:
             if len(self.data_buffer) < CETP_LEN_FIELD:
                 break
-            
-            len_field = self.data_buffer[0:CETP_LEN_FIELD]                                      # Reading length field in buffered data
-            msg_length = int.from_bytes(len_field, byteorder='big')
-                        
-            if len(self.data_buffer) >= (CETP_LEN_FIELD + msg_length):
-                cetp_data = self.data_buffer[CETP_LEN_FIELD:CETP_LEN_FIELD+msg_length]
-                self.data_buffer = self.data_buffer[CETP_LEN_FIELD+msg_length:]                 # Moving ahead in the buffered data
-                cetp_msg = cetp_data.decode()
+
+            cetp_msg = self._extract_message()
+            if cetp_msg!= None:
                 self.ces_layer.consume_transport_message(cetp_msg, self)
             else:
                 break
     
     def connection_lost(self, exc):
-        if self.is_connected:                                # Prevents reporting the connection closure twice, at sending & receiving of FIN/ACK
+        if self.is_connected:                                # To prevent reporting the connection closure twice, at sending & receiving of FIN/ACK
             self._logger.info(" Remote CES '{}'closed the transport connection".format(self.r_cesid))
-            self.ces_layer.report_connectivity(self, status=False)
-            self.is_connected=False
-            
+            self._clear_resources()
             if type(exc) == TimeoutError:
                 print("Connection timedout")
 
-
     def close(self):
         """ Closes the connection towards remote CES """
-        self._logger.info(" Closing the client CETP Transport towards '{}'".format(self.r_cesid))
-        self.transport.close()
         if self.is_connected:
-            self.ces_layer.report_connectivity(self, status=False)
-            self.is_connected=False
+            self._logger.info(" Closing the client CETP Transport towards '{}'".format(self.r_cesid))
+            self._clear_resources()
+
+    def _clear_resources(self):
+        self.transport.close()
+        self.ces_layer.report_connectivity(self, status=False)
+        self.is_connected=False
+
+
 
 
 class iCESServerTCPTransport(asyncio.Protocol):
@@ -150,7 +160,7 @@ class iCESServerTCPTransport(asyncio.Protocol):
         self._logger         = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_iCESTCPServerTransport)
         self.data_buffer     = b''
-        self.c2c_negotiation_t0 = 10 #int(ces_params['c2c_establishment_t0'])              # In seconds
+        self.c2c_negotiation_t0 = int(ces_params['c2c_establishment_t0'])              # In seconds
         
     def connection_made(self, transport):
         self.transport = transport
@@ -204,35 +214,39 @@ class iCESServerTCPTransport(asyncio.Protocol):
         return to_send
         
     def data_received(self, data):
-        self.buffer_and_parse_stream(data)
-    
-    def buffer_and_parse_stream(self, data):
-        """ 
-        1. Appends received data to a buffer;          2. Parses the stream into CETP messages, based on length field;
-        3. invokes CETP process to handle message;     4. Removes processed data from the buffer.
+        """Asyncio executed callback for received data. We append the received data to a buffer """
+        self.data_buffer = self.data_buffer + data
+        self._process_data(data)
+
+    def _extract_message(self):
         """
-        try:
-            self.data_buffer = self.data_buffer+data
-            while True:
-                if len(self.data_buffer) < CETP_LEN_FIELD:
-                    break
-                
-                len_field = self.data_buffer[0:CETP_LEN_FIELD]
-                msg_length = int.from_bytes(len_field, byteorder='big')
+        1. Parses the data buffer into CETP messages, based on length field.
+        2. Removes the processed data from the buffer.
+        """
+        cetp_msg = None
+        len_field = self.data_buffer[0:CETP_LEN_FIELD]                                      # Reading length field in buffered data
+        msg_length = int.from_bytes(len_field, byteorder='big')
+        
+        if len(self.data_buffer) >= (CETP_LEN_FIELD + msg_length):
+            cetp_data = self.data_buffer[CETP_LEN_FIELD:CETP_LEN_FIELD+msg_length]
+            self.data_buffer = self.data_buffer[CETP_LEN_FIELD+msg_length:]                 # Moving ahead in the buffered data
+            cetp_msg = cetp_data.decode()
+            
+        return cetp_msg
     
-                if len(self.data_buffer) >= (CETP_LEN_FIELD+ msg_length):
-                    cetp_data = self.data_buffer[CETP_LEN_FIELD:CETP_LEN_FIELD+msg_length]
-                    self.data_buffer = self.data_buffer[CETP_LEN_FIELD+msg_length:]
-                    cetp_msg = cetp_data.decode()
-                    self.forward_to_CETP_c2c(cetp_msg)
-                else:
-                    break
-        except Exception as ex:
-            self._logger.info("Exception in received data: {}".format(ex))
-            self.close()
+    def _process_data(self, data):
+        """ Invokes C2C method to handle the inbound message """
+        while True:
+            if len(self.data_buffer) < CETP_LEN_FIELD:
+                break
 
-
-    def forward_to_CETP_c2c(self, cetp_msg):
+            cetp_msg = self._extract_message()
+            if cetp_msg!= None:
+                self._to_c2c(cetp_msg)
+            else:
+                break
+            
+    def _to_c2c(self, cetp_msg):
         if self.c2c_layer is None:
             self.cetp_mgr.process_inbound_message(cetp_msg, self)      # Forwards the message to CETPManager for C2C negotiation.
         else:
@@ -242,7 +256,7 @@ class iCESServerTCPTransport(asyncio.Protocol):
         """ Called by asyncio framework """
         if self.is_connected:
             self._logger.info(" Remote endpoint closed the connection")
-            self.clean_resources()
+            self._clean_resources()
             
             if type(ex) == TimeoutError:
                 print("Connection timedout")
@@ -252,9 +266,9 @@ class iCESServerTCPTransport(asyncio.Protocol):
         """ Closes the connection with the remote CES """
         if self.is_connected:
             self._logger.info(" Closing connection to remote endpoint")
-            self.clean_resources()
+            self._clean_resources()
             
-    def clean_resources(self):
+    def _clean_resources(self):
         self.transport.close()
         self.is_connected = False
         if self.c2c_layer != None:
@@ -263,7 +277,7 @@ class iCESServerTCPTransport(asyncio.Protocol):
         
 
 
-class iCESServerTLSTransport(asyncio.Protocol):
+class iCESServerTLSTransport(iCESServerTCPTransport):
     def __init__(self, loop, ces_params, ces_certificate, ca_certificate, cetp_mgr = None, name="iCESServerTransportTLS"):
         self._loop           = loop
         self.ces_certificate = ces_certificate
@@ -300,7 +314,7 @@ class iCESServerTLSTransport(asyncio.Protocol):
             return
         else:
             self.r_cesid = remote_id
-            self.cetp_mgr.report_connected_transport(self, self.r_cesid)
+            self.cetp_mgr.report_connected_transport(self, self.r_cesid)                # What are possible return values, and how you handle them
 
     def set_keepalive_params(self):
         self.socket = self.transport.get_extra_info('socket')
@@ -312,14 +326,6 @@ class iCESServerTLSTransport(asyncio.Protocol):
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, after_idle_sec)
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, interval_sec)
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, max_fails)
-
-    def is_c2c_negotiated(self):
-        """ Terminates transport connection if C2C negotiation doesn't complete in t<To """        
-        if (self.c2c_layer==None) and (self.is_connected):
-            self._logger.info(" Remote end did not complete C2C negotiation in To={}".format(str(self.c2c_negotiation_t0)))
-            ip_addr, port = self.remotepeer
-            self.cetp_security.register_unverifiable_cetp_sender(ip_addr)
-            self.close()
 
     def get_remote_id(self):
         ssl_obj = self.transport.get_extra_info('ssl_object')
@@ -333,96 +339,95 @@ class iCESServerTLSTransport(asyncio.Protocol):
                     return remote_id
         return None
 
-    def set_c2c_details(self, r_cesid, c2c_layer):
-        """ CETPManager uses this method to assign c2c-layer """
-        self.r_cesid    = r_cesid
-        self.c2c_layer  = c2c_layer
-
-    def send_cetp(self, msg):
-        #self._logger.debug("Message to send: {!r}".format(msg))
-        to_send = self.message_framing(msg)
-        self.transport.write(to_send)
-
-    def message_framing(self, msg):
-        cetp_msg = msg.encode()
-        msg_length = len(cetp_msg)
-        len_bytes = (msg_length).to_bytes(CETP_LEN_FIELD, byteorder="big")
-        to_send = len_bytes + cetp_msg
-        return to_send
-
-    def data_received(self, data):
-        self.buffer_and_parse_stream(data)
-
-    def buffer_and_parse_stream(self, data):
-        """ 
-        1. Appends received data to a buffer;          2. Parses the stream into CETP messages, based on length field;
-        3. invokes CETP process to handle message;     4. Removes processed data from the buffer.
-        """
-        self.data_buffer = self.data_buffer+data
-        while True:
-            if len(self.data_buffer) < CETP_LEN_FIELD:
-                break
-            
-            len_field = self.data_buffer[0:CETP_LEN_FIELD]
-            msg_length = int.from_bytes(len_field, byteorder='big')
-
-            if len(self.data_buffer) >= (CETP_LEN_FIELD+ msg_length):
-                cetp_data = self.data_buffer[CETP_LEN_FIELD:CETP_LEN_FIELD+msg_length]
-                self.data_buffer = self.data_buffer[CETP_LEN_FIELD+ msg_length:]
-                cetp_msg  = cetp_data.decode()
-                self.forward_to_CETP_c2c(cetp_msg)
-            else:
-                break
 
 
-    def forward_to_CETP_c2c(self, cetp_msg):
-        if self.c2c_layer is None:
-            self.cetp_mgr.process_inbound_message(cetp_msg, self)      # Forwards the message to CETPManager for C2C negotiation.
-        else:
-            self.c2c_layer.consume_transport_message(cetp_msg, self)   # Forwarding the message to C2C layer
-
-    def connection_lost(self, ex):
-        """ Called by asyncio framework """
-        if self.is_connected:
-            self._logger.info(" Remote endpoint closed the connection")
-            self.clean_resources()
-            
-            if type(ex) == TimeoutError:
-                print("Connection timedout")
-
-
-    def close(self):
-        """ Closes the connection with the remote CES """
-        if self.is_connected:
-            self._logger.info(" Closing connection to remote endpoint")
-            self.clean_resources()
-            
-    def clean_resources(self):
-        self.transport.close()
-        self.is_connected = False
-        if self.c2c_layer != None:
-            self.c2c_layer.report_connectivity(self, status=False)
-
-
+class MockC2C:
+    def report_connectivity(self, t, status=True):
+        print("Conn status: ", status)
+        
+    def consume_transport_message(self, cetp_msg, t):
+        print("Message size:", len(cetp_msg))
+        print(cetp_msg)
 
 @asyncio.coroutine
-def test1(loop):
-    print(" Initiating CETPTransport towards cesid")
-    transport_instance = oCESTCPTransport(None, "tcp", None, None, remote_addr=("10.0.3.103", 49001), loop=loop)
-    
+def test_connection(loop):
+    ip_addr, port = "10.0.2.15", 5000
+    remote_addr=(ip_addr, port)
+    c2c_layer = MockC2C()
+    print("Initiating CETPTransport towards ".format(remote_addr))
+    ces_params={}
+    ces_params["c2c_establishment_t0"] = 2
+    ces_params["keepalive_idle_t0"] = 10
+    ces_params["keepalive_count"] = 3
+    ces_params["keepalive_interval"] = 2
+    #CETPC2C.CETPC2CLayer
+        
     try:
-        coro = loop.create_connection(lambda: transport_instance, ip_addr, port)
+        t = oCESTCPTransport(c2c_layer, "tcp", "cesb.lte.", ces_params, remote_addr=remote_addr, loop=loop)
+        coro = loop.create_connection(lambda: t, ip_addr, port)
         connect_task = asyncio.ensure_future(coro)
-        yield from connect_task
+        timeout = 2
+        yield from asyncio.wait_for(connect_task, timeout)
         
     except Exception as ex:
-        print("Exception handled towards r_cesid")
+        print("Exception '{}' towards r_cesid".format(ex))
+
+@asyncio.coroutine
+def test_unreachable_ep(loop):
+    try:
+        import os
+        port_n = 5000
+        ip_addr = "10.0.2.15"
+        ipt_cmd = "sudo iptables -A INPUT -p tcp --dport {} -j DROP".format(port_n)
+        os.popen(ipt_cmd)
+        yield from asyncio.sleep(0.2)
+        yield from test_connection(loop)
+        
+    except:
+        print("Exception in test_unreachable_ep() ")
+    finally:
+        ipt_cmd = "sudo iptables -D INPUT -p tcp --dport {} -j DROP".format(port_n)
+        os.popen(ipt_cmd)
+
+def test_msg_framing(loop):
+    ip_addr, port = "10.0.2.15", 5000
+    remote_addr=(ip_addr, port)
+    c2c_layer = MockC2C()
+    print("Initiating CETPTransport towards ".format(remote_addr))
+    ces_params={}
+    ces_params["c2c_establishment_t0"] = 2
+    
+    msg="Take5 CETPv2"
+    t = oCESTCPTransport(c2c_layer, "tcp", "cesb.lte.", ces_params, remote_addr=remote_addr, loop=loop)
+    to_send = t.message_framing(msg)
+    t.process_received_data(to_send)
+    print("Message size:", len(msg))
+
+@asyncio.coroutine
+def test_keepalive_t0(loop):
+    try:
+        import os
+        yield from test_connection(loop)
+        port_n = 5000
+        ip_addr = "10.0.2.15"
+        ipt_cmd = "sudo iptables -A INPUT -p tcp --dport {} -j DROP".format(port_n)
+        os.popen(ipt_cmd)
+        
+    except:
+        print("Exception in test_unreachable_ep() ")
+    finally:
+        yield from asyncio.sleep(20)
+        ipt_cmd = "sudo iptables -D INPUT -p tcp --dport {} -j DROP".format(port_n)
+        os.popen(ipt_cmd)
 
 def test_function(loop):
-    asyncio.ensure_future(test1(loop))
-
+    asyncio.ensure_future(test_connection(loop))
+    #asyncio.ensure_future(test_unreachable_ep(loop))
+    #asyncio.ensure_future(test_keepalive_t0(loop))
+    #test_msg_framing(loop)
+    
 if __name__=="__main__":
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     loop = asyncio.get_event_loop()
     test_function(loop)
     try:

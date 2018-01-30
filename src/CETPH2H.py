@@ -121,7 +121,7 @@ class CETPH2H:
     def get_c2c_dp_connection(self):
         return self.c2c.get_c2c_dp_connection()
     
-    def c2c_negotiation_status(self, connected=True):
+    def c2c_connectivity_report(self, connected=True):
         """ Reports that success/failure of C2C-negotiation """
         self.c2c_connectivity = connected
         if connected:
@@ -148,7 +148,7 @@ class CETPH2H:
             self._logger.debug(" H2H transaction started.")
             self.send(cetp_packet)
 
-    def process_h2h_transaction(self, cetp_msg, transport):
+    def process_h2h_transaction(self, cetp_msg):
         #self.count += 1
         #self._logger.debug("self.count: {}".format(self.count))
         o_transaction = None
@@ -159,17 +159,22 @@ class CETPH2H:
             #self._logger.info(" No prior H2H-transaction found -> Initiating Inbound H2HTransaction (SST={} -> DST={})".format(inbound_sstag, inbound_dstag))
             i_h2h = H2HTransaction.H2HTransactionInbound(sstag=sstag, dstag=sstag, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, \
                                                          interfaces=self.interfaces, conn_table=self.conn_table, cetp_h2h=self, cetp_security=self.cetp_security, ces_params=self.ces_params)
-            asyncio.ensure_future(i_h2h.start_cetp_processing(cetp_msg, transport))
+            asyncio.ensure_future(i_h2h.start_cetp_processing(cetp_msg))
             
         elif self.cetpstate_mgr.has_initiated_transaction( (sstag, 0) ):
             self._logger.debug(" Continue resolving H2H-transaction (SST={} -> DST={})".format(sstag, 0))
             o_h2h = self.cetpstate_mgr.get_initiated_transaction( (sstag, 0) )
-            o_h2h.continue_cetp_processing(cetp_msg, transport)
+            res = o_h2h.continue_cetp_processing(cetp_msg)
+            (ret, cetp_packet) = res
+            if cetp_packet!=None:
+                self.send(cetp_packet)
+            
+            # Send shall be here.        Allowing independent implementation b/w layers and objects.
             
         elif self.cetpstate_mgr.has_established_transaction( (sstag, dstag) ):
             self._logger.info(" CETP message for a negotiated transaction (SST={} -> DST={})".format(sstag, dstag))
             o_h2h = self.cetpstate_mgr.get_established_transaction( (sstag, dstag) )
-            o_h2h.post_h2h_negotiation(cetp_msg, transport)
+            o_h2h.post_h2h_negotiation(cetp_msg)
         
         # Add try, except?
         
@@ -177,11 +182,11 @@ class CETPH2H:
         """ Forwards the message to CETP c2c layer"""
         self.c2c.send_cetp(msg)
 
-    def consume_message_from_c2c(self, cetp_msg, transport):
+    def consume_message_from_c2c(self, cetp_msg):
         """ Consumes the message from C2CLayer for H2H processing """
         try:
             if self.c2c_connectivity:
-                self.process_h2h_transaction(cetp_msg, transport)        
+                self.process_h2h_transaction(cetp_msg)
 
         except Exception as ex:
             self._logger.info(" Exception in consuming message from c2c-layer: '{}'".format(ex))
