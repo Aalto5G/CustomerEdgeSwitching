@@ -77,7 +77,7 @@ class CETPSecurity:
         if not self.is_unverifiable_cetp_sender(ip_addr):
             key = ip_addr
             self.unverifiable_cetp_senders.append(key)
-            self._loop.call_later(30, self.unregister_unverifiable_cetp_sender, ip_addr)
+            self._loop.call_later(60, self.unregister_unverifiable_cetp_sender, ip_addr)
         
     def unregister_unverifiable_cetp_sender(self, ip_addr):
         if self.is_unverifiable_cetp_sender(ip_addr):
@@ -311,7 +311,6 @@ class CETPSecurity:
     def trigger_terminate(self, r_cesid):
         """ Triggers closing of CETP-signalling channel/channels towards remote-CES """
         pass
-    
     
     
     """ Function for dynamic management of POW  """

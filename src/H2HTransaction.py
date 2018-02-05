@@ -352,7 +352,6 @@ class H2HTransactionOutbound(H2HTransaction):
         self.ces_params         = ces_params
         self.direction          = direction
         self.host_register      = host_register
-        self.src_id             = src_id
         self.interfaces         = interfaces
         self.conn_table         = conn_table
         self.cetp_security      = cetp_security
@@ -368,7 +367,7 @@ class H2HTransactionOutbound(H2HTransaction):
 
     def handle_h2h(self):
         if not self.h2h_negotiation_status:
-            #self._logger.info(" Incomplete H2H-state towards '{}' expired".format(self.dst_id))
+            self._logger.error(" Incomplete H2H-state towards '{}' expired".format(self.dst_id))
             self.cetpstate_mgr.remove_initiated_transaction((self.sstag, 0))
             self.cetp_h2h.update_H2H_transaction_count(initiated=False)
     
@@ -394,6 +393,7 @@ class H2HTransactionOutbound(H2HTransaction):
             self.state_timeout = DEFAULT_STATE_TIMEOUT
             self.sstag = self.generate_session_tags()
             if self.load_policies(src_id = self.src_id) == None:
+                #self._logger.info("Failure to load policies")
                 return False
             
             if 'incomplete_cetp_state_t0' in self.ces_params:
@@ -415,14 +415,14 @@ class H2HTransactionOutbound(H2HTransaction):
         """ Returns CETP message containing Policy Offers & Request towards remote-host """
         #try:
         if not self._initialize():
-            #self._logger.debug(" Failure in initiating the Host-to-Host session.")
+            self._logger.error(" Failure in initiating the Host-to-Host session.")
             return None
         
         #self._logger.debug(" Starting H2H session towards '{}' (SST= {} -> DST={})".format(self.dst_id, self.sstag, self.dstag))
         tlvs_to_send = []
         dstep_tlv = self.append_dstep_info()
         tlvs_to_send.append(dstep_tlv)
-        self._logger.info("outbound policy: {}".format(self.opolicy))
+        #self._logger.info("outbound policy: {}".format(self.opolicy))
 
         # Check if sender supports the id_type as of the destination-id, otherwise maybe not even initiate a transaction? or initiate with a default ID-type?
         # And regardless of id_type being used, FQDN of host shall be made part of the messages exchanged?
@@ -439,7 +439,7 @@ class H2HTransactionOutbound(H2HTransaction):
         
         cetp_msg = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
         cetp_packet = json.dumps(cetp_msg)
-        self.pprint(cetp_msg, m="Outbound H2H CETP")
+        #self.pprint(cetp_msg, m="Outbound H2H CETP")
         self.last_packet_sent = cetp_packet
         self.cetp_negotiation_history.append(cetp_packet)
         self.cetpstate_mgr.add_initiated_transaction((self.sstag,0), self)                # Registering the H2H state
@@ -497,7 +497,7 @@ class H2HTransactionOutbound(H2HTransaction):
         ##self._logger.info("Host policy: {}".format(self.opolicy))
         self.rtt += 1
         tlvs_to_send, error_tlvs = [], []
-        self.pprint(cetp_packet, m="Inbound Response")
+        #self.pprint(cetp_packet, m="Inbound Response")
 
         if self.rtt > NEGOTIATION_RTT_THRESHOLD:                                        # Prevents infinite-exchange of CETP policies.
             self.cetpstate_mgr.remove_initiated_transaction((self.sstag, self.dstag))
@@ -524,7 +524,7 @@ class H2HTransactionOutbound(H2HTransaction):
                             ret_tlv = self._get_unavailable_response(received_tlv)
                             tlvs_to_send.append(ret_tlv)
                         else:
-                            #self._logger.error(" A required TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
+                            self._logger.error(" A required TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
                             error = True
                             break
                     
@@ -540,7 +540,7 @@ class H2HTransactionOutbound(H2HTransaction):
                             ret_tlv = self._get_unavailable_response(received_tlv)
                             tlvs_to_send.append(ret_tlv)
                         else:
-                            #self._logger.error(" A required TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
+                            self._logger.error(" A required TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
                             error = True
                             break
 
@@ -595,7 +595,7 @@ class H2HTransactionOutbound(H2HTransaction):
                 cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)        # Send as 'Info' TLV
                 self.last_packet_sent = cetp_message
                 self.cetp_negotiation_history.append(cetp_message)
-                self.pprint(cetp_message, m="oCES Packet")
+                #self.pprint(cetp_message, m="oCES Packet")
                 cetp_packet = json.dumps(cetp_message)
                 return (False, cetp_packet)
         else:
@@ -626,7 +626,7 @@ class H2HTransactionOutbound(H2HTransaction):
                 self.last_packet_sent = cetp_msg
                 self.last_packet_received = self.packet
                 self.cetp_negotiation_history.append(cetp_msg)
-                #self.pprint(cetp_msg)
+                ##self.pprint(cetp_msg)
                 cetp_packet = json.dumps(cetp_msg)
                 return (None, cetp_packet)
 
@@ -888,7 +888,7 @@ class H2HTransactionInbound(H2HTransaction):
             #self._logger.info("Inbound packet failed the pre-processing()")
             return False
         
-        self.pprint(cetp_packet, m="H2H Inbound packet")
+        #self.pprint(cetp_packet, m="H2H Inbound packet")
         tlvs_to_send, error_tlvs = [], []
         error = False
         
@@ -961,7 +961,7 @@ class H2HTransactionInbound(H2HTransaction):
     
         if error:
             cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=error_tlvs)
-            ##self.pprint(cetp_message)
+            ###self.pprint(cetp_message)
             cetp_packet = json.dumps(cetp_message)
             self.send_cetp(cetp_packet)
             return False
@@ -977,7 +977,7 @@ class H2HTransactionInbound(H2HTransaction):
                 
                     cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
                     #self._logger.info("Response packet:")
-                    self.pprint(cetp_message, m="iCES Response")
+                    #self.pprint(cetp_message, m="iCES Response")
                     cetp_packet = json.dumps(cetp_message)
                     self.last_packet_sent = cetp_packet
                     ##self._logger.info("iCES start_cetp_processing delay: {}".format(now- start_time))
@@ -986,7 +986,7 @@ class H2HTransactionInbound(H2HTransaction):
                 else:
                     if len(error_tlvs)!=0:
                         cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=error_tlvs)
-                        #self.pprint(cetp_message)
+                        ##self.pprint(cetp_message)
                         cetp_packet = json.dumps(cetp_message)
                         negotiation_status = False
                         return (negotiation_status, cetp_packet)
@@ -1009,7 +1009,7 @@ class H2HTransactionInbound(H2HTransaction):
                 #self.append_negotiated_payloads_request(tlvs_to_send)
                 cetp_message = self.get_cetp_packet(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
                 #self._logger.info("Response packet:")
-                #self.pprint(cetp_message)
+                ##self.pprint(cetp_message)
                 cetp_packet = json.dumps(cetp_message)
                 self.send_cetp(cetp_packet)
                 return None
@@ -1159,12 +1159,12 @@ class H2HTransactionLocal(H2HTransaction):
 
 
         if error:
-            #self._logger.warning("CETP Policy mismatched! Connection refused {} -> {}".format(self.src_id, self.dst_id))
+            self._logger.warning("CETP Policy mismatched! Connection refused {} -> {}".format(self.src_id, self.dst_id))
             self._execute_dns_callback(resolution=False)
             #self.dns_state.delete(stateobj)
             return False
         else:
-            #self._logger.warning("CETP Policy matched! Allocate proxy address. {} -> {}".format(self.src_id, self.dst_id))
+            self._logger.warning("CETP Policy matched! Allocate proxy address. {} -> {}".format(self.src_id, self.dst_id))
             lpip = self._create_local_connection()
             self._execute_dns_callback(lpip)
             #o_connection, i_connection = self.create_local_connection(localhost, remotehost)

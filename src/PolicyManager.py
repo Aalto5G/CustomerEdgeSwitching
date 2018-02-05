@@ -156,6 +156,7 @@ class PolicyManager(object):
             policy = self._hostpolicy[key]
             return policy
         except Exception as ex:
+            self._logger.error("No {} policy exists for host_id: {}".format(direction, host_id))
             return None
         
     def get_policy_copy(self, policy):

@@ -25,7 +25,7 @@ LOGLEVEL_iCESTCPServerTransport     = logging.INFO
 
 class oCESTCPTransport(asyncio.Protocol):
     def __init__(self, c2c_layer, proto, r_cesid, ces_params, remote_addr=None, loop=None, name="oCESTransport"):
-        self.ces_layer                  = c2c_layer
+        self.c2c_layer                  = c2c_layer
         self.proto                      = proto
         self.r_cesid                    = r_cesid
         self.ces_params                 = ces_params
@@ -42,21 +42,27 @@ class oCESTCPTransport(asyncio.Protocol):
 
     def connection_made(self, transport):
         self.transport = transport
-        self.set_keepalive_params()
         self._logger.info('Connected to {}'.format(self.remotepeer))
-        self.ces_layer.report_connectivity(self)                        # Reporting the connectivity to C2C layer.
-        self.is_connected = True
-        if self.proto == "tls":
-            verified = self.verify_identity(self.r_cesid)
-            if not verified:
-                print("Failed to verify identity")
-                self.close()
                 
-    def set_keepalive_params(self):
-        self.socket = self.transport.get_extra_info('socket')
+        if self.proto == "tls":
+            if not self.verify_identity(self.r_cesid):
+                self._logger.info(" SSL certificate failed to verify sender identity {}.".format(self.r_cesid))
+                self._cleanup()
+                return
+                
+        self.is_connected = True
+        self._set_keepalives()
+        self.c2c_layer.report_connectivity(self)                        # Reporting the connectivity to C2C layer.
+            
+    def get_remotepeer(self):
+        if self.transport is not None:
+            return self.remotepeer
+    
+    def _set_keepalives(self):
+        self.socket     = self.transport.get_extra_info('socket')
         after_idle_sec  = int(self.ces_params["keepalive_idle_t0"])
-        interval_sec    = int(self.ces_params["keepalive_count"])
-        max_fails       = int(self.ces_params["keepalive_interval"])
+        interval_sec    = int(self.ces_params["keepalive_interval"])
+        max_fails       = int(self.ces_params["keepalive_count"])
 
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, after_idle_sec)
@@ -73,8 +79,8 @@ class oCESTCPTransport(asyncio.Protocol):
                 if k == 'commonName':
                     remote_id = v
                     if (remote_id==r_cesid) or (remote_id+'.'==r_cesid):
-                        print(" Successful TLS connection to '{}'".format(self.r_cesid))
-                        return True                    
+                        self._logger.debug(" Successful TLS connection to '{}'".format(self.r_cesid))
+                        return True
         
     def report_c2c_negotiation(self, status):
         """ Method used by C2CLayer to report success of C2C-Negotiation """
@@ -96,7 +102,7 @@ class oCESTCPTransport(asyncio.Protocol):
     def data_received(self, data):
         """Asyncio executed callback for received data. We append the received data to a buffer """
         self.data_buffer = self.data_buffer + data
-        self._process_data(data)
+        self._process_data()
 
     def _extract_message(self):
         """
@@ -114,7 +120,7 @@ class oCESTCPTransport(asyncio.Protocol):
             
         return cetp_msg
 
-    def _process_data(self, data):
+    def _process_data(self):
         """ Invokes C2C method to handle the inbound message """
         while True:
             if len(self.data_buffer) < CETP_LEN_FIELD:
@@ -122,14 +128,14 @@ class oCESTCPTransport(asyncio.Protocol):
 
             cetp_msg = self._extract_message()
             if cetp_msg!= None:
-                self.ces_layer.consume_transport_message(cetp_msg, self)
+                self.c2c_layer.consume_transport_message(cetp_msg, self)
             else:
                 break
     
     def connection_lost(self, exc):
         if self.is_connected:                                # To prevent reporting the connection closure twice, at sending & receiving of FIN/ACK
             self._logger.info(" Remote CES '{}'closed the transport connection".format(self.r_cesid))
-            self._clear_resources()
+            self._cleanup()
             if type(exc) == TimeoutError:
                 print("Connection timedout")
 
@@ -137,12 +143,13 @@ class oCESTCPTransport(asyncio.Protocol):
         """ Closes the connection towards remote CES """
         if self.is_connected:
             self._logger.info(" Closing the client CETP Transport towards '{}'".format(self.r_cesid))
-            self._clear_resources()
+            self._cleanup()
 
-    def _clear_resources(self):
+    def _cleanup(self):
         self.transport.close()
-        self.ces_layer.report_connectivity(self, status=False)
+        self.c2c_layer.report_connectivity(self, status=False)
         self.is_connected=False
+        del(self.c2c_layer)
 
 
 
@@ -163,34 +170,40 @@ class iCESServerTCPTransport(asyncio.Protocol):
         self.c2c_negotiation_t0 = int(ces_params['c2c_establishment_t0'])              # In seconds
         
     def connection_made(self, transport):
-        self.transport = transport
-        self.set_keepalive_params()
+        self.transport  = transport
         self.remotepeer = transport.get_extra_info('peername')
         self._logger.info('Connection from {}'.format(self.remotepeer))
         ip_addr, port = self.remotepeer
-        self.is_connected   = True
         
         if self.cetp_security.is_unverifiable_cetp_sender(ip_addr):
             self._logger.warning(" Remote address <{}> has misbehavior history.".format(ip_addr))
             self.close()
-        else:
-            self._loop.call_later(self.c2c_negotiation_t0, self.is_c2c_negotiated)     # Schedules a check for C2C-policy negotiation.
+            return
+        
+        self.is_connected   = True
+        self._set_keepalives()
+        self._loop.call_later(self.c2c_negotiation_t0, self.is_c2c_negotiated)     # Schedules a check for C2C-policy negotiation.
+            
 
-    def set_keepalive_params(self):
-        self.socket = self.transport.get_extra_info('socket')
+    def _set_keepalives(self):
+        self.socket     = self.transport.get_extra_info('socket')
         after_idle_sec  = int(self.ces_params["keepalive_idle_t0"])
-        interval_sec    = int(self.ces_params["keepalive_count"])
-        max_fails       = int(self.ces_params["keepalive_interval"])
+        interval_sec    = int(self.ces_params["keepalive_interval"])
+        max_fails       = int(self.ces_params["keepalive_count"])
 
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, after_idle_sec)
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, interval_sec)
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, max_fails)
 
+
+    def get_remotepeer(self):
+        if self.transport is not None:
+            return self.remotepeer
          
     def is_c2c_negotiated(self):
         """ Terminates transport connection if C2C negotiation doesn't complete in t<To """        
-        if self.is_connected and (self.c2c_layer==None):
+        if self.is_connected and (self.c2c_layer is None):
             self._logger.info(" Remote end did not complete C2C negotiation in To={}".format(str(self.c2c_negotiation_t0)))
             ip_addr, port = self.remotepeer
             self.cetp_security.register_unverifiable_cetp_sender(ip_addr)
@@ -216,7 +229,7 @@ class iCESServerTCPTransport(asyncio.Protocol):
     def data_received(self, data):
         """Asyncio executed callback for received data. We append the received data to a buffer """
         self.data_buffer = self.data_buffer + data
-        self._process_data(data)
+        self._process_data()
 
     def _extract_message(self):
         """
@@ -234,7 +247,7 @@ class iCESServerTCPTransport(asyncio.Protocol):
             
         return cetp_msg
     
-    def _process_data(self, data):
+    def _process_data(self):
         """ Invokes C2C method to handle the inbound message """
         while True:
             if len(self.data_buffer) < CETP_LEN_FIELD:
@@ -256,19 +269,18 @@ class iCESServerTCPTransport(asyncio.Protocol):
         """ Called by asyncio framework """
         if self.is_connected:
             self._logger.info(" Remote endpoint closed the connection")
-            self._clean_resources()
+            self._cleanup()
             
             if type(ex) == TimeoutError:
                 print("Connection timedout")
-
 
     def close(self):
         """ Closes the connection with the remote CES """
         if self.is_connected:
             self._logger.info(" Closing connection to remote endpoint")
-            self._clean_resources()
+            self._cleanup()
             
-    def _clean_resources(self):
+    def _cleanup(self):
         self.transport.close()
         self.is_connected = False
         if self.c2c_layer != None:
@@ -295,37 +307,27 @@ class iCESServerTLSTransport(iCESServerTCPTransport):
         self.c2c_negotiation_t0 = int(ces_params['c2c_establishment_t0'])              # In seconds
         
     def connection_made(self, transport):
-        self.transport = transport
-        self.set_keepalive_params()
+        self.transport  = transport
         self.remotepeer = transport.get_extra_info('peername')
         self._logger.info('Connection from {}'.format(self.remotepeer))
         ip_addr, port = self.remotepeer
-        self.is_connected   = True
         
         if self.cetp_security.is_unverifiable_cetp_sender(ip_addr):
-            self._logger.warning(" Remote endpoint has misbehavior history.")
+            self._logger.warning(" Remote IP <{}> has misbehavior history.".format(ip_addr))
             self.close()
-        else:
-            self._loop.call_later(self.c2c_negotiation_t0, self.is_c2c_negotiated)     # Schedules a check for C2C-policy negotiation.
+            return
         
         remote_id = self.get_remote_id()
         if remote_id is None:
             self.close()
             return
-        else:
-            self.r_cesid = remote_id
-            self.cetp_mgr.report_connected_transport(self, self.r_cesid)                # What are possible return values, and how you handle them
+        
+        self.r_cesid    = remote_id
+        self._set_keepalives()
+        self.is_connected   = True
+        self._loop.call_later(self.c2c_negotiation_t0, self.is_c2c_negotiated)      # Schedules a check for C2C-policy negotiation.
+        self.cetp_mgr.report_connected_transport(self, self.r_cesid)
 
-    def set_keepalive_params(self):
-        self.socket = self.transport.get_extra_info('socket')
-        after_idle_sec  = int(self.ces_params["keepalive_idle_t0"])
-        interval_sec    = int(self.ces_params["keepalive_count"])
-        max_fails       = int(self.ces_params["keepalive_interval"])
-
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-        self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, after_idle_sec)
-        self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, interval_sec)
-        self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, max_fails)
 
     def get_remote_id(self):
         ssl_obj = self.transport.get_extra_info('ssl_object')
@@ -346,24 +348,32 @@ class MockC2C:
         print("Conn status: ", status)
         
     def consume_transport_message(self, cetp_msg, t):
-        print("Message size:", len(cetp_msg))
-        print(cetp_msg)
+        print("Received Message size:", len(cetp_msg))
 
 @asyncio.coroutine
 def test_connection(loop):
-    ip_addr, port = "10.0.2.15", 5000
+    import os, yaml, json
+    ip_addr, port = "10.0.3.103", 49001
     remote_addr=(ip_addr, port)
     c2c_layer = MockC2C()
     print("Initiating CETPTransport towards ".format(remote_addr))
-    ces_params={}
-    ces_params["c2c_establishment_t0"] = 2
-    ces_params["keepalive_idle_t0"] = 10
-    ces_params["keepalive_count"] = 3
-    ces_params["keepalive_interval"] = 2
-    #CETPC2C.CETPC2CLayer
+    config_file            = open("config_cesa/config_cesa_ct.yaml")
+    ces_conf               = yaml.load(config_file)
+    ces_params             = ces_conf['CESParameters']    
+    ces_certificate_path   = ces_params['certificate']
+    ces_privatekey_path    = ces_params['private_key']
+    ca_certificate_path    = ces_params['ca_certificate']
+
+    sc = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+    sc.check_hostname = False
+    #sc.verify_mode = ssl.CERT_NONE
+    sc.verify_mode = ssl.CERT_REQUIRED
+    sc.load_verify_locations(ca_certificate_path)
+    sc.load_cert_chain(ces_certificate_path, ces_privatekey_path)
         
     try:
         t = oCESTCPTransport(c2c_layer, "tcp", "cesb.lte.", ces_params, remote_addr=remote_addr, loop=loop)
+        #coro = loop.create_connection(lambda: t, ip_addr, port, ssl=sc)
         coro = loop.create_connection(lambda: t, ip_addr, port)
         connect_task = asyncio.ensure_future(coro)
         timeout = 2
@@ -376,9 +386,9 @@ def test_connection(loop):
 def test_unreachable_ep(loop):
     try:
         import os
-        port_n = 5000
-        ip_addr = "10.0.2.15"
-        ipt_cmd = "sudo iptables -A INPUT -p tcp --dport {} -j DROP".format(port_n)
+        port_n = 49001
+        ip_addr = "10.0.3.103"
+        ipt_cmd = "sudo iptables -A OUTPUT -p tcp --dport {} -j DROP".format(port_n)
         os.popen(ipt_cmd)
         yield from asyncio.sleep(0.2)
         yield from test_connection(loop)
@@ -386,11 +396,11 @@ def test_unreachable_ep(loop):
     except:
         print("Exception in test_unreachable_ep() ")
     finally:
-        ipt_cmd = "sudo iptables -D INPUT -p tcp --dport {} -j DROP".format(port_n)
+        ipt_cmd = "sudo iptables -D OUTPUT -p tcp --dport {} -j DROP".format(port_n)
         os.popen(ipt_cmd)
 
 def test_msg_framing(loop):
-    ip_addr, port = "10.0.2.15", 5000
+    ip_addr, port = "10.0.3.103", 49001
     remote_addr=(ip_addr, port)
     c2c_layer = MockC2C()
     print("Initiating CETPTransport towards ".format(remote_addr))
@@ -400,32 +410,42 @@ def test_msg_framing(loop):
     msg="Take5 CETPv2"
     t = oCESTCPTransport(c2c_layer, "tcp", "cesb.lte.", ces_params, remote_addr=remote_addr, loop=loop)
     to_send = t.message_framing(msg)
-    t.process_received_data(to_send)
-    print("Message size:", len(msg))
+    f=b''
+    f+=to_send
+    t.data_buffer = f
+    t._process_data()
+    print("Sent Message size:", len(msg))
 
 @asyncio.coroutine
 def test_keepalive_t0(loop):
+    """ Run for about 20 sec to see behavior"""
     try:
         import os
         yield from test_connection(loop)
-        port_n = 5000
-        ip_addr = "10.0.2.15"
-        ipt_cmd = "sudo iptables -A INPUT -p tcp --dport {} -j DROP".format(port_n)
+        port = 49001
+        ipt_cmd = "sudo iptables -A OUTPUT -p tcp --dport {} -j DROP".format(port)
         os.popen(ipt_cmd)
+        yield from asyncio.sleep(20)
         
     except:
         print("Exception in test_unreachable_ep() ")
     finally:
-        yield from asyncio.sleep(20)
-        ipt_cmd = "sudo iptables -D INPUT -p tcp --dport {} -j DROP".format(port_n)
+        ipt_cmd = "sudo iptables -D OUTPUT -p tcp --dport {} -j DROP".format(port)
         os.popen(ipt_cmd)
 
 def test_function(loop):
-    asyncio.ensure_future(test_connection(loop))
+    """ Client testing methods """
+    #asyncio.ensure_future(test_connection(loop))
     #asyncio.ensure_future(test_unreachable_ep(loop))
     #asyncio.ensure_future(test_keepalive_t0(loop))
     #test_msg_framing(loop)
     
+    """ Server testing methods """
+    test_server(loop)
+
+
+"""Need to test both the server and the client"""
+
 if __name__=="__main__":
     logging.basicConfig(level=logging.INFO)
     loop = asyncio.get_event_loop()

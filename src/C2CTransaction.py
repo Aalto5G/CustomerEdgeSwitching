@@ -491,8 +491,8 @@ class oC2CTransaction(C2CTransaction):
         self.negotiated_params         = {} 
 
     def load_parameters(self):
-        self.keepalive_cycle    = self.ces_params['keepalive_cycle']
-        self.keepalive_timeout  = self.ces_params['keepalive_t0']
+        self.keepalive_cycle    = self.ces_params['keepalive_idle_t0']
+        self.keepalive_timeout  = self.ces_params['keepalive_interval']
         self.completion_t0      = self.ces_params['incomplete_cetp_state_t0']
     
     def load_policies(self):
@@ -1209,7 +1209,7 @@ class iC2CTransaction(C2CTransaction):
         self.r_ces_requirements         = []
         self.last_seen                  = time.time()
         self.keepalive_trigger_time     = time.time()
-        self.keepalive_timeout          = ces_params['keepalive_t0']
+        self.keepalive_timeout          = ces_params['keepalive_interval']
         self._logger                    = logging.getLogger(name)
         self.negotiated_params          = {} 
         self._logger.setLevel(LOGLEVEL_iC2CTransaction)        
