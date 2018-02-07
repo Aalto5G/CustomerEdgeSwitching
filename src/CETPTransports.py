@@ -177,7 +177,7 @@ class iCESServerTCPTransport(asyncio.Protocol):
         
         if self.cetp_security.is_unverifiable_cetp_sender(ip_addr):
             self._logger.warning(" Remote address <{}> has misbehavior history.".format(ip_addr))
-            self.close()
+            self.transport.close()
             return
         
         self.is_connected   = True
@@ -277,7 +277,7 @@ class iCESServerTCPTransport(asyncio.Protocol):
     def close(self):
         """ Closes the connection with the remote CES """
         if self.is_connected:
-            self._logger.info(" Closing connection to remote endpoint")
+            self._logger.info(" Closing connection to remote CES '{}'".format(self.r_cesid))
             self._cleanup()
             
     def _cleanup(self):
@@ -314,15 +314,15 @@ class iCESServerTLSTransport(iCESServerTCPTransport):
         
         if self.cetp_security.is_unverifiable_cetp_sender(ip_addr):
             self._logger.warning(" Remote IP <{}> has misbehavior history.".format(ip_addr))
-            self.close()
+            self.transport.close()
             return
         
         remote_id = self.get_remote_id()
         if remote_id is None:
-            self.close()
+            self.transport.close()
             return
         
-        self.r_cesid    = remote_id
+        self.r_cesid        = remote_id
         self._set_keepalives()
         self.is_connected   = True
         self._loop.call_later(self.c2c_negotiation_t0, self.is_c2c_negotiated)      # Schedules a check for C2C-policy negotiation.

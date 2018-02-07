@@ -1083,9 +1083,9 @@ class H2HTransactionLocal(H2HTransaction):
     @asyncio.coroutine
     def _initialize(self):
         yield from asyncio.sleep(0.000)          # Simulating the delay in loading policies from the Policy System
-        self.src_id   = self.host_register.ip_to_fqdn_mapping(self.host_ip)
-        sender_permitted = self.check_outbound_permission(self.src_id)
-        destination_permitted = self.check_inbound_permission(self.dst_id)
+        self.src_id             = self.host_register.ip_to_fqdn_mapping(self.host_ip)
+        sender_permitted        = self.check_outbound_permission(self.src_id)
+        destination_permitted   = self.check_inbound_permission(self.dst_id)
         
         if (not sender_permitted) or (not destination_permitted):
             self._logger.warning("Communication from sender <{}> to destination <{}> is not allowed.".format(self.src_id, self.dst_id))
@@ -1164,7 +1164,7 @@ class H2HTransactionLocal(H2HTransaction):
             #self.dns_state.delete(stateobj)
             return False
         else:
-            self._logger.warning("CETP Policy matched! Allocate proxy address. {} -> {}".format(self.src_id, self.dst_id))
+            #self._logger.warning("CETP Policy matched! Allocate proxy address. {} -> {}".format(self.src_id, self.dst_id))
             lpip = self._create_local_connection()
             self._execute_dns_callback(lpip)
             #o_connection, i_connection = self.create_local_connection(localhost, remotehost)

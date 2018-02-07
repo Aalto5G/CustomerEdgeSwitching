@@ -124,6 +124,7 @@ class CETPC2CLayer:
         """ Terminates the tasks scheduled within C2C-transaction """
         if self.c2c_transaction is not None:
             self.c2c_transaction.set_terminated()
+            del(self.c2c_transaction)
         
     def assign_cetp_h2h_layer(self, cetp_h2h):
         """ Assigns the CETP-H2H layer corresponding to this C2C layer """
@@ -142,7 +143,7 @@ class CETPC2CLayer:
     def report_connectivity_to_h2h(self, connected=True):
         self.cetp_h2h.c2c_connectivity_report(connected=connected)
         
-    def _set_c2c_negotiation(self, status=True):
+    def set_c2c_negotiation(self, status=True):
         """ Set the C2C negotiation status and updates it in Transport layer """
         self.c2c_negotiated = status
         self._set_c2c_transports(status)
@@ -268,7 +269,7 @@ class CETPC2CLayer:
             (status, cetp_resp) = result
                         
             if status == True:
-                self._set_c2c_negotiation()
+                self.set_c2c_negotiation()
                 self._update_connectivity_status()
             
             elif status == False:
@@ -411,7 +412,6 @@ class CETPC2CLayer:
             if len(self.initiated_transports)==0:
                 self._logger.info(" No initiated/connected transport towards '{}' -> Closing CETP-H2H and C2C layer".format(self.r_cesid))
                 self.cetp_mgr.remove_c2c_layer(self.r_cesid)
-                self.cetp_mgr.remove_cetp_endpoint(self.r_cesid)
                 self.resource_cleanup()
                 self.unregister_c2c()
 
@@ -491,23 +491,24 @@ class CETPC2CLayer:
     def resource_cleanup(self):
         """ Cancels the tasks in progress and deletes the object """
         if not self._closure_signal:
+            self._set_closure_signal()
             self._report_closure()
-            self._close_all_connected_transports()
-            del(self)
-
+            
     def _report_closure(self):
-        """ Set own closure signal, and reports to H2H layer """
-        self._set_closure_signal()
+        """ Report closure to H2H layer """
         self.cetp_h2h.set_closure_signal()
 
     def _set_closure_signal(self):
+        """ Unregister the C2C layer and set a closure flag """
         self._closure_signal = True
+        self.cetp_mgr.remove_c2c_layer(self.r_cesid)
+        del(self)
     
     def handle_interrupt(self):
         if not self._closure_signal:
             self._set_closure_signal()
-            self._close_all_connected_transports()
             self._close_all_initiated_transports()
+            self._close_all_connected_transports()
 
 
 

@@ -567,6 +567,8 @@ class oC2CTransaction(C2CTransaction):
     def set_terminated(self, terminated=True):
         self.terminated = terminated
         self.cetpstate_mgr.remove_established_transaction((self.sstag, self.dstag))
+        if hasattr(self, 'unregister_handler'):
+            self.unregister_handler.cancel()
 
     def get_remote_cesid(self):
         return self.r_cesid
