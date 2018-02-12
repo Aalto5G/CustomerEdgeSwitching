@@ -142,11 +142,15 @@ class PolicyManager(object):
         return self._hostpolicies
     
     def get_ces_policy(self, proto="tcp"):
-        policy_type = "cespolicy"
-        l_cesid = self.l_cesid
-        key = policy_type+":"+proto+":"+l_cesid
-        policy = self._cespolicy[key]
-        return copy.deepcopy(policy)
+        try:
+            policy_type = "cespolicy"
+            l_cesid = self.l_cesid
+            key = policy_type+":"+proto+":"+l_cesid
+            policy = self._cespolicy[key]
+            return copy.deepcopy(policy)
+        except Exception as ex:
+            #self._logger.error("CES policy doesn't exist for '{}'".format(self.l_cesid))
+            return None
     
     def get_host_policy(self, direction, host_id=""):
         """ The search key for host-policy number 0 is 'policy-0' """
@@ -156,7 +160,7 @@ class PolicyManager(object):
             policy = self._hostpolicy[key]
             return policy
         except Exception as ex:
-            self._logger.error("No {} policy exists for host_id: {}".format(direction, host_id))
+            #self._logger.error("No '{}' policy exists for host_id: '{}'".format(direction, host_id))
             return None
         
     def get_policy_copy(self, policy):

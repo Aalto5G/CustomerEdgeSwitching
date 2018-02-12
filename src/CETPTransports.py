@@ -49,7 +49,7 @@ class oCESTCPTransport(asyncio.Protocol):
                 self._logger.info(" SSL certificate failed to verify sender identity {}.".format(self.r_cesid))
                 self._cleanup()
                 return
-                
+        
         self.is_connected = True
         self._set_keepalives()
         self.c2c_layer.report_connectivity(self)                        # Reporting the connectivity to C2C layer.

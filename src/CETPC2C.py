@@ -195,8 +195,9 @@ class CETPC2CLayer:
         
         self.register_c2c(c2c_transaction)
         cetp_resp = yield from c2c_transaction.initiate_c2c_negotiation()
-        if cetp_resp!=None:
-            transport.send_cetp(cetp_resp)
+        if cetp_resp != None:
+            cetp_packet = self._packetize(cetp_resp)
+            transport.send_cetp(cetp_packet)
     
     
     def is_c2c_transaction(self, sstag, dstag):
@@ -208,19 +209,24 @@ class CETPC2CLayer:
             return True
         return False
 
-
-    def _pre_process(self, msg):
+    def _packetize(self, cetp_msg):
+        return json.dumps(cetp_msg)
+    
+    def _depacketize(self, packet):
+        return json.loads(packet)
+    
+    def _pre_process(self, packet):
         """ Checks whether inbound message conforms to CETP packet format. """
         try:
-            cetp_msg = json.loads(msg)
+            cetp_msg = self._depacketize(packet)
             inbound_sstag, inbound_dstag, ver = cetp_msg['SST'], cetp_msg['DST'], cetp_msg['VER']
             sstag, dstag    = inbound_dstag, inbound_sstag
-            acceptable_ver = self.ces_params["CETPVersion"]
+            supported_version = self.ces_params["CETPVersion"]
             
-            if ver!=acceptable_ver:
-                self._logger.info(" CETP version is not supported.")
+            if ver != supported_version:
+                self._logger.error(" CETP Version {} is not supported.".format(ver))
                 return False
-            
+
             if ( (sstag==0) and (dstag ==0)) or (sstag < 0) or (dstag < 0):
                 self._logger.error(" Session tag values are invalid")
                 return False
@@ -232,10 +238,10 @@ class CETPC2CLayer:
             return False
         
     
-    def consume_transport_message(self, msg, transport):
+    def consume_transport_message(self, packet, transport):
         """ Consumes CETP messages from transport. """
         try:
-            outcome = self._pre_process(msg)
+            outcome = self._pre_process(packet)
             if not outcome:     return                        # For repeated non-CETP packets, shall we terminate the connection?
             sstag, dstag, cetp_msg = outcome
             
@@ -265,7 +271,7 @@ class CETPC2CLayer:
         elif self.cetpstate_mgr.has_initiated_transaction( (sstag, 0) ):
             self._logger.info(" Continue resolving c2c-transaction (SST={}, DST={})".format(sstag, 0))
             o_c2c   = self.cetpstate_mgr.get_initiated_transaction( (sstag, 0) )
-            result  = o_c2c.continue_c2c_negotiation(cetp_msg, transport)
+            result  = o_c2c.continue_c2c_negotiation(cetp_msg)
             (status, cetp_resp) = result
                         
             if status == True:
@@ -273,22 +279,24 @@ class CETPC2CLayer:
                 self._update_connectivity_status()
             
             elif status == False:
-                if len(cetp_resp) > 0:  
-                    transport.send_cetp(cetp_resp)
+                if len(cetp_resp) > 0:
+                    cetp_packet = self._packetize(cetp_resp)
+                    transport.send_cetp(cetp_packet)
                     
-                for t in self.connected_transports + self.initiated_transports:
+                for t in self.connected_transports:
                     (r_ip, r_port), proto = t.remotepeer, t.proto
                     self.register_unreachable_cetp_addr(r_ip, r_port, proto)
                     
                 self.unregister_c2c()
-                self._logger.debug(" Close all transports connections towards {}.".format(self.r_cesid))
+                self._logger.debug(" Close all transports towards {}.".format(self.r_cesid))
                 self._close_all_initiated_transports()
                 self._close_all_connected_transports()
                 
             elif status == None:
                 if len(cetp_resp) > 0:
                     self._logger.info(" CES-to-CES towards <{}> is not negotiated yet.".format(self.r_cesid))
-                    transport.send_cetp(cetp_resp)
+                    cetp_packet = self._packetize(cetp_resp)
+                    transport.send_cetp(cetp_packet)
 
 
     """  ***************    ***************    ***************    *************** ************
@@ -420,8 +428,10 @@ class CETPC2CLayer:
     *********************** *********************** *********************** ************ ******** ********   """
 
     def send_cetp(self, msg):
+        cetp_packet = self._packetize(msg)
         t = self._select_transport()
-        if t!=None: t.send_cetp(msg)
+        if t!=None:
+            t.send_cetp(cetp_packet)
             
     def _select_transport(self):
         """ Selects a transport instance towards remote CES. """

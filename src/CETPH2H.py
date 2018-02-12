@@ -123,10 +123,10 @@ class CETPH2H:
         h2h = H2HTransaction.H2HTransactionOutbound(loop=self._loop, cb=cb, host_ip=ip_addr, src_id="", dst_id=dst_id, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetp_h2h=self, \
                                                     ces_params=self.ces_params, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, host_register=self.host_register, \
                                                     conn_table=self.conn_table, interfaces=self.interfaces, cetp_security=self.cetp_security, rtt_time=self.rtt_measurement)
-        cetp_packet = yield from h2h.start_cetp_processing()
-        if cetp_packet != None:
+        cetp_message = yield from h2h.start_cetp_processing()
+        if cetp_message != None:
             #self._logger.info(" H2H transaction started.")
-            self.send(cetp_packet)
+            self.send(cetp_message)
 
     def process_h2h_transaction(self, cetp_msg):
         self.count += 1
@@ -135,26 +135,34 @@ class CETPH2H:
         inbound_sstag, inbound_dstag = cetp_msg['SST'], cetp_msg['DST']
         sstag, dstag    = inbound_dstag, inbound_sstag
         
-        if inbound_dstag == 0:
-            #self._logger.info(" No prior H2H-transaction found -> Initiating Inbound H2HTransaction (SST={} -> DST={})".format(inbound_sstag, inbound_dstag))
-            i_h2h = H2HTransaction.H2HTransactionInbound(sstag=sstag, dstag=sstag, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, \
-                                                         interfaces=self.interfaces, conn_table=self.conn_table, cetp_h2h=self, cetp_security=self.cetp_security, ces_params=self.ces_params)
-            asyncio.ensure_future(i_h2h.start_cetp_processing(cetp_msg))
-            
-        elif self.cetpstate_mgr.has_initiated_transaction( (sstag, 0) ):
-            self._logger.debug(" Continue resolving H2H-transaction (SST={} -> DST={})".format(sstag, 0))
-            o_h2h = self.cetpstate_mgr.get_initiated_transaction( (sstag, 0) )
-            res = o_h2h.continue_cetp_processing(cetp_msg)
-            (ret, cetp_packet) = res
-            if cetp_packet!=None:
-                self.send(cetp_packet)
-            
-        elif self.cetpstate_mgr.has_established_transaction( (sstag, dstag) ):
+        if self.cetpstate_mgr.has_established_transaction( (sstag, dstag) ):
             self._logger.info(" CETP message for a negotiated transaction (SST={} -> DST={})".format(sstag, dstag))
             o_h2h = self.cetpstate_mgr.get_established_transaction( (sstag, dstag) )
             o_h2h.post_h2h_negotiation(cetp_msg)
-        
+
+        elif self.cetpstate_mgr.has_initiated_transaction( (sstag, 0) ):
+            self._logger.debug(" Continue resolving H2H-transaction (SST={} -> DST={})".format(sstag, 0))
+            o_h2h = self.cetpstate_mgr.get_initiated_transaction( (sstag, 0) )
+            resp = o_h2h.continue_cetp_processing(cetp_msg)
+            (ret, cetp_message) = resp
+            if len(cetp_message) != 0:
+                self.send(cetp_message)
+            
+        elif inbound_dstag == 0:
+            #self._logger.info(" No prior H2H-transaction found -> Initiating Inbound H2HTransaction (SST={} -> DST={})".format(inbound_sstag, inbound_dstag))
+            ih2h = H2HTransaction.H2HTransactionInbound(sstag=sstag, dstag=sstag, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, \
+                                                         interfaces=self.interfaces, conn_table=self.conn_table, cetp_h2h=self, cetp_security=self.cetp_security, ces_params=self.ces_params)
+            #asyncio.ensure_future(i_h2h.start_cetp_processing(cetp_msg))
+            asyncio.ensure_future(self.process_inbound_transaction(ih2h, cetp_msg))
+            
         # Add try, except?
+        
+    @asyncio.coroutine
+    def process_inbound_transaction(self, ih2h, cetp_msg):
+        res = yield from ih2h.start_cetp_processing(cetp_msg)
+        (negotiation_status, cetp_message) = res
+        if cetp_message != None:
+            self.send(cetp_message)
         
     def send(self, msg):
         """ Forwards the message to CETP c2c layer"""
@@ -309,7 +317,7 @@ def test_singleAQuery(h):
     cb = (test_cb, cb_args)
     
     h.resolve_cetp(dst_id, cb)
-    yield from asyncio.sleep(5)
+    yield from asyncio.sleep(2)
 
     asyncio.ensure_future(testing_Localoutput(h))
     yield from asyncio.sleep(2)
@@ -481,6 +489,20 @@ def test_transportFailover(h):
         os.popen(ipt_cmd)
         yield from asyncio.sleep(0.2)
 
+@asyncio.coroutine
+def test_forbiddenSender(h):
+    import CETPSecurity
+    h.cetp_security.register_filtered_domains(CETPSecurity.KEY_BlacklistedLHosts, "hosta1.cesa.lte.")
+    yield from asyncio.sleep(0.1)
+    yield from test_singleAQuery(h)
+
+@asyncio.coroutine
+def test_forbiddenDestination(h):
+    import CETPSecurity
+    h.cetp_security.register_filtered_domains(CETPSecurity.KEY_LocalHosts_Inbound_Disabled, "srv1.hosta1.cesa.lte.")
+    yield from asyncio.sleep(0.1)
+    yield from test_singleAQuery(h)
+
            
 def test_functions(h, loop):
     #For H2H-CETP
@@ -492,6 +514,8 @@ def test_functions(h, loop):
     #For LocalH2H-CETP
     #asyncio.ensure_future(test_singleAQuery(h))
     #asyncio.ensure_future(test_FloodAQuery(h))
+    #asyncio.ensure_future(test_forbiddenSender(h))
+    #asyncio.ensure_future(test_forbiddenDestination(h))
     asyncio.ensure_future(test_ratelimit(h, loop))
     
 if __name__=="__main__":
