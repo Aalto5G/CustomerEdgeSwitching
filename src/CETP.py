@@ -34,9 +34,6 @@ def is_IPv6(ip6_addr):
         return False
 
 
-class CETP(object):
-    pass                        # CETP class will have multiple instances of CETP TLV
-
 class CETPTLV(object):
     def __init__(self):
         self.ope    = None

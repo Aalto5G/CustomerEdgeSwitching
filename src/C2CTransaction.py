@@ -17,6 +17,8 @@ import cetpOperations
 import CETP
 import copy
 import ConnectionTable
+import H2HTransaction
+from H2HTransaction import CETPTransaction
 
 LOGLEVELCETP                    = logging.DEBUG
 LOGLEVEL_C2CTransaction         = logging.INFO
@@ -46,39 +48,7 @@ General_CES_policy
 """
 
 
-class C2CTransaction(object):
-    def __init__(self, name="C2CTransaction"):
-        self.name       = name
-        self._logger    = logging.getLogger(name)
-        self._logger.setLevel(LOGLEVEL_C2CTransaction)
-
-    def get_cetp_message(self, sstag=None, dstag=None, tlvs=[]):
-        """ Default CETP fields for signalling message """
-        version                     = 2
-        cetp_msg                 = {}
-        cetp_msg['VER']          = version
-        cetp_msg['SST']          = sstag
-        cetp_msg['DST']          = dstag
-        cetp_msg['TLV']          = tlvs
-        return cetp_msg
-    
-    def get_cetp_packet(self, cetp_msg, pprint_msg=""):
-        cetp_packet = json.dumps(cetp_msg)
-        return cetp_packet
-
-    def _get_unavailable_response(self, tlv):
-        resp_tlv = copy.copy(tlv)
-        resp_tlv['cmp'] = 'notAvailable'
-        resp_tlv['ope'] = "info"
-        return resp_tlv
-        
-    def _get_terminate_tlv(self, err_tlv=None):
-        terminate_tlv = {}
-        terminate_tlv['ope'], terminate_tlv['group'], terminate_tlv['code'], terminate_tlv['value'] = "info", "ces", "terminate", ""
-        if err_tlv is not None:
-            value = {"error_tlv": err_tlv}
-            terminate_tlv['value'] = value
-        return terminate_tlv
+class C2CTransaction(CETPTransaction):
 
     def _create_offer_tlv(self, tlv):
         try:
@@ -89,17 +59,15 @@ class C2CTransaction(object):
                            cetp_security=self.cetp_security, policy = self.ces_policy, interfaces=self.interfaces, query=False)
             return tlv
         except Exception as ex:
-            self._logger.error("Exception in _create_offer_tlv(): '{}'".format(ex))
+            self._logger.error("Exception '{}' in _create_offer_tlv() for tlv : '{}'".format(ex, tlv))
             return None
                     
     def _create_offer_tlv2(self, group=None, code=None, value=None):
         try:
             tlv ={}
-            tlv['ope'], tlv['group'], tlv['code'] = "info", group, code
+            tlv['ope'], tlv['group'], tlv['code'], tlv["value"] = "info", group, code, ""
             if value!=None:
                 tlv["value"] = value
-            else:
-                tlv["value"] = ""
                 
             if group in ["ces", "rloc", "payload"]:
                 func = CETP.SEND_TLV_GROUP[group][code]
@@ -174,67 +142,6 @@ class C2CTransaction(object):
                 ack_value = self._get_tlv_value(tlv)
         return ack_value
 
-    def _check_tlv(self, tlv, ope=None, cmp=None, group=None, code=None):
-        """ Check whether an attribute with given value exists in a TLV"""
-        try:
-            if (ope != None) and (tlv["ope"] == ope):
-                return True
-            if 'cmp' in tlv:
-                if (cmp != None) and (tlv["cmp"] == cmp):
-                    return True
-            if (group != None) and (tlv["group"] == group):
-                return True
-            if (code != None) and (tlv["code"] == code):
-                return True
-            return False
-        except Exception as ex:
-            self._logger.error("Exception in _check_tlv(): {}".format(ex))
-            return False
-
-    def _check_tlv2(self, tlv, group=[], code=[]):
-        """ Check whether an attribute with given value exists in a TLV"""
-        try:
-            if (group != []) and (tlv["group"] in group):
-                return True
-            if (code != []) and (tlv["code"] in code):
-                return True
-            return False
-        except Exception as ex:
-            self._logger.error("Exception in _check_tlv2(): {}".format(ex))
-            return False
-
-    def _get_from_tlvlist(self, tlvlist, group, code = None, ope = ""):
-        retlist = []
-        for tlv in tlvlist:
-            if tlv["group"] != group:
-                continue
-            if len(ope) != 0:
-                if tlv["ope"] != ope:
-                    continue
-            
-            if code is None:
-                retlist.append(tlv)
-            elif tlv["code"] == code:
-                retlist.append(tlv)
-        return retlist
-        
-
-    def generate_session_tags(self, dstag=0):
-        """ Returns a session-tag of 4-byte length, if sstag is not part of an connecting or ongoing transaction """
-        while True:
-            sstag = random.randint(0, 2**32)
-            if dstag ==0:
-                # For oCES, it checks the connecting transactions
-                if not self.cetpstate_mgr.has_initiated_transaction((sstag, 0)):
-                    return sstag
-            
-            elif dstag:
-                #self._logger.info("iCES is requesting source session tag")
-                """ iCES checks if upon assigning 'sstag' the resulting (SST, DST) pair will lead to a unique transaction. """
-                if not self.cetpstate_mgr.has_established_transaction((sstag, dstag)):                   # Checks connected transactions
-                    return sstag
-
-
     def get_local_rloc(self, rrloc_tlv, policy):
         """ Extracts local RLOCs from ces-policy """
         lrloc_tlv = None
@@ -242,7 +149,6 @@ class C2CTransaction(object):
             lrloc_tlv = self._create_offer_tlv(rrloc_tlv)
         
         return lrloc_tlv
-
 
     def _get_dp_connection_rlocs(self):
         l_rlocs, r_rlocs = [], []
@@ -373,81 +279,10 @@ class C2CTransaction(object):
         return self.negotiated_params
         
     def get_negotiated_parameter(self, key=None):
+        """ Possible keys: 1) lrlocs, 2) rrlocs, 3) lpayloads, 4) rpayloads, """
         if key is not None:
             if key in self.negotiated_params:
                 return self.negotiated_params[key]
-
-    def get_negotiated_lrlocs(self):
-        key = "rrlocs"
-        if key in self.negotiated_params:
-            return self.negotiated_params[key]
-
-    def get_negotiated_rrlocs(self):
-        key = "rrlocs"
-        if key in self.negotiated_params:
-            return self.negotiated_params[key]
-
-    def get_negotiated_lpayloads(self):
-        key="lpayloads"
-        if key in self.negotiated_params:
-            return self.negotiated_params[key]
-
-    def get_negotiated_rpayloads(self):
-        key="rpayloads"
-        if key in self.negotiated_params:
-            return self.negotiated_params[key]
-
-    def get_c2c_dp_connection(self):
-        return self.conn
-
-    def get_packet_details(self, cetp_msg):
-        """ Sets basic details of an inbound CETP message """
-        inbound_sstag           = cetp_msg['SST']
-        inbound_dstag           = cetp_msg['DST']
-        self.sstag, self.dstag  = inbound_dstag, inbound_sstag                                       # Sender's SST is DST for CES
-        self.packet             = cetp_msg
-        self.received_tlvs      = cetp_msg['TLV']
-        
-    def show(self, packet):
-        s = ""
-        for k, v in packet.items():
-            if k != "TLV":
-                s += str(k)+": "+ str(v) + "\n"
-            else:
-                s+=k+":\n"
-                for tlv in v:
-                    ope, group = CETP.PPRINT_OPE[tlv['ope']], CETP.PPRINT_GROUP[tlv['group']]
-                    code = tlv["code"]
-                    if code in CETP.PPRINT_CODE:
-                        code = CETP.PPRINT_CODE[code]
-                    
-                    s += "\t ['ope':{}, 'group':{}, 'code':{}".format(ope, group, code)
-                    
-                    if 'cmp' in tlv:
-                        s += ", 'cmp':{}".format(tlv['cmp'])
-                    if 'value' in tlv:
-                        s += ", 'value':{}".format(tlv['value'])                   
-                    s += " ]\n"
-        return s
-        
-
-    def show2(self, packet):
-        s = ""
-        for k, v in packet.items():
-            if k != "TLV":
-                s += str(k)+": "+ str(v)+ "\n"
-            else:
-                s += k+":\n"
-                for tlv in v:
-                    s += "\t"+ str(tlv)+"\n"
-                s += "\n"
-
-
-    def pprint(self, packet, m=None):
-        if m!=None:
-            self._logger.info(m)
-        s = self.show(packet)
-        print(s, "\n")
 
 
 
@@ -478,7 +313,6 @@ class oC2CTransaction(C2CTransaction):
         self.rtt                    = 0
         self.packet_count           = 0
         self.missed_keepalives      = 0
-        self.incomplete_state_pkt_cnt = 0
         self.last_seen              = time.time()
         self.last_packet_received   = None
         self.keepalive_handler      = None
@@ -573,7 +407,7 @@ class oC2CTransaction(C2CTransaction):
         except Exception as ex:
             self._logger.error(" Exception '{}' in initiating CES-to-CES session towards: '{}'".format(ex, self.r_cesid))
             return None
-            
+    
     def set_terminated(self, terminated=True):
         self.terminated = terminated
         self.cetpstate_mgr.remove_established_transaction((self.sstag, self.dstag))

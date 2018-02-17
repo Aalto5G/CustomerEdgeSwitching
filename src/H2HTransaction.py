@@ -26,12 +26,18 @@ LOGLEVEL_H2HTransactionLocal    = logging.INFO
 
 NEGOTIATION_RTT_THRESHOLD       = 2
 
-class H2HTransaction(object):
-    def __init__(self, name="H2HTransaction"):
+class CETPTransaction(object):
+    def __init__(self, name="CETPTransaction"):
         self.name       = name
         self._logger    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HTransaction)
 
+    def _get_unavailable_response(self, tlv):
+        resp_tlv = copy.copy(tlv)
+        resp_tlv['cmp'] = 'notAvailable'
+        resp_tlv['ope'] = "info"
+        return resp_tlv
+    
     def get_cetp_message(self, sstag=None, dstag=None, tlvs=[]):
         """ Default CETP fields for signalling message """
         cetp_header         = {}
@@ -40,19 +46,6 @@ class H2HTransaction(object):
         cetp_header['DST']  = dstag
         cetp_header['TLV']  = tlvs
         return cetp_header
-
-    def _get_unavailable_response(self, tlv):
-        resp_tlv = copy.copy(tlv)
-        resp_tlv['cmp'] = 'notAvailable'
-        resp_tlv['ope'] = "info"
-        return resp_tlv
-    
-    def _get_terminate_tlv(self, err_tlv=None):
-        terminate_tlv = {}
-        terminate_tlv['ope'], terminate_tlv['group'], terminate_tlv['code'], terminate_tlv['value'] = "info", "control", "terminate", ""
-        if err_tlv is not None:
-            terminate_tlv['value'] = err_tlv
-        return terminate_tlv
 
     def _create_basic_tlv(self, ope=None, cmp=None, group=None, code=None, value=None):
         try:
@@ -69,93 +62,20 @@ class H2HTransaction(object):
             self._logger.error("Exception in _create_basic_tlv(): '{}'".format(ex))
             return None
     
-    def _create_offer_tlv(self, tlv):
-        group, code = tlv['group'], tlv['code']
-        if (group!="control") or ((group=="control") and (code in CETP.CONTROL_CODES)):
-            func = CETP.SEND_TLV_GROUP[group][code]
-            tlv = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True, interfaces=self.interfaces, query=False)
-        return tlv          # shall use try, except here.
+    def get_packet_details(self, cetp_msg):
+        """ Sets basic details of an inbound CETP message """
+        inbound_sstag           = cetp_msg['SST']
+        inbound_dstag           = cetp_msg['DST']
+        self.sstag, self.dstag  = inbound_dstag, inbound_sstag                                       # Sender's SST is DST for CES
+        self.packet             = cetp_msg
+        self.received_tlvs      = cetp_msg['TLV']
 
-    def _create_offer_tlv2(self, group=None, code=None, value=None):
-        tlv ={}
-        tlv['ope'], tlv['group'], tlv['code'] = "info", group, code
-        if value!=None:
-            tlv["value"] = value
-        else:
-            tlv["value"] = ""
-        
-        if group in ["control", "rloc", "payload"]:
-            func = CETP.SEND_TLV_GROUP[group][code]
-            tlv = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True, interfaces=self.interfaces, query=False)
-        return tlv
-
-    def _create_offer_tlv3(self, group=None):
-        """ Function to get all the TLVs belonging to a group (of RLOC and Payload) """
-        try:
-            tlv = None
-            if group is "rloc":
-                func = cetpOperations.send_rloc
-            elif group is "payload":
-                func = cetpOperations.send_payload
-            else:
-                return None
-        
-            tlv  = func(tlv=tlv, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True, interfaces=self.interfaces, query=False)
-            return tlv
-        except Exception as ex:
-            self._logger.error("Exception in _create_offer_tlv3() '{}'".format(ex))
-            return None
-
-    def _create_request_tlv(self, tlv):
-        group, code = tlv['group'], tlv['code']
-        #print(self.policy)
-        if (group!="control") or ((group=="control") and (code in CETP.CONTROL_CODES)):
-            func = CETP.SEND_TLV_GROUP[group][code]
-            tlv  = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True, interfaces=self.interfaces, query=True)
-            return tlv
-
-    def _create_request_tlv2(self, group=None, code=None):
-        tlv = {}
-        tlv['group'], tlv['code'] = group, code
-        if (group!="control") or ((group=="control") and (code in CETP.CONTROL_CODES)):
-            func = CETP.SEND_TLV_GROUP[group][code]
-            tlv  = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True, interfaces=self.interfaces, query=True)
-            return tlv
-    
-    def _create_request_tlv3(self, group=None):
-        """ Function to request the TLVs belonging to a group (of RLOC and Payload) """
-        try:
-            tlv = None
-            if group is "rloc":
-                func = cetpOperations.send_rloc            
-            elif group is "payload":
-                func = cetpOperations.send_payload
-            else:
-                return None
-            
-            tlv  = func(tlv=tlv, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True, interfaces=self.interfaces, query=True)            
-            return tlv
-        except Exception as ex:
-            self._logger.error("Exception in _create_request_tlv3() '{}'".format(ex))
-            return None
-        
-
-    def _create_response_tlv(self, tlv):
-        group, code = tlv['group'], tlv['code']
-        if (group!="control") or ((group=="control") and (code in CETP.CONTROL_CODES)):
-            func = CETP.RESPONSE_TLV_GROUP[group][code]
-            tlv  = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True,interfaces=self.interfaces)
-            return tlv
-
-    def _verify_tlv(self, tlv, policy=None):
-        group, code = tlv['group'], tlv['code']
-        if (group!="control") or ((group=="control") and (code in CETP.CONTROL_CODES)):
-            func   = CETP.VERIFY_TLV_GROUP[group][code]
-            if policy!=None:
-                result = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=policy, transaction=self, h2h_session=True, interfaces=self.interfaces)
-            else:
-                result = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True, interfaces=self.interfaces)
-            return result
+    def _get_terminate_tlv(self, err_tlv=None):
+        terminate_tlv = {}
+        terminate_tlv['ope'], terminate_tlv['group'], terminate_tlv['code'], terminate_tlv['value'] = "info", "control", "terminate", ""
+        if err_tlv is not None:
+            terminate_tlv['value'] = err_tlv
+        return terminate_tlv
 
     def _check_tlv(self, tlv, ope=None, cmp=None, group=None, code=None):
         """ Check whether an attribute with given value exists in a TLV"""
@@ -170,6 +90,7 @@ class H2HTransaction(object):
                 return True
             return False
         except:
+            self._logger.error("Exception in _check_tlv(): {}".format(ex))
             return False
 
     def _check_tlv2(self, tlv, group=[], code=[]):
@@ -183,7 +104,6 @@ class H2HTransaction(object):
         except Exception as ex:
             self._logger.error("Exception in _check_tlv2(): {}".format(ex))
             return False
-
         
     def _get_from_tlvlist(self, tlvlist, group, code = None, ope = ""):
         retlist = []
@@ -199,38 +119,6 @@ class H2HTransaction(object):
             elif tlv.code == code:
                 retlist.append(tlv)
         return retlist
-        
-    def is_IPv4(self, ip4_addr):
-        try:
-            socket.inet_pton(socket.AF_INET, ip4_addr)
-            return True
-        except socket.error:
-            return False
-    
-    def is_IPv6(self, ip6_addr):
-        try:
-            socket.inet_pton(socket.AF_INET6, ip6_addr)
-            return True
-        except socket.error:
-            return False
-
-    def _check_sessionTags_uniqueness(self, sstag=0, dstag=0):
-        """ Checks whether (SST, DST) pair will be locally unique, if the H2H negotiation succeeds    - Since DST is assigned by remote CES. """
-        if dstg !=0 and self.cetpstate_mgr.has_established_transaction((sstag, dstag)):
-            self._logger.error(" Failure: Resulting ({},{}) pair will not be locally unique in CES".format(sstag, dstag))
-            return False
-        return True
-        
-    def _allocate_proxy_address(self, lip):
-        """Allocates a proxy IP address to represent remote host in local CES."""
-        if self.is_IPv4(lip):      ap = "AP_PROXY4_HOST_ALLOCATION"
-        elif Utils.is_IPv6(lip):   ap = "AP_PROXY6_HOST_ALLOCATION"
-        proxy_ip = self.cetpstate_mgr.allocate_proxy_address(lip)
-        return proxy_ip
-
-    def get_proxy_address(self, key, local_ip):
-        proxy_ip = "10.1.3.103"
-        return proxy_ip
     
     def generate_session_tags(self, dstag=0):
         """ Returns a session-tag of 4-byte length, if sstag is not part of an connecting or ongoing transaction """
@@ -247,15 +135,14 @@ class H2HTransaction(object):
                 if not self.cetpstate_mgr.has_established_transaction((sstag, dstag)):                   # Checks connected transactions
                     return sstag
 
-
-    def get_packet_details(self, cetp_msg):
-        """ Sets basic details of an inbound CETP message """
-        inbound_sstag           = cetp_msg['SST']
-        inbound_dstag           = cetp_msg['DST']
-        self.sstag, self.dstag  = inbound_dstag, inbound_sstag                                       # Sender's SST is DST for CES
-        self.packet             = cetp_msg
-        self.received_tlvs      = cetp_msg['TLV']
-
+    def _check_sessionTags_uniqueness(self, sstag=0, dstag=0):
+        """ Checks whether (SST, DST) pair will be locally unique, if the H2H negotiation succeeds    - Since DST is assigned by remote CES. """
+        if dstg !=0 and self.cetpstate_mgr.has_established_transaction((sstag, dstag)):
+            self._logger.error(" Failure: Resulting ({},{}) pair will not be locally unique in CES".format(sstag, dstag))
+            return False
+        return True
+        
+                
     def show(self, packet):
         s = ""
         for k, v in packet.items():
@@ -294,7 +181,79 @@ class H2HTransaction(object):
             self._logger.info("\n"+m)
         s = self.show(packet)
         print(s, "\n")   
+
+
+
+
+class H2HTransaction(CETPTransaction):
+
+    def _create_offer_tlv(self, tlv):
+        try:
+            group, code = tlv['group'], tlv['code']
+            if group in ["id", "control"]:
+                func = CETP.SEND_TLV_GROUP[group][code]
+                tlv = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True, interfaces=self.interfaces, query=False)
+            return tlv
+        
+        except Exception as ex:
+            self._logger.error("Exception '{}' in _create_offer_tlv() for tlv : '{}'".format(ex, tlv))
+            return None
+
+    def _create_request_tlv(self, tlv):
+        try:
+            group, code = tlv['group'], tlv['code']
+            #print(self.policy)
+            if group in ["id", "control"]:
+                func = CETP.SEND_TLV_GROUP[group][code]
+                tlv  = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True, interfaces=self.interfaces, query=True)
+                return tlv
+
+        except Exception as ex:
+            self._logger.error("Exception '{}' in  _create_request_tlv() for tlv : '{}'".format(ex, tlv))
+            return None
+
+    def _create_response_tlv(self, tlv):
+        try:
+            group, code = tlv['group'], tlv['code']
+            if group in ["id", "control"]:
+                func = CETP.RESPONSE_TLV_GROUP[group][code]
+                tlv  = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True,interfaces=self.interfaces)
+            return tlv
+
+        except Exception as ex:
+            self._logger.error("Exception '{}' in  _create_response_tlv() for tlv : '{}'".format(ex, tlv))
+            return None
+
+    def _verify_tlv(self, tlv, policy=None):
+        try:
+            group, code = tlv['group'], tlv['code']
+            if group in ["id", "control"]:
+                func   = CETP.VERIFY_TLV_GROUP[group][code]
+                if policy!=None:
+                    result = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=policy, transaction=self, h2h_session=True, interfaces=self.interfaces)
+                else:
+                    result = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True, interfaces=self.interfaces)
+                return result
+        
+        except Exception as ex:
+            self._logger.error("Exception '{}' in _verify_tlv() for tlv : '{}'".format(ex, tlv))
+            return False
+
+
+    def is_IPv4(self, ip4_addr):
+        return CETP.is_IPv6(ip4_addr)
     
+    def is_IPv6(self, ip6_addr):
+        return CETP.is_IPv6(ip6_addr)
+
+    def _allocate_proxy_address(self, lip):
+        """Allocates a proxy IP address to represent remote host in local CES."""
+        if self.is_IPv4(lip):      ap = "AP_PROXY4_HOST_ALLOCATION"
+        elif Utils.is_IPv6(lip):   ap = "AP_PROXY6_HOST_ALLOCATION"
+        proxy_ip = self.cetpstate_mgr.allocate_proxy_address(lip)
+        return proxy_ip
+
+
 
 class H2HTransactionOutbound(H2HTransaction):
     def __init__(self, loop=None, sstag=0, dstag=0, cb=None, host_ip="", src_id="", dst_id="", l_cesid="", r_cesid="", policy_mgr= None, host_register=None, cetp_security=None, \
@@ -349,7 +308,7 @@ class H2HTransactionOutbound(H2HTransaction):
                 return False
             
             if self.load_policies(src_id = self.src_id) is None:
-                self._logger.error("Failure to load policies for host '{}'".format(self.src_id))
+                self._logger.error("Failure to load policies for host-ID '{}'".format(self.src_id))
                 return False
             
             self.load_parameters()
@@ -368,8 +327,12 @@ class H2HTransactionOutbound(H2HTransaction):
         """ Unregisters the incomplete negotiation upon timeout """
         if not self.is_negotiated():
             self._logger.error(" Incomplete H2H-state towards '{}' expired".format(self.dst_id))
-            self.cetpstate_mgr.remove_initiated_transaction((self.sstag, 0))
-            self.cetp_h2h.update_H2H_transaction_count(initiated=False)
+            self._unregister_h2h()
+    
+    def _unregister_h2h(self):
+        self.cetpstate_mgr.remove_initiated_transaction((self.sstag, 0))
+        #self.cetp_h2h.update_H2H_transaction_count(initiated=False)
+        self._execute_dns_callback(resolution=False)
     
     def is_negotiated(self):
         return self.h2h_negotiation_status
@@ -405,7 +368,7 @@ class H2HTransactionOutbound(H2HTransaction):
         self.last_packet_sent = cetp_msg
         self.cetp_negotiation_history.append(cetp_msg)
         self.cetpstate_mgr.add_initiated_transaction((self.sstag,0), self)                # Registering the H2H state
-        self.cetp_h2h.update_H2H_transaction_count()
+        #self.cetp_h2h.update_H2H_transaction_count()
         self._schedule_completion_check()
         ##self._logger.info("start_cetp_processing delay: {}".format(now-start_time))
         return cetp_msg
@@ -453,7 +416,7 @@ class H2HTransactionOutbound(H2HTransaction):
         self.rtt += 1
         
         if self.rtt > NEGOTIATION_RTT_THRESHOLD:                                        # Prevents infinite-exchange of CETP policies.
-            self.cetpstate_mgr.remove_initiated_transaction((self.sstag, self.dstag))
+            self._unregister_h2h()
             return (False, cetp_resp)
         
         if not self._pre_process(cetp_msg):
@@ -579,17 +542,15 @@ class H2HTransactionOutbound(H2HTransaction):
     
     def _process_negotiation_failure(self):
         """ Steps to execute on failure of negotiation """
-        self.cetpstate_mgr.remove_initiated_transaction((self.sstag, 0))
-        self.cetp_h2h.update_H2H_transaction_count(initiated=False)
         self.unregister_handler.cancel()
-        self._execute_dns_callback(resolution=False)
+        self._unregister_h2h()
     
     def _process_negotiation_success(self):
         """ Executes DNS callback, AND session-tags management for an established transaction. """
         self.cetpstate_mgr.remove_initiated_transaction((self.sstag, 0))
         self.cetpstate_mgr.add_established_transaction((self.sstag, self.dstag), self)
         self.unregister_handler.cancel()
-        self.cetp_h2h.update_H2H_transaction_count(initiated=False)                            # To reduce number of ongoing transactions.
+        #self.cetp_h2h.update_H2H_transaction_count(initiated=False)                            # To reduce number of ongoing transactions.
         return True
 
     def _create_connection(self):
@@ -1078,7 +1039,29 @@ def test_cb(a,b,r_addr=None, success=False):
         print("H2H Success")
     else: 
         print("H2H failed")
+
+
+def instantiate_h2hOutboundTransaction(loop, ip_addr, dst_id):
+    import yaml, CETPSecurity, ConnectionTable, PolicyManager
+
+    cesid                  = "cesa.lte."
+    cetp_policies          = "config_cesa/cetp_policies.json"
+    filename               = "config_cesa/config_cesa_ct.yaml"
+    config_file            = open(filename)
+    ces_conf               = yaml.load(config_file)
+    ces_params             = ces_conf['CESParameters']
+    conn_table             = ConnectionTable.ConnectionTable()
+    cetpstate_mgr          = ConnectionTable.CETPStateTable()                                       # Records the established CETP transactions (both H2H & C2C). Required for preventing the re-allocation already in-use SST & DST (in CETP transaction).
+    cetp_security          = CETPSecurity.CETPSecurity(loop, conn_table, ces_params)
+    interfaces             = PolicyManager.FakeInterfaceDefinition(cesid)
+    policy_mgr             = PolicyManager.PolicyManager(cesid, policy_file=cetp_policies)          # Shall ideally fetch the policies from Policy Management System (of Hassaan)    - And will be called, policy_sys_agent
+    host_register          = PolicyManager.HostRegister()
     
+    h2h = H2HTransactionOutbound(loop=loop, cb=None, host_ip=ip_addr, src_id="", dst_id=dst_id, l_cesid="cesa.lte.", r_cesid="cesblte.", cetp_h2h=None, \
+                                                ces_params=ces_params, policy_mgr=policy_mgr, cetpstate_mgr=cetpstate_mgr, host_register=host_register, \
+                                                conn_table=conn_table, interfaces=interfaces, cetp_security=cetp_security)
+    return h2h
+
 def instantiate_h2hLocalTransaction(loop, ip_addr, dst_id):
     import yaml, CETPSecurity, ConnectionTable, PolicyManager
 
@@ -1097,6 +1080,22 @@ def instantiate_h2hLocalTransaction(loop, ip_addr, dst_id):
     h2h = H2HTransactionLocal(loop=loop, cb=None, host_ip=ip_addr, src_id="", dst_id=dst_id, policy_mgr=policy_mgr, \
                               cetpstate_mgr=cetpstate_mgr, cetp_security= cetp_security, host_register=host_register, conn_table=conn_table)
     return h2h
+
+
+@asyncio.coroutine
+def test_H2HCETP(h2h):
+    cb_args = ("SomeQ", ("10.0.3.111", 55443))
+    cb      = (test_cb, cb_args)
+    h2h.cb  = cb
+    cetp_message = yield from h2h.start_cetp_processing()
+    print("cetp_message: ", cetp_message)
+    if cetp_message!=None:
+        for it in range(0,3):
+            print("iteration", it)
+            res = h2h.continue_cetp_processing(cetp_message)
+            (status, cetp_message) = res
+            print("cetp_message: ", cetp_message)
+        
 
 @asyncio.coroutine
 def test_localH2H(h2h):
@@ -1120,14 +1119,14 @@ def test_forbiddenDestination(h2h):
     
    
 def test_function(h2h, ip_addr, dst_id):
-    """ Client testing methods """
-    #asyncio.ensure_future(test_connection(loop))
+    """ Testing CES/CETP H2HTransactions """
+    asyncio.ensure_future(test_H2HCETP(h2h))
     #asyncio.ensure_future(test_unreachable_ep(loop))
     #asyncio.ensure_future(test_keepalive_t0(loop))
     #test_msg_framing(loop)
     
-    """ Server testing methods """
-    asyncio.ensure_future(test_localH2H(h2h))
+    """ Testing local H2HTransactions """
+    #asyncio.ensure_future(test_localH2H(h2h))
     #asyncio.ensure_future(test_forbiddenSender(h2h))
     #asyncio.ensure_future(test_forbiddenDestination(h2h))
 
@@ -1137,8 +1136,11 @@ def test_function(h2h, ip_addr, dst_id):
 if __name__=="__main__":
     logging.basicConfig(level=logging.INFO)
     loop = asyncio.get_event_loop()
-    ip_addr, dst_id = "10.0.3.111", "srv1.hosta2.cesa.lte."
-    h2h = instantiate_h2hLocalTransaction(loop, ip_addr, dst_id)
+    #ip_addr, dst_id = "10.0.3.111", "srv1.hosta2.cesa.lte."
+    #h2h = instantiate_h2hLocalTransaction(loop, ip_addr, dst_id)
+    
+    ip_addr, dst_id = "10.0.3.111", "srv1.hostb1.cesb.lte."
+    h2h = instantiate_h2hOutboundTransaction(loop, ip_addr, dst_id)
     test_function(h2h, ip_addr, dst_id)
     
     try:
