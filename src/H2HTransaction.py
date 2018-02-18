@@ -249,7 +249,7 @@ class H2HTransaction(CETPTransaction):
     def _allocate_proxy_address(self, lip):
         """Allocates a proxy IP address to represent remote host in local CES."""
         if self.is_IPv4(lip):      ap = "AP_PROXY4_HOST_ALLOCATION"
-        elif Utils.is_IPv6(lip):   ap = "AP_PROXY6_HOST_ALLOCATION"
+        elif self.is_IPv6(lip):   ap = "AP_PROXY6_HOST_ALLOCATION"
         proxy_ip = self.cetpstate_mgr.allocate_proxy_address(lip)
         return proxy_ip
 
@@ -410,18 +410,17 @@ class H2HTransactionOutbound(H2HTransaction):
         ##self._logger.info("Host policy: {}".format(self.opolicy))
         #self.pprint(cetp_msg, m="Inbound Response")
 
-        error = False
-        negotiation_status, cetp_resp = None, None
-        tlvs_to_send, error_tlvs      = [], []
+        error                       = False
+        tlvs_to_send, error_tlvs    = [], []
         self.rtt += 1
         
         if self.rtt > NEGOTIATION_RTT_THRESHOLD:                                        # Prevents infinite-exchange of CETP policies.
             self._unregister_h2h()
-            return (False, cetp_resp)
+            return
         
         if not self._pre_process(cetp_msg):
             self._logger.error(" Inbound packet SST={} -> DST={} failed in pre_processing.".format(self.sstag, self.dstag))
-            return (None, cetp_resp)
+            return
         
         """
         Processing logic:
@@ -478,16 +477,17 @@ class H2HTransactionOutbound(H2HTransaction):
         if error:
             self._logger.error(" H2H policy negotiation failed in {} RTT".format(self.rtt))
             self._process_negotiation_failure()
+            self.h2h_negotiation_status = False
             
             if self.dstag==0:
-                return (False, cetp_resp)                                                                         # Locally terminate session, as iCES is stateless
+                return                                                                                            # Locally terminate session, as iCES is stateless
             else:
                 #self._logger.info(" Responding remote CES with the terminate-TLV")                               # Since remote CES has completed the transaction
                 cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs = error_tlvs)        # Send as 'Info' TLV
                 self.last_packet_sent = cetp_message
                 self.cetp_negotiation_history.append(cetp_message)
                 #self.pprint(cetp_message, m="oCES Packet")
-                return (False, cetp_message)
+                return cetp_message
         else:
             if self._is_ready():
                 if self._create_connection():
@@ -495,15 +495,16 @@ class H2HTransactionOutbound(H2HTransaction):
                     #self.rtt_time.append(time.time()-self.start_time)
                     self._process_negotiation_success()
                     self.h2h_negotiation_status = True
-                    return (self.h2h_negotiation_status, "")
+                    return
+                
                 else:
-                    self._logger.error(" Responding host session with the terminate-TLV")
+                    self._logger.error(" Failed to create connection -> Responding host session with the terminate-TLV")
                     self._process_negotiation_failure()
                     tlvs_to_send = [self._get_terminate_tlv()]
                     cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
                     self.pprint(cetp_message, m="Outbound Msg")
-                    negotiation_status = False
-                    return (negotiation_status, cetp_message)
+                    self.h2h_negotiation_status = False
+                    return cetp_message
             else:
                 if self.rtt < NEGOTIATION_RTT_THRESHOLD:
                     # Issuing all sender policy requirements
@@ -516,22 +517,20 @@ class H2HTransactionOutbound(H2HTransaction):
                     self.last_packet_sent = cetp_message
                     self.last_packet_received = self.packet
                     self.cetp_negotiation_history.append(cetp_message)
-                    ##self.pprint(cetp_msg)
-                    return (None, cetp_message)
+                    ##self.pprint(cetp_msg, m="Sent packet")
+                    self.h2h_negotiation_status = None
+                    return cetp_message
                 
                 else:
-                    cetp_resp = ""
                     self._logger.error(" Inbound packet didn't meet all the policy requirements of the sender-host in {} RTT".format(self.rtt))
                     self._process_negotiation_failure()
+                    self.h2h_negotiation_status = False
                     
                     if self.dstag!=0:
                         tlvs_to_send = [self._get_terminate_tlv()]
                         cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
                         self.pprint(cetp_message)
-                        negotiation_status = False
-                        return (negotiation_status, cetp_message)
-                    else:
-                        return (negotiation_status, cetp_resp)
+                        return cetp_message
 
         #except Exception as ex:
         #    #self._logger.info(" Exception in negotiating CETP-H2H session: {}".format(ex))
@@ -611,17 +610,17 @@ class H2HTransactionOutbound(H2HTransaction):
             return False
         return True
         
-    def post_h2h_negotiation(self, cetp_packet):
+    def post_h2h_negotiation(self, cetp_message):
         """  Processes a CETP packet received on a negotiated H2H session.  e.g. a 'terminate' TLV, or change in ratelimit of data connection. 
         """
         #self._logger.info(" Post-H2H negotiation packet on (SST={}, DST={})".format(self.sstag, self.dstag))
-        self.packet = cetp_packet
+        self.packet = cetp_message
         tlv_to_send = []
         
-        if 'TLV' not in cetp_packet:
+        if 'TLV' not in cetp_message:
             return False
         
-        received_tlvs = cetp_packet['TLV']
+        received_tlvs = cetp_message['TLV']
         
         for received_tlv in received_tlvs:
             if (received_tlv['group'] == 'control') and (received_tlv['code']=='terminate'):
@@ -736,20 +735,20 @@ class H2HTransactionInbound(H2HTransaction):
         return True
 
     @asyncio.coroutine
-    def start_cetp_processing(self, cetp_packet):
+    def start_cetp_processing(self, cetp_message):
         """ Processes the inbound CETP-packet for negotiating the H2H policies """
         #try:
         #self._logger.info("{}".format(42*'*') )
-        #self.pprint(cetp_packet, m="H2H Inbound packet")
+        #self.pprint(cetp_message, m="H2H Inbound packet")
         tlvs_to_send, error_tlvs = [], []
         negotiation_status  = None
         cetp_response       = ""
         error               = False
 
-        if not self._pre_process(cetp_packet):
+        if not self._pre_process(cetp_message):
             self._logger.error(" Inbound CETP packet ({}->{}) failed pre-processing()".format(self.sstag, self.dstag))
             negotiation_status = False
-            return (negotiation_status, cetp_response)
+            return
         
         # Processing inbound packet
         for received_tlv in self.received_tlvs:
@@ -792,42 +791,38 @@ class H2HTransactionInbound(H2HTransaction):
                     pass
     
         if error:
-            cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=error_tlvs)
-            ###self.pprint(cetp_message, m="CETP Error Response")
-            negotiation_status = False
-            return (negotiation_status, cetp_message)
+            tlvs_to_send        = error_tlvs
+            negotiation_status  = False
             
         else:
             if self._is_ready():
-                #All the  requirements of remote-CES are met -> Accept/Create CETP connection (i.e. by assigning 'SST') and Export to stateful (for post-negotiation CETP flow etc.)
+                # Create H2H connection, if all the  requirements of remote-host are met
                 if self._create_connection():
                     #self._logger.info("{} H2H-policy negotiation succeeded -> Create transaction (SST={}, DST={})".format(42*'#', self.sstag, self.dstag))
-                    self.sstag = self.generate_session_tags(self.dstag)
-                    stateful_transansaction = self._export_to_stateful()
-                    self.last_received_packet = self.packet
-                    cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
-                    #self.pprint(cetp_message, m="iCES Response")
-                    self.last_packet_sent = cetp_message
-                    ##self._logger.info("iCES start_cetp_processing delay: {}".format(now- start_time))
-                    return (True, cetp_message)
+                    negotiation_status = True
+                    stateful_transansaction     = self._export_to_stateful()            # Create stateful version
                 else:
                     if len(error_tlvs) == 0:
                         error_tlvs = [self._get_terminate_tlv()]
                         
-                    cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=error_tlvs)
                     negotiation_status = False
-                    return (negotiation_status, cetp_message)                    
+                    tlvs_to_send       = error_tlvs
+                    
             else:
                 #self._logger.info(" {} unsatisfied iCES requirements -> Initiate full query: ".format(len(self.ipolicy_tmp.required)) )
                 tlvs_to_send = []
+                negotiation_status = None
+                
                 for rtlv in self.ipolicy.get_required():            # Generating Full Query message
                     ret_tlv = self._create_request_tlv(rtlv)
                     tlvs_to_send += ret_tlv
 
-                negotiation_status = None
-                cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
-                ##self.pprint(cetp_message, m="CETP Response packet")
-                return (negotiation_status, cetp_message)
+                
+        cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
+        ##self.pprint(cetp_message, m="CETP Response packet")
+        if negotiation_status is True:
+            stateful_transansaction.last_packet_sent = cetp_message
+        return cetp_message
     
         #except Exception as ex:
         #    #self._logger.info("Exception: {}".format(ex))
@@ -842,6 +837,7 @@ class H2HTransactionInbound(H2HTransaction):
 
     def _create_connection(self):
         try:
+            self.sstag                      = self.generate_session_tags(self.dstag)
             self.lfqdn, self.rfqdn          = self.src_id, self.dst_id
             self.lip                        = "10.0.3.111"                                    # Use Jesus defined functions
             self.lpip                       = self._allocate_proxy_address(self.lip)          # Use Jesus defined functions
@@ -865,8 +861,10 @@ class H2HTransactionInbound(H2HTransaction):
         new_transaction = H2HTransactionOutbound(sstag=self.sstag, dstag=self.dstag, policy_mgr= self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, conn_table=self.conn_table, \
                                                  l_cesid=self.l_cesid, r_cesid=self.r_cesid, direction="inbound", src_id=self.src_id, dst_id=self.dst_id, cetp_h2h=self.cetp_h2h, \
                                                  cetp_security=self.cetp_security)
-        new_transaction.opolicy = self.ipolicy
-        new_transaction.policy  = self.policy
+        
+        new_transaction.opolicy                 = self.ipolicy
+        new_transaction.policy                  = self.policy
+        new_transaction.last_received_packet    = self.packet
         self.cetpstate_mgr.add_established_transaction((self.sstag, self.dstag), new_transaction)
         return new_transaction
     

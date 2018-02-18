@@ -11,6 +11,7 @@ import traceback
 import json
 import ssl
 import copy
+import traceback
 import cetpManager
 import C2CTransaction
 import H2HTransaction
@@ -258,6 +259,7 @@ class CETPC2CLayer:
                     
         except Exception as ex:
             self._logger.info("Exception in consuming messages from CETP Transport: {}".format(ex))
+            traceback.print_exc(file=sys.stdout)
             
     
     def process_c2c(self, sstag, dstag, cetp_msg, transport):
@@ -273,7 +275,7 @@ class CETPC2CLayer:
             o_c2c   = self.cetpstate_mgr.get_initiated_transaction( (sstag, 0) )
             result  = o_c2c.continue_c2c_negotiation(cetp_msg)
             (status, cetp_resp) = result
-                        
+            
             if status == True:
                 self.set_c2c_negotiation()
                 self._update_connectivity_status()

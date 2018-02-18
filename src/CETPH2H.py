@@ -143,10 +143,9 @@ class CETPH2H:
         elif self.cetpstate_mgr.has_initiated_transaction( (sstag, 0) ):
             self._logger.debug(" Continue resolving H2H-transaction (SST={} -> DST={})".format(sstag, 0))
             o_h2h = self.cetpstate_mgr.get_initiated_transaction( (sstag, 0) )
-            resp = o_h2h.continue_cetp_processing(cetp_msg)
-            (ret, cetp_message) = resp
-            if len(cetp_message) != 0:
-                self.send(cetp_message)
+            cetp_resp = o_h2h.continue_cetp_processing(cetp_msg)
+            if cetp_resp is not None:
+                self.send(cetp_resp)
             
         elif inbound_dstag == 0:
             #self._logger.info(" No prior H2H-transaction found -> Initiating Inbound H2HTransaction (SST={} -> DST={})".format(inbound_sstag, inbound_dstag))
@@ -159,10 +158,9 @@ class CETPH2H:
         
     @asyncio.coroutine
     def process_inbound_transaction(self, ih2h, cetp_msg):
-        res = yield from ih2h.start_cetp_processing(cetp_msg)
-        (negotiation_status, cetp_message) = res
-        if cetp_message != None:
-            self.send(cetp_message)
+        cetp_resp = yield from ih2h.start_cetp_processing(cetp_msg)
+        if cetp_resp is not None:
+            self.send(cetp_resp)
         
     def send(self, msg):
         """ Forwards the message to CETP c2c layer"""
