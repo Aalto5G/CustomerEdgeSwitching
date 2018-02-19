@@ -270,7 +270,6 @@ def response_ces_keepalive(**kwargs):
     try:
         new_tlv = copy.copy(tlv)
         ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
-        transaction.last_seen = time.time()
         new_tlv['ope'] = "info"
         new_tlv['value'] = ""
         return [new_tlv]

@@ -548,47 +548,42 @@ class CETPManager:
             self._logger.info("Exception '{}' in terminating session".format(ex))
 
 
-    def _process_session_terminate_message(self, r_cesid):
+    def process_session_terminate_message(self, r_cesid, tag_list=[]):
         """ Terminate all H2H sessions to/from a remote-CESID """
-        keytype = ConnectionTable.KEY_MAP_REMOTE_CESID
-        key = r_cesid
-        
-        if self.conn_table.has(keytype, key):
-            conn_list = self.conn_table.get(keytype, key)
-            self._logger.warning(" Terminating all H2H sessions towards {}".format(r_cesid))
+        try:
+            keytype = ConnectionTable.KEY_MAP_REMOTE_CESID
+            key = r_cesid
             
-            for num in range(0, len(conn_list)):
-                conn = conn_list[0]
+            if self.conn_table.has(keytype, key):
+                conn_list = self.conn_table.get(keytype, key)
                 
-                if conn.connectiontype=="CONNECTION_H2H":
-                    self.conn_table.delete(conn)
-                    sstag, dstag = conn.sstag, conn.dstag
-                    h2h_transaction = self.cetpstate_mgr.get_established_transaction((sstag,dstag))
-                    self.cetpstate_mgr.remove_established_transaction((sstag,dstag))
+                if len(tag_list)==0:
+                    self._logger.warning(" Terminating all H2H session with CES '{}'".format(r_cesid))
+                
+                    for num in range(0, len(conn_list)):
+                        conn = conn_list[0]
+                        
+                        if conn.connectiontype=="CONNECTION_H2H":
+                            self.conn_table.delete(conn)
+                            sstag, dstag = conn.sstag, conn.dstag
+                            h2h_transaction = self.cetpstate_mgr.get_established_transaction((sstag,dstag))
+                            self.cetpstate_mgr.remove_established_transaction((sstag,dstag))
+                            
+                else:
+                    self._logger.warning(" Terminating {} H2H sessions towards {}".format(len(tag_list), r_cesid))
                     
-            self._logger.info("Closed all H2H session with CES '{}'".format(r_cesid))
-
-
-    def _process_session_terminate_message2(self, r_cesid, tag_list):
-        """ Terminate all H2H sessions to/from a remote-CESID """
-        keytype = ConnectionTable.KEY_MAP_REMOTE_CESID
-        key = r_cesid
-        
-        if self.conn_table.has(keytype, key):
-            conn_list = self.conn_table.get(keytype, key)
-            self._logger.warning(" Terminating H2H sessions towards {}".format(r_cesid))
+                    for num in range(0, len(conn_list)):
+                        conn = conn_list[0]
+                        sstag, dstag = conn.sstag, conn.dstag
+                        
+                        if conn.connectiontype=="CONNECTION_H2H" and ((dstag, sstag) in tag_list):          #Flipped the (SST, DST) order to match the sender perspective
+                            self.conn_table.delete(conn)
+                            h2h_transaction = self.cetpstate_mgr.get_established_transaction((sstag,dstag))
+                            self.cetpstate_mgr.remove_established_transaction((sstag,dstag))
+                            
+        except Exception as ex:
+            self._logger.error("Exception {} in process_session_terminate_message()".format(ex))
             
-            for num in range(0, len(conn_list)):
-                conn = conn_list[0]
-                sstag, dstag = conn.sstag, conn.dstag
-                
-                if conn.connectiontype=="CONNECTION_H2H" and ((dstag, sstag) in tag_list):          #Flipped the (SST, DST) order to match the sender perspective
-                    self.conn_table.delete(conn)
-                    h2h_transaction = self.cetpstate_mgr.get_established_transaction((sstag,dstag))
-                    self.cetpstate_mgr.remove_established_transaction((sstag,dstag))
-                    
-            self._logger.info("Closed all H2H session with CES '{}'".format(r_cesid))
-
 
     def terminate_sessions_by_tags(self, tags_list):
         """ Terminates CETP sessions identified as a list of (SST, DST) pairs """

@@ -114,7 +114,7 @@ class CETPC2CLayer:
     def _has_processed_rlocs(self, key):
         return key in self.processed_rlocs
 
-    def get_c2c_transaction(self, transport):
+    def get_c2c_transaction(self):
         return self.c2c_transaction
     
     def register_c2c(self, c2c_transaction):
@@ -456,44 +456,38 @@ class CETPC2CLayer:
     ********* Some functionalities exposed by the CETP-C2C API *******
     *************  *************  ************* ********* ******** """
 
+    def shutdown(self):
+        """ Close the C2C link between two CES nodes """
+        c2c_transaction = self.get_c2c_transaction()
+        c2c_transaction.set_terminated()
+        c2c_transaction.send_cetp_terminate()
+        self.close_all_transport_connections()
+            
     def close_all_transport_connections(self):
         """ Closes all connected transports to remote CES """
         for transport in self.connected_transports:
-            self._close_transport_connection(transport)
-        
-    def _close_transport_connection(self, transport):
-        """ Closes the transport connection """
-        c2c_transaction = self.get_c2c_transaction(transport)
-        c2c_transaction.set_terminated()
-        c2c_transaction.send_cetp_terminate()
-        c2c_transaction.terminate_transport()
+            transport.close()
         
     def report_evidence(self, h_sstag, h_dstag, r_hostid, r_cesid, misbehavior_evidence):
         """ Reports misbehavior evidence observed in H2H (sstag, dstag) to the remote CES """
-        c2c_transaction = self.get_active_c2c_link()
+        c2c_transaction = self.get_c2c_transaction()
         c2c_transaction.report_misbehavior_evidence(h_sstag, h_dstag, r_hostid, misbehavior_evidence)
 
     def block_malicious_remote_host(self, r_hostid):
-        c2c_transaction = self.get_active_c2c_link()
+        c2c_transaction = self.get_c2c_transaction()
         c2c_transaction.block_remote_host(r_hostid)
         
     def drop_connection_to_local_domain(self, l_domain):
-        c2c_transaction = self.get_active_c2c_link()
+        c2c_transaction = self.get_c2c_transaction()
         c2c_transaction.drop_connection_to_local_domain(l_domain)
 
     def close_all_h2h_sessions(self):
-        c2c_transaction = self.get_active_c2c_link()
+        c2c_transaction = self.get_c2c_transaction()
         c2c_transaction.drop_all_h2h_sessions()
 
     def close_h2h_sessions(self, h2h_tags):
-        c2c_transaction = self.get_active_c2c_link()
+        c2c_transaction = self.get_c2c_transaction()
         c2c_transaction.drop_h2h_sessions(h2h_tags)
-        
-    def get_active_c2c_link(self):
-        """ Returns c2c-transaction corresponding to an active signalling transport """
-        transport = self._select_transport()
-        c2c_transaction = self.get_c2c_transaction(transport)
-        return c2c_transaction
     
 
     """ ***********************    ***********************    ***********************
