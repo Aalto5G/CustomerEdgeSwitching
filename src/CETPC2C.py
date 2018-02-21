@@ -190,8 +190,9 @@ class CETPC2CLayer:
     @asyncio.coroutine
     def initiate_c2c_transaction(self, transport):
         """ Initiates/Continues CES-to-CES negotiation """
-        c2c_transaction  = C2CTransaction.oC2CTransaction(self._loop, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetpstate_mgr=self.cetpstate_mgr, transport=transport, \
-                                                          policy_mgr=self.policy_mgr, proto=transport.proto, ces_params=self.ces_params, cetp_security=self.cetp_security, \
+        remote_addr, proto = transport.get_remotepeer(), transport.proto
+        c2c_transaction  = C2CTransaction.oC2CTransaction(self._loop, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetpstate_mgr=self.cetpstate_mgr, remote_addr=remote_addr, \
+                                                          policy_mgr=self.policy_mgr, proto=proto, ces_params=self.ces_params, cetp_security=self.cetp_security, \
                                                           interfaces=self.interfaces, c2c_layer=self, conn_table=self.conn_table, cetp_mgr=self.cetp_mgr)
         
         self.register_c2c(c2c_transaction)

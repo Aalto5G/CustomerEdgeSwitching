@@ -89,8 +89,7 @@ class CETPTransaction(object):
             if (code != None) and (tlv["code"] == code):
                 return True
             return False
-        except:
-            self._logger.error("Exception in _check_tlv(): {}".format(ex))
+        except Exception as ex:
             return False
 
     def _check_tlv2(self, tlv, group=[], code=[]):
@@ -116,14 +115,14 @@ class CETPTransaction(object):
             
             if code is None:
                 retlist.append(tlv)
-            elif tlv.code == code:
+            elif tlv["code"] == code:
                 retlist.append(tlv)
         return retlist
     
     def generate_session_tags(self, dstag=0):
         """ Returns a session-tag of 4-byte length, if sstag is not part of an connecting or ongoing transaction """
         while True:
-            sstag = random.randint(0, 2**32)
+            sstag = random.randint(1, 2**32)
             if dstag == 0:
                 # For oCES, it checks the connecting transactions
                 if not self.cetpstate_mgr.has_initiated_transaction((sstag, 0)):
@@ -396,11 +395,19 @@ class H2HTransactionOutbound(H2HTransaction):
                 if self._check_tlv(received_tlv, ope="query"):
                     self.query_message = True
                     break
-                
+
+            if not self.query_message:
+                for received_tlv in self.received_tlvs:
+                    if self._check_tlv(received_tlv, ope="info") and self._check_tlv(received_tlv, group="id") and self._check_tlv(received_tlv, code ="fqdn"):
+                        remote_hostid = received_tlv['value']
+                        
+                        if remote_hostid != self.dst_id:
+                            return False
+                        
             return True
         
         except Exception as ex:
-            self._logger.error(" Exception '{}' in pre-processing the CETP packet '{}'".format(ex))
+            self._logger.error(" Exception '{}' in pre-processing the CETP packet".format(ex))
             return False
 
 
@@ -500,7 +507,8 @@ class H2HTransactionOutbound(H2HTransaction):
                 else:
                     self._logger.error(" Failed to create connection -> Responding host session with the terminate-TLV")
                     self._process_negotiation_failure()
-                    tlvs_to_send = [self._get_terminate_tlv()]
+                    if len(error_tlvs)==0:   tlvs_to_send = [self._get_terminate_tlv()]
+                    tlvs_to_send = error_tlvs
                     cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
                     self.pprint(cetp_message, m="Outbound Msg")
                     self.h2h_negotiation_status = False
@@ -613,29 +621,31 @@ class H2HTransactionOutbound(H2HTransaction):
     def post_h2h_negotiation(self, cetp_message):
         """  Processes a CETP packet received on a negotiated H2H session.  e.g. a 'terminate' TLV, or change in ratelimit of data connection. 
         """
-        #self._logger.info(" Post-H2H negotiation packet on (SST={}, DST={})".format(self.sstag, self.dstag))
-        self.packet = cetp_message
-        tlv_to_send = []
-        
-        if 'TLV' not in cetp_message:
-            return False
-        
-        received_tlvs = cetp_message['TLV']
-        
-        for received_tlv in received_tlvs:
-            if (received_tlv['group'] == 'control') and (received_tlv['code']=='terminate'):
-                self._logger.warning(" Terminate received for an established H2H Session ({}->{}).".format(self.sstag, self.dstag))
-                self.cetpstate_mgr.remove_established_transaction((self.sstag, self.dstag))
-                keytype = ConnectionTable.KEY_MAP_CES_TO_CES
-                key = (self.sstag, self.dstag)
+        try:
+            #self._logger.info(" Post-H2H negotiation packet on (SST={}, DST={})".format(self.sstag, self.dstag))
+            self.packet = cetp_message
+            tlv_to_send = []
+            
+            if 'TLV' not in cetp_message:
+                return False
+            
+            for received_tlv in cetp_message['TLV']:
                 
-                if self.conn_table.has(keytype, key):
-                    conn = self.conn_table.get(keytype, key)
-                    self.conn_table.delete(conn)
-                else:
-                    self._logger.error("No H2H connection object is found for ({}->{})".format(self.sstag, self.dstag))
-                    #print("After terminate", self.conn_table.connection_dict)
+                if self._check_tlv(received_tlv, group="control") and self._check_tlv(received_tlv, code="terminate"):
+                    self._logger.warning(" Terminate received for an established H2H Session ({}->{}).".format(self.sstag, self.dstag))
+                    self.cetpstate_mgr.remove_established_transaction((self.sstag, self.dstag))
+                    keytype = ConnectionTable.KEY_MAP_CES_TO_CES
+                    key = (self.sstag, self.dstag)
                     
+                    if self.conn_table.has(keytype, key):
+                        conn = self.conn_table.get(keytype, key)
+                        self.conn_table.delete(conn)
+                    else:
+                        self._logger.error("No H2H connection object is found for ({}->{})".format(self.sstag, self.dstag))
+                        #print("After terminate", self.conn_table.connection_dict)
+                        
+        except Exception as ex:
+            self._logger.error("Exception '{}'".format(ex))
 
 
 
@@ -1030,120 +1040,3 @@ class H2HTransactionLocal(H2HTransaction):
         if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_LocalHosts_Inbound_Disabled, hostid):
             return False
         return True
-    
-
-def test_cb(a,b,r_addr=None, success=False):
-    if success: 
-        print("H2H Success")
-    else: 
-        print("H2H failed")
-
-
-def instantiate_h2hOutboundTransaction(loop, ip_addr, dst_id):
-    import yaml, CETPSecurity, ConnectionTable, PolicyManager
-
-    cesid                  = "cesa.lte."
-    cetp_policies          = "config_cesa/cetp_policies.json"
-    filename               = "config_cesa/config_cesa_ct.yaml"
-    config_file            = open(filename)
-    ces_conf               = yaml.load(config_file)
-    ces_params             = ces_conf['CESParameters']
-    conn_table             = ConnectionTable.ConnectionTable()
-    cetpstate_mgr          = ConnectionTable.CETPStateTable()                                       # Records the established CETP transactions (both H2H & C2C). Required for preventing the re-allocation already in-use SST & DST (in CETP transaction).
-    cetp_security          = CETPSecurity.CETPSecurity(loop, conn_table, ces_params)
-    interfaces             = PolicyManager.FakeInterfaceDefinition(cesid)
-    policy_mgr             = PolicyManager.PolicyManager(cesid, policy_file=cetp_policies)          # Shall ideally fetch the policies from Policy Management System (of Hassaan)    - And will be called, policy_sys_agent
-    host_register          = PolicyManager.HostRegister()
-    
-    h2h = H2HTransactionOutbound(loop=loop, cb=None, host_ip=ip_addr, src_id="", dst_id=dst_id, l_cesid="cesa.lte.", r_cesid="cesblte.", cetp_h2h=None, \
-                                                ces_params=ces_params, policy_mgr=policy_mgr, cetpstate_mgr=cetpstate_mgr, host_register=host_register, \
-                                                conn_table=conn_table, interfaces=interfaces, cetp_security=cetp_security)
-    return h2h
-
-def instantiate_h2hLocalTransaction(loop, ip_addr, dst_id):
-    import yaml, CETPSecurity, ConnectionTable, PolicyManager
-
-    cesid                  = "cesa.lte."
-    cetp_policies          = "config_cesa/cetp_policies.json"
-    filename               = "config_cesa/config_cesa_ct.yaml"
-    config_file            = open(filename)
-    ces_conf               = yaml.load(config_file)
-    ces_params             = ces_conf['CESParameters']
-    conn_table             = ConnectionTable.ConnectionTable()
-    cetpstate_mgr          = ConnectionTable.CETPStateTable()                                       # Records the established CETP transactions (both H2H & C2C). Required for preventing the re-allocation already in-use SST & DST (in CETP transaction).
-    cetp_security          = CETPSecurity.CETPSecurity(loop, conn_table, ces_params)
-    interfaces             = PolicyManager.FakeInterfaceDefinition(cesid)
-    policy_mgr             = PolicyManager.PolicyManager(cesid, policy_file=cetp_policies)          # Shall ideally fetch the policies from Policy Management System (of Hassaan)    - And will be called, policy_sys_agent
-    host_register          = PolicyManager.HostRegister()
-    h2h = H2HTransactionLocal(loop=loop, cb=None, host_ip=ip_addr, src_id="", dst_id=dst_id, policy_mgr=policy_mgr, \
-                              cetpstate_mgr=cetpstate_mgr, cetp_security= cetp_security, host_register=host_register, conn_table=conn_table)
-    return h2h
-
-
-@asyncio.coroutine
-def test_H2HCETP(h2h):
-    cb_args = ("SomeQ", ("10.0.3.111", 55443))
-    cb      = (test_cb, cb_args)
-    h2h.cb  = cb
-    cetp_message = yield from h2h.start_cetp_processing()
-    print("cetp_message: ", cetp_message)
-    if cetp_message!=None:
-        for it in range(0,3):
-            print("iteration", it)
-            res = h2h.continue_cetp_processing(cetp_message)
-            (status, cetp_message) = res
-            print("cetp_message: ", cetp_message)
-        
-
-@asyncio.coroutine
-def test_localH2H(h2h):
-    cb_args = ("SomeQ", ("10.0.3.111", 55443))
-    cb      = (test_cb, cb_args)
-    h2h.cb  = cb
-    result  = yield from h2h.start_cetp_processing()     # Returns True or False
-    print(result)
-
-@asyncio.coroutine
-def test_forbiddenSender(h2h):
-    h2h.cetp_security.register_filtered_domains(CETPSecurity.KEY_BlacklistedLHosts, "hosta1.cesa.lte.")
-    yield from asyncio.sleep(0.1)
-    yield from test_localH2H(h2h)
-
-@asyncio.coroutine
-def test_forbiddenDestination(h2h):
-    h2h.cetp_security.register_filtered_domains(CETPSecurity.KEY_LocalHosts_Inbound_Disabled, "srv1.hosta1.cesa.lte.")
-    yield from asyncio.sleep(0.1)
-    yield from test_localH2H(h2h)
-    
-   
-def test_function(h2h, ip_addr, dst_id):
-    """ Testing CES/CETP H2HTransactions """
-    asyncio.ensure_future(test_H2HCETP(h2h))
-    #asyncio.ensure_future(test_unreachable_ep(loop))
-    #asyncio.ensure_future(test_keepalive_t0(loop))
-    #test_msg_framing(loop)
-    
-    """ Testing local H2HTransactions """
-    #asyncio.ensure_future(test_localH2H(h2h))
-    #asyncio.ensure_future(test_forbiddenSender(h2h))
-    #asyncio.ensure_future(test_forbiddenDestination(h2h))
-
-
-"""Need to test both the server and the client"""
-
-if __name__=="__main__":
-    logging.basicConfig(level=logging.INFO)
-    loop = asyncio.get_event_loop()
-    #ip_addr, dst_id = "10.0.3.111", "srv1.hosta2.cesa.lte."
-    #h2h = instantiate_h2hLocalTransaction(loop, ip_addr, dst_id)
-    
-    ip_addr, dst_id = "10.0.3.111", "srv1.hostb1.cesb.lte."
-    h2h = instantiate_h2hOutboundTransaction(loop, ip_addr, dst_id)
-    test_function(h2h, ip_addr, dst_id)
-    
-    try:
-        loop.run_forever()
-    except KeyboardInterrupt:
-        print("Ctrl+C Handled")
-    finally:
-        loop.close()

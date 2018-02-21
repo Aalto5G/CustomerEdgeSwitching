@@ -322,13 +322,13 @@ class CETPManager:
         """ Checks whether inbound message is part of existing or new CETP-C2C negotiation from a legitimate node... """ 
         inbound_sstag, inbound_dstag = cetp_msg['SST'], cetp_msg['DST']
         sstag, dstag    = inbound_dstag, inbound_sstag
-        r_addr          = transport.remotepeer
+        r_addr          = transport.get_remotepeer()
         proto           = transport.proto
         self._logger.info("No C2CTransaction (SST={} -> DST={}) exists -> Initiating inbound C2CTransaction".format(inbound_sstag, inbound_dstag))
         
         ic2c_transaction = C2CTransaction.iC2CTransaction(self._loop, r_addr=r_addr, sstag=sstag, dstag=sstag, l_cesid=self.cesid, policy_mgr=self.policy_mgr, \
-                                                           cetpstate_mgr=self.cetpstate_mgr, ces_params=self.ces_params, proto=proto, transport=transport, \
-                                                           cetp_security=self.cetp_security, interfaces=self.interfaces, conn_table=self.conn_table, cetp_mgr=self)
+                                                           cetpstate_mgr=self.cetpstate_mgr, ces_params=self.ces_params, proto=proto, cetp_security=self.cetp_security, \
+                                                           interfaces=self.interfaces, conn_table=self.conn_table, cetp_mgr=self)
         response = ic2c_transaction.process_c2c_transaction(cetp_msg)
         return response
 
