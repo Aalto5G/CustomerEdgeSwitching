@@ -153,6 +153,22 @@
 },
 {
 "type": "hostpolicy",
+"fqdn": "srv1.hosta2.cesa.lte.",
+"direction": "inbound",
+"policy": {
+    "request": [
+        { "ope":"query", "group": "id", "code": "fqdn", "value":["hostc1.cesa.lte.", "hostb1.cesb.lte."]},
+        { "ope":"query", "group": "control", "code": "caep" }
+    ],
+    "available": [
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"srv1.hosta1.cesa.lte." },
+        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" },
+        { "ope":"info", "group": "control", "code": "ack" }
+    ]
+    }
+},
+{
+"type": "hostpolicy",
 "fqdn": "hosta2.cesa.lte.",
 "direction": "outbound",
 "policy": {
