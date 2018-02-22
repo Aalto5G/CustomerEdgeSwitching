@@ -960,7 +960,7 @@ class iC2CTransaction(C2CTransaction):
                     if self._check_tlv(received_tlv, group="ces") and self._check_tlv(received_tlv, code="cesid"):
                         r_cesid = received_tlv['value']
                         break
-
+            
             if len(r_cesid)==0 or len(r_cesid) > 256 or (r_cesid != self.r_cesid) or (r_cesid==self.l_cesid):
                 self._logger.error(" Invalid Remote CES-ID")
                 return False

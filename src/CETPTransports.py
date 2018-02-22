@@ -105,6 +105,9 @@ class CETPTransport(asyncio.Protocol):
             self.c2c_layer.report_connectivity(self, status=False)
             del(self.c2c_layer)
 
+    def get_remote_cesid(self):
+        if hasattr(self, "r_cesid"):
+            return self.r_cesid
 
 
 class oCESTCPTransport(CETPTransport):
@@ -231,7 +234,7 @@ class iCESServerTLSTransport(iCESServerTCPTransport):
             self.transport.close()
             return
         
-        remote_id = self.get_remote_id()
+        remote_id = self._get_remote_id()
         if remote_id is None:
             self.transport.close()
             return
@@ -243,7 +246,7 @@ class iCESServerTLSTransport(iCESServerTCPTransport):
         self.cetp_mgr.report_connected_transport(self, self.r_cesid)
 
 
-    def get_remote_id(self):
+    def _get_remote_id(self):
         ssl_obj = self.transport.get_extra_info('ssl_object')
         crt = ssl_obj.getpeercert()
         subject_ids = crt.get('subject', ())

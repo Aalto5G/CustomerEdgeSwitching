@@ -324,9 +324,10 @@ class CETPManager:
         sstag, dstag    = inbound_dstag, inbound_sstag
         r_addr          = transport.get_remotepeer()
         proto           = transport.proto
+        r_cesid         = transport.get_remote_cesid()
         self._logger.info("No C2CTransaction (SST={} -> DST={}) exists -> Initiating inbound C2CTransaction".format(inbound_sstag, inbound_dstag))
         
-        ic2c_transaction = C2CTransaction.iC2CTransaction(self._loop, r_addr=r_addr, sstag=sstag, dstag=sstag, l_cesid=self.cesid, policy_mgr=self.policy_mgr, \
+        ic2c_transaction = C2CTransaction.iC2CTransaction(self._loop, r_addr=r_addr, sstag=sstag, dstag=sstag, l_cesid=self.cesid, r_cesid= r_cesid, policy_mgr=self.policy_mgr, \
                                                            cetpstate_mgr=self.cetpstate_mgr, ces_params=self.ces_params, proto=proto, cetp_security=self.cetp_security, \
                                                            interfaces=self.interfaces, conn_table=self.conn_table, cetp_mgr=self)
         response = ic2c_transaction.process_c2c_transaction(cetp_msg)
