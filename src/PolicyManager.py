@@ -98,6 +98,7 @@ class PolicyManager(object):
         self._logger.setLevel(LOGLEVEL_PolicyManager)             # Within this class, logger will only handle message with this or higher level.    (Otherwise, default value of basicConfig() will apply)
         self.load_policies(self.config_file)
         self.assign_policy_to_host()
+        print("self.ces_policy", self._cespolicy)
         
     def load_policies(self, config_file):
         try:
@@ -149,7 +150,7 @@ class PolicyManager(object):
             policy = self._cespolicy[key]
             return copy.deepcopy(policy)
         except Exception as ex:
-            #self._logger.error("CES policy doesn't exist for '{}'".format(self.l_cesid))
+            self._logger.error("Exception '{}' in loading policy for '{}'".format(ex, self.l_cesid))
             return None
     
     def get_host_policy(self, direction, host_id=""):

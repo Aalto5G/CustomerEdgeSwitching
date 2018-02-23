@@ -72,26 +72,10 @@ PPRINT_CODE  = {"cesid":"cesid", "pow":"pwork", "caces":"caces",     "fw_version
                 "evidence":"evdnc", "certificate":"certf", "caep":"caep ", "ack": "ack  ", "ipv4":"ipv4 ", "ipv6":"ipv6 ", "eth": "eth  ", "gre": "gre  "
                 }
 
-CES_CODE_TO_POLICY= {
-                    'cesid':'cesid',                       'cesid':'cesid',                         #Contains the CES-ID
-                    'ttl':'dp_ttl',                         'dp_ttl':'ttl',                         #Contains the TTL of the connection
-                    'certificate':'certificate',            'certificate':'certificate',            #CES-Certificate
-                    'keepalive_cycle':'keepalive_cycle',    'keepalive_cycle':'keepalive_cycle',    #Contains the keepalive cycle duration
-                    'keepalive':'keepalive',                'keepalive':'keepalive',                #Keepalive
-                    'fw_version':'fw_version',              'fw_version':'fw_version',              #Contains terminating codes {error, timeout} 
-                    'session_limit':'ces_session_limit',    'ces_session_limit':'session_limit',    #Contains waning codes {backoff}
-                    'host_sessions':'host_sessions',        'host_sessions':'host_sessions',        #Sets the rate limit {packets/s,bytes/s}
-                    'caces':'caces',                        'caces':'caces',                        #Contains the CA address for validating a CES
-                    'pow_algo':'pow_algo',                  'pow_algo':'pow_algo',                  #Proof-of-work mechanism to push the burden of communication to the sender
-                    'pow':'pow',                            'pow':'pow',
-                    'evidence_format':'evidence_format',    'evidence_format':'evidence_format',
-                    'evidence':'evidence',                  'evidence':'evidence',
-                    'host_filtering':'host_filtering',      'host_filtering':'host_filtering'
-                    }
+# 'session_limit':'ces_session_limit',    'ces_session_limit':'session_limit',    #Contains waning codes {backoff}
+# 'ttl':'dp_ttl',                         'dp_ttl':'ttl',                         #Contains the TTL of the connection
 
-CONTROL_CODES = {'caep':'caep',     'caep':'caep',
-                 'ack':'ack',       'ack':'ack'
-                }
+CONTROL_CODES = ['caep', 'ack']
 
 ALL_C2C_CODES = {'cesid', 'ttl', 'cert', 'keepalive_cycle', 'fw_ver', 'session_limit', 'terminate', 'warning', 'host_sessions', 'headersignature', \
                  'caces', 'pow', 'keepalive'}
@@ -114,17 +98,11 @@ VERIFY_TLV_RLOC_CODE      = {"ipv4":cetpOperations.verify_rloc,
 
 
 VERIFY_TLV_PAYLOAD_CODE   = {#"all"cetpOperations.verify_payload,
-                             "ipv4":cetpOperations.verify_payload,
-                             "ipv6":cetpOperations.verify_payload,
-                             "eth":cetpOperations.verify_payload,
                               "vxlan":cetpOperations.verify_payload,
                               "gre":cetpOperations.verify_payload,
                               "geneve":cetpOperations.verify_payload}
 
 SEND_TLV_PAYLOAD_CODE   = {#"all"cetpOperations.send_payload,
-                          "ipv4":cetpOperations.send_payload,
-                          "ipv6":cetpOperations.send_payload,
-                          "eth":cetpOperations.send_payload,
                           "vxlan":cetpOperations.send_payload,
                           "gre":cetpOperations.send_payload,
                           "geneve":cetpOperations.send_payload}
@@ -135,9 +113,6 @@ SEND_TLV_RLOC_CODE      = {#"all"cetpOperations.send_rloc,
                            "eth":cetpOperations.send_rloc}
 
 RESPONSE_TLV_PAYLOAD_CODE = {#"all"cetpOperations.response_payload,
-                             "ipv4":cetpOperations.response_payload,
-                             "ipv6":cetpOperations.response_payload,
-                             "eth":cetpOperations.response_payload,
                               "vxlan":cetpOperations.response_payload,
                               "gre":cetpOperations.response_payload,
                               "geneve":cetpOperations.response_payload}

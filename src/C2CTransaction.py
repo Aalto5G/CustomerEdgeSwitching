@@ -962,7 +962,7 @@ class iC2CTransaction(C2CTransaction):
                         break
             
             if len(r_cesid)==0 or len(r_cesid) > 256 or (r_cesid != self.r_cesid) or (r_cesid==self.l_cesid):
-                self._logger.error(" Invalid Remote CES-ID")
+                self._logger.error(" Invalid Remote CES-ID '{}'".format(r_cesid))
                 return False
 
             if self.load_policies() is None:

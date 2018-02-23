@@ -1,49 +1,6 @@
 [
 {
 "type": "cespolicy",
-"proto":"tcp",
-"cesid": "cesb.lte.",
-"policy":
-    {
-    "request": [
-        { "ope":"query", "group": "ces", "code": "cesid", "value":["cesa.lte.", "cesc.lte."]},
-        { "ope":"query", "group": "ces", "code": "caces", "value":"195.148.124.145"},
-        { "ope":"query", "group": "ces", "code": "fw_version", "value":"0.1"},
-        { "ope":"query", "group": "ces", "code": "ttl", "value":{"min":"3600", "max":"7200"}},
-        { "ope":"query", "group": "ces", "code": "pow" },
-        { "ope":"query", "group": "ces", "code": "session_limit", "value": "500"},
-        { "ope":"query", "group": "ces", "code": "evidence_format", "value":["IETF-IOC1", "IETF-IOC2"]},
-        { "ope":"query", "group": "rloc", "code": "ipv4" },
-        { "ope":"query", "group": "rloc", "code": "ipv6" },
-        { "ope":"query", "group": "payload", "code": "eth" }
-    ],
-    "offer": [
-        { "ope":"info", "group": "ces", "code": "cesid", "value":"cesb.lte."},
-        { "ope":"info", "group": "ces", "code": "caces", "value":"195.148.124.145"},
-        { "ope":"info", "group": "ces", "code": "fw_version", "value":"0.1"},
-        { "ope":"info", "group": "ces", "code": "ttl", "value":"3600"},
-        { "ope":"info", "group": "ces", "code": "session_limit", "value":"200"},
-        { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1" },
-        { "ope":"info", "group": "rloc", "code": "ipv4" },
-        { "ope":"info", "group": "rloc", "code": "ipv6" },
-        { "ope":"info", "group": "payload", "code": "eth" }
-    ],
-    "available": [
-        { "ope":"info", "group": "ces", "code": "cesid", "value":"cesb.lte."},
-        { "ope":"info", "group": "ces", "code": "pow"},
-        { "ope":"info", "group": "ces", "code": "caces", "value":"195.148.124.145"},
-        { "ope":"info", "group": "ces", "code": "fw_version", "value":"0.1"},
-        { "ope":"info", "group": "ces", "code": "ttl", "value":"3600"},
-        { "ope":"info", "group": "ces", "code": "session_limit", "value":"200"},
-        { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"},
-        { "ope":"info", "group": "rloc", "code": "ipv4" },
-        { "ope":"info", "group": "rloc", "code": "ipv6" },
-        { "ope":"info", "group": "payload", "code": "eth" }
-    ]                
-    }
-},
-{
-"type": "cespolicy",
 "proto":"tls",
 "cesid": "cesb.lte.",
 "policy":
@@ -57,7 +14,7 @@
         { "ope":"query", "group": "ces", "code": "evidence_format", "value":["IETF-IOC1", "IETF-IOC2"]},
         { "ope":"query", "group": "rloc", "code": "ipv4" },
         { "ope":"query", "group": "rloc", "code": "ipv6" },
-        { "ope":"query", "group": "payload", "code": "eth" }
+        { "ope":"query", "group": "payload", "code": "vxlan" }
     ],
     "offer": [
         { "ope":"info", "group": "ces", "code": "cesid", "value":"cesb.lte."},
@@ -68,7 +25,7 @@
         { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"},
         { "ope":"info", "group": "rloc", "code": "ipv4" },
         { "ope":"info", "group": "rloc", "code": "ipv6" },
-        { "ope":"info", "group": "payload", "code": "eth" }
+        { "ope":"info", "group": "payload", "code": "vxlan" }
     ],
     "available": [
         { "ope":"info", "group": "ces", "code": "cesid", "value":"cesb.lte."},
@@ -80,7 +37,7 @@
         { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"},
         { "ope":"info", "group": "rloc", "code": "ipv4" },
         { "ope":"info", "group": "rloc", "code": "ipv6" },
-        { "ope":"info", "group": "payload", "code": "eth" }
+        { "ope":"info", "group": "payload", "code": "vxlan" }
     ]                
     }
 },

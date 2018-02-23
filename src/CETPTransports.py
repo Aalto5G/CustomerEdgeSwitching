@@ -224,6 +224,7 @@ class iCESServerTCPTransport(CETPTransport):
 class iCESServerTLSTransport(iCESServerTCPTransport):
         
     def connection_made(self, transport):
+        self.proto      = "tls"
         self.transport  = transport
         self.remotepeer = transport.get_extra_info('peername')
         self._logger.info('Connection from {}'.format(self.remotepeer))
