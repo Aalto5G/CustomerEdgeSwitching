@@ -302,6 +302,96 @@ class LocalConnection:
             CES_CONF.cache_table.delete(cached_entry)
         """
 
+class CETPState:
+
+    def __init__(self):
+        """
+        Initialize the CETPState object. 
+        """
+        self.logger = logging.getLogger("CETP State")
+        self.logger.setLevel(LOGLEVELCETPSTATE)
+        self.obj_list = []
+        self.obj_dict = {}
+    
+    def add(self, obj):
+        """
+        Add a transaction to the CETPState.
+        @param obj: The transaction object.
+        """
+        self.obj_list.append(obj)
+        for keytype, key in obj.lookupkeys():
+            if not keytype in self.obj_dict:
+                self.obj_dict[keytype] = {}
+            else:
+                self.obj_dict[keytype][key] = obj
+        
+        self.logger.debug("New transaction: %s" % (obj))
+    
+    def delete(self, obj):
+        """
+        Removes a transaction from the CETPState.
+        @param obj: The transaction object.
+        """
+        try:
+            self.logger.debug("Delete transaction: %s" % (obj))
+            #obj.delete()    
+            if obj in self.obj_list:
+                self.obj_list.remove(obj)
+            
+            for keytype, key in obj.lookupkeys():
+                if not keytype in self.obj_dict:
+                    self.logger.warning("CETP State does not have key '%s'" % (str(keytype)))
+                else:
+                    del self.obj_dict[keytype][key]
+                    
+        except Exception, ex:
+            Utils.exception_handler("CETPState - delete", ex)
+    
+    def reregister(self, obj):
+        """
+        Re-register a transaction from the CETPState.
+        
+        @param obj: The transaction object.
+        """
+        self.logger.debug("Re-registering transaction: %s" % (obj))
+        #Use the flag to modify the behavior of the lookupkeys() response
+        obj.set_ready_flag(False)
+        self.unregister(obj)
+        obj.set_ready_flag(True)
+        self.register(obj)
+            
+    def get(self, keytype, key):
+        """
+        Obtain a transaction with the given key and keytype.
+        @param keytype: The type of the transaction.
+        @param key: The values of the transaction.
+        @return: The transaction object.
+        """
+        try:
+            return self.obj_dict[keytype][key]
+        except KeyError:
+            return None
+    
+    def has(self, keytype, key):
+        """
+        Check if there is a transaction with the given key and keytype.
+        
+        @param keytype: The type of the transaction.
+        @param key: The values of the transaction.
+        @return: True if there is a transaction.
+        """
+        try:
+            self.obj_dict[keytype][key]
+            return True
+        except KeyError:
+            return False
+    
+    def clearall(self):
+        self.obj_list.clear()
+        self.obj_dict.clear()
+        
+    def __str__(self):
+        return "\n".join([str(obj) for obj in self.obj_list])
 
 
 class CETPStateTable(object):

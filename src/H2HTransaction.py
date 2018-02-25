@@ -381,6 +381,15 @@ class H2HTransactionOutbound(H2HTransaction):
         dstep_tlv["ope"], dstep_tlv["group"], dstep_tlv["code"], dstep_tlv["value"] = "info", "control", "dstep", self.dst_id 
         return dstep_tlv
     
+    def set_terminated(self):
+        if self.is_negotiated():
+            self.cetpstate_mgr.remove_established_transaction((self.sstag, self.dstag))
+        else:
+            self._unregister_h2h()
+            
+        if hasattr(self, 'unregister_handler'):
+            self.unregister_handler.cancel()
+    
     def _pre_process(self, cetp_msg):
         """ Checks for minimum packet detail & CETP format compliance in the inbound packet """
         try:
@@ -617,6 +626,13 @@ class H2HTransactionOutbound(H2HTransaction):
         if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_RCES_UnreachableRCESDestinations, hostid, key=self.r_cesid):
             return False
         return True
+    
+    def lookupkeys(self):
+        if self.is_negotiated():
+            keys = [(KEY_CETP_TAGID_TMP, (self.sstag, self.dstag)), (KEY, (self.src_id, self.dst_id)), (Key, self.r_cesid)]
+        else:
+            keys = [(KEY_CETP_TAGID_TMP, (self.sstag, 0)), (KEY, (self.src_id, self.dst_id)), (Key, self.r_cesid)]
+            
         
     def post_h2h_negotiation(self, cetp_message):
         """  Processes a CETP packet received on a negotiated H2H session.  e.g. a 'terminate' TLV, or change in ratelimit of data connection. 
@@ -997,10 +1013,10 @@ class H2HTransactionLocal(H2HTransaction):
     def _create_local_connection(self):
         lip             = self.host_ip
         rip             = "10.0.3.103"                            # Get IP of destination from host-register (IPv4 or IPv6 address depending on sender address type)
-        lpip            = self.cetpstate_mgr.allocate_proxy_address(lip)
+        lpip            = self._allocate_proxy_address(lip)
         lfqdn, rfqdn    = self.src_id, self.dst_id
         lid, rid        = None, None
-        rpip            = self.cetpstate_mgr.allocate_proxy_address(rip)
+        rpip            = self._allocate_proxy_address(rip)
         
         connection_direction = "" #both outbound and inbound
 

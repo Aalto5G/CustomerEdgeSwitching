@@ -400,6 +400,8 @@ class oC2CTransaction(C2CTransaction):
         self.terminated = terminated
         if self.is_negotiated():
             self.cetpstate_mgr.remove_established_transaction((self.sstag, self.dstag))
+        else:
+            self.cetpstate_mgr.remove_initiated_transaction((self.sstag, 0))
         
         if hasattr(self, 'unregister_handler'):
             self.unregister_handler.cancel()

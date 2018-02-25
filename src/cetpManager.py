@@ -371,9 +371,7 @@ class CETPManager:
             
 
     def _pre_check(self, naptr_rrs):
-        """ Sanitizes the naptr responses: 1) Checks the number of NAPTR records in DNS response.
-            2) Filters out the NAPTRs that recently failed connectivity.    3) Assures that all NAPTRs belong to the same r_cesid.
-        """
+        """ Checks the number of NAPTR records in DNS response; AND filters out the NAPTRs that recently failed connectivity. """
         try:
             if len(naptr_rrs) > self.max_naptrs_per_msg:
                 return None                                                     # > 10 naptr_rrs could create high traffic flood
@@ -401,100 +399,95 @@ class CETPManager:
 
 
     """ Functions/Methods supported by CETPManager API, i.e. to drop, terminate or allow connections """
+    
+    def blacklist_remote_host(self, r_hostid):
+        """ Blacklists the remote-host & Drops all the connection to and from to this remote host-id """
+        self.cetp_security.register_filtered_domains(CETPSecurity.KEY_BlacklistedRHosts, r_hostid)
 
     def block_connections_to_local_domain(self, l_domain="", r_cesid=""):
-        """ Informs remote CES to block (future) connections towards the local domain of this CES """
+        """ Reports remote CES to stop sending connection requests to a 'l_domain' destination """
+        self.block_local_domain_connections(l_domain=l_domain, r_cesid=r_cesid, to_ldomain=True)
+        
+    def block_connections_from_local_domain(self, l_domain="", r_cesid=""):
+        """ Drops future connections from this local host (to a remote CES) """
+        self.block_local_domain_connections(l_domain=l_domain, r_cesid=r_cesid, to_ldomain=False)
+        
+    def block_local_domain_connections(self, l_domain="", r_cesid="", to_ldomain=True):
+        """ Blocks (future) outbound or inbound connections of this local host (towards or from a remote CES node) """
         try:
-            if (len(r_cesid)==0) and (len(l_domain)==0):
-                return
-            
             timeout = int(self.ces_params["host_filtering_t0"])
-            #Store locally to detect non-compliance by remote CES
-            if len(r_cesid)!=0:
-                keytype = CETPSecurity.KEY_LCES_UnreachableDestinationsForRCES
-                self.cetp_security.register_filtered_domains(keytype, l_domain, key=r_cesid, timeout=timeout)
-                
-                #Reports remote CES to stop sending connection requests to a 'l_domain' destination
-                if self.has_c2c_layer(r_cesid):
-                    c2c_layer = self.get_c2c_layer(r_cesid)
-                    c2c_layer.drop_connection_to_local_domain(l_domain)
+            if len(l_domain)==0: return
+            
+            if to_ldomain:
+                if len(r_cesid) != 0:
+                    keytype = CETPSecurity.KEY_LCES_UnreachableDestinationsForRCES
+                    self.cetp_security.register_filtered_domains(keytype, l_domain, key=r_cesid, timeout=timeout)
+                    
+                    if self.has_c2c_layer(r_cesid):
+                        c2c_layer = self.get_c2c_layer(r_cesid)
+                        c2c_layer.drop_connection_to_local_domain(l_domain)
+                        
+                else:
+                    #Store locally to detect non-compliance by remote CES
+                    keytype = CETPSecurity.KEY_LocalHosts_Inbound_Disabled
+                    self.cetp_security.register_filtered_domains(keytype, l_domain, timeout=timeout)
                     
             else:
-                keytype = CETPSecurity.KEY_LocalHosts_Inbound_Disabled
-                self.cetp_security.register_filtered_domains(keytype, l_domain, timeout=timeout)
-            
+                #Store locally to detect non-compliance by remote CES
+                if len(r_cesid) != 0:
+                    #Records a host that acted as malicious towards a remote CES
+                    keytype = CETPSecurity.KEY_LCES_FilteredSourcesTowardsRCES
+                    self.cetp_security.register_filtered_domains(keytype, l_domain, key=r_cesid, timeout=timeout)
+                else:
+                    keytype = CETPSecurity.KEY_LocalHosts_Outbound_Disabled
+                    self.cetp_security.register_filtered_domains(keytype, l_domain, timeout=timeout)
+                
         except Exception as ex:
             self._logger.info("Exception '{}'".format(ex))
             return
 
 
-    def block_connections_from_local_domain(self, l_domain="", r_cesid=""):
-        """ Informs remote CES to block (future) connections towards the local domain of this CES """
-        try:
-            if (len(r_cesid)==0) and (len(l_domain)==0):
-                return
-            
-            timeout = int(self.ces_params["host_filtering_t0"])
-            #Store locally to detect non-compliance by remote CES
-            if len(r_cesid)!=0:
-                #Records a host that acted as malicious towards a remote CES
-                keytype = CETPSecurity.KEY_LCES_FilteredSourcesTowardsRCES
-                self.cetp_security.register_filtered_domains(keytype, l_domain, key=r_cesid, timeout=timeout)
-            else:
-                keytype = CETPSecurity.KEY_LocalHosts_Outbound_Disabled
-                self.cetp_security.register_filtered_domains(keytype, l_domain, timeout=timeout)
-            
-        except Exception as ex:
-            self._logger.info("Exception '{}'".format(ex))
-            return
-    
     def block_connections_from_remote_ces_host(self, r_hostid="", r_cesid=""):
-        """ Reports (to block future connections) from a remote-host served by a remote CES-ID """
-        try:
-            if (len(r_cesid)==0) and (len(r_hostid)==0):
-                return
-            
-            timeout = int(self.ces_params["host_filtering_t0"])
-            
-            if len(r_cesid)!=0:
-                #Stores the remote-host to be filtered in the security module.         # to detect non-compliance from remote CES
-                keytype = CETPSecurity.KEY_LCES_BlockedHostsOfRCES
-                self.cetp_security.register_filtered_domains(keytype, r_hostid, key=r_cesid, timeout=timeout)
-            
-                #Report malicious-host to remote CES
-                if self.has_c2c_layer(r_cesid):
-                    c2c_layer = self.get_c2c_layer(r_cesid)
-                    c2c_layer.block_malicious_remote_host(r_hostid)
-                
-            else:
-                keytype = CETPSecurity.KEY_BlacklistedRHosts
-                self.cetp_security.register_filtered_domains(keytype, r_hostid, timeout=timeout)
-                
-        except Exception as ex:
-            self._logger.info("Exception '{}'".format(ex))
-
-
+        """ Reports (to block future connections) from a host served by a remote CES-ID """
+        self.block_connections_from_remote_ces_host(r_hostid=r_hostid, r_cesid=r_cesid, to_remoteHost=False)
+    
     def block_connections_to_remote_ces_host(self, r_hostid="", r_cesid=""):
-        """ Reports (to block future connections) from a remote-host served by a remote CES-ID """
+        """ Blocks future connections to a host served by a remote CES-ID """
+        self.block_connections_from_remote_ces_host(r_hostid=r_hostid, r_cesid=r_cesid, to_remoteHost=True)
+        
+    def block_remote_host_connections(self, r_hostid="", r_cesid="", to_remoteHost=True):
         try:
-            if (len(r_cesid)==0) and (len(r_hostid)==0):
-                return
-            
             timeout = int(self.ces_params["host_filtering_t0"])
+            if len(r_hostid)==0:    return
             
-            if len(r_cesid)!=0:
-                #Stores the remote-host to be filtered in the security module.         # to detect non-compliance from remote CES
-                keytype = CETPSecurity.KEY_RCES_UnreachableRCESDestinations
-                self.cetp_security.register_filtered_domains(keytype, r_hostid, key=r_cesid, timeout=timeout)
-                
+            if to_host:
+                if len(r_cesid)!=0:
+                    #Stores the remote-host to be filtered in the security module.         # to detect non-compliance from remote CES
+                    keytype = CETPSecurity.KEY_RCES_UnreachableRCESDestinations
+                    self.cetp_security.register_filtered_domains(keytype, r_hostid, key=r_cesid, timeout=timeout)
+                    
+                else:
+                    keytype = CETPSecurity.KEY_RemoteHosts_inbound_Disabled
+                    self.cetp_security.register_filtered_domains(keytype, r_hostid, timeout=timeout)
+
             else:
-                keytype = CETPSecurity.KEY_RemoteHosts_inbound_Disabled
-                self.cetp_security.register_filtered_domains(keytype, r_hostid, timeout=timeout)
+                if len(r_cesid)!=0:
+                    #Stores the remote-host to be filtered in the security module.         # to detect non-compliance from remote CES
+                    keytype = CETPSecurity.KEY_LCES_BlockedHostsOfRCES
+                    self.cetp_security.register_filtered_domains(keytype, r_hostid, key=r_cesid, timeout=timeout)
                 
+                    #Report malicious-host to remote CES
+                    if self.has_c2c_layer(r_cesid):
+                        c2c_layer = self.get_c2c_layer(r_cesid)
+                        c2c_layer.block_malicious_remote_host(r_hostid)
+                else:
+                    keytype = CETPSecurity.KEY_BlacklistedRHosts
+                    self.cetp_security.register_filtered_domains(keytype, r_hostid, timeout=timeout)
+
         except Exception as ex:
             self._logger.info("Exception '{}'".format(ex))
-
-
+            
+            
     def terminate_cetp_c2c_signalling(self, r_cesid="", terminate_h2h=False):
         """ Terminates the CETP signalling channel with remote-CESID """
         try:
@@ -507,7 +500,7 @@ class CETPManager:
             
             if self.has_c2c_layer(r_cesid):
                 c2c_layer = self.get_c2c_layer(r_cesid)
-                c2c_layer.close_all_transport_connections()
+                c2c_layer.shutdown()
             
         except Exception as ex:
             self._logger.info("Exception '{}' in terminating cetp signalling channel to '{}'".format(ex))
@@ -555,32 +548,36 @@ class CETPManager:
             keytype = ConnectionTable.KEY_MAP_REMOTE_CESID
             key = r_cesid
             
-            if self.conn_table.has(keytype, key):
-                conn_list = self.conn_table.get(keytype, key)
+            if len(tag_list)==0:
+                self._logger.warning(" Terminating all H2H session with CES '{}'".format(r_cesid))
                 
-                if len(tag_list)==0:
-                    self._logger.warning(" Terminating all H2H session with CES '{}'".format(r_cesid))
-                
-                    for num in range(0, len(conn_list)):
-                        conn = conn_list[0]
-                        
-                        if conn.connectiontype=="CONNECTION_H2H":
-                            self.conn_table.delete(conn)
-                            sstag, dstag = conn.sstag, conn.dstag
-                            h2h_transaction = self.cetpstate_mgr.get_established_transaction((sstag,dstag))
-                            self.cetpstate_mgr.remove_established_transaction((sstag,dstag))
-                            
-                else:
-                    self._logger.warning(" Terminating {} H2H sessions towards {}".format(len(tag_list), r_cesid))
+                if self.conn_table.has(keytype, key):
+                    conn_list = self.conn_table.get(keytype, key)
+            
+                for num in range(0, len(conn_list)):
+                    conn = conn_list[0]
                     
-                    for num in range(0, len(conn_list)):
-                        conn = conn_list[0]
+                    if conn.connectiontype=="CONNECTION_H2H":
+                        self.conn_table.delete(conn)
                         sstag, dstag = conn.sstag, conn.dstag
+                        h2h_transaction = self.cetpstate_mgr.get_established_transaction((sstag,dstag))
+                        self.cetpstate_mgr.remove_established_transaction((sstag,dstag))
                         
-                        if conn.connectiontype=="CONNECTION_H2H" and ((dstag, sstag) in tag_list):          #Flipped the (SST, DST) order to match the sender perspective
-                            self.conn_table.delete(conn)
-                            h2h_transaction = self.cetpstate_mgr.get_established_transaction((sstag,dstag))
-                            self.cetpstate_mgr.remove_established_transaction((sstag,dstag))
+            else:
+                self._logger.warning(" Terminating {} H2H sessions towards {}".format(len(tag_list), r_cesid))
+                #self.terminate_sessions_by_tags(tag_list)
+
+                if self.conn_table.has(keytype, key):
+                    conn_list = self.conn_table.get(keytype, key)
+                
+                for num in range(0, len(conn_list)):
+                    conn = conn_list[0]
+                    sstag, dstag = conn.sstag, conn.dstag
+                    
+                    if conn.connectiontype=="CONNECTION_H2H" and ((dstag, sstag) in tag_list):          #Flipped the (SST, DST) order to match the sender perspective
+                        self.conn_table.delete(conn)
+                        h2h_transaction = self.cetpstate_mgr.get_established_transaction((sstag,dstag))
+                        self.cetpstate_mgr.remove_established_transaction((sstag,dstag))
                             
         except Exception as ex:
             self._logger.error("Exception {} in process_session_terminate_message()".format(ex))
@@ -606,16 +603,17 @@ class CETPManager:
                     cetp_transaction = self.cetpstate_mgr.get_established_transaction((sstag, dstag))
                     self.cetpstate_mgr.remove_established_transaction((sstag, dstag))
                 
-                #Delete the connection instances from Connection table
-                if cetp_transaction.name=="H2HTransactionOutbound":
-                    conn = cetp_transaction.conn
-                    self.conn_table.delete(conn)
-                    cetp_transaction.terminate_session()
-                
-                elif cetp_transaction.name=="oC2CTransaction":
-                    cetp_transaction.set_terminated()                   # TB Encode
-                    #conn = cetp_transaction.conn
-                    #self.conn_table.remove(conn)
+                    #Delete the connection instances from Connection table
+                    if cetp_transaction.name=="H2HTransactionOutbound":
+                        conn = cetp_transaction.conn
+                        self.conn_table.delete(conn)
+                        cetp_transaction.terminate_session()
+                    
+                    elif cetp_transaction.name=="oC2CTransaction":
+                        cetp_transaction.set_terminated()                   # TB Encode
+                        #conn = cetp_transaction.conn
+                        #self.conn_table.remove(conn)
+                        
         except Exception as ex:
             self._logger.info("Exception '{}' in terminating session".format(ex))
             return
@@ -642,10 +640,6 @@ class CETPManager:
                 self.conn_table.delete(r_conn)                                              # Deleting the pair of local connection
 
     
-    def blacklist_the_remote_hosts(self, r_hostid):
-        """ Blacklists a remote-hosts """
-        self.cetp_security.register_filtered_domains(CETPSecurity.KEY_BlacklistedRHosts, r_hostid)
-
     def disable_local_host(self, local_domain=""):
         """ Allows to disable connection initiations towards a local_domain """
         try:
@@ -728,12 +722,11 @@ class CETPManager:
     def terminate_rces_h2h_sessions(self, r_cesid):
         """ Terminate all H2H sessions to/from a remote-CESID """
         keytype = ConnectionTable.KEY_MAP_REMOTE_CESID
-        key = r_cesid
+        key     = r_cesid
         
         if self.conn_table.has(keytype, key):
             conn_list = self.conn_table.get(keytype, key)
             total_connections = len(conn_list)
-            self._logger.debug("Terminating all H2HTransaction states towards {}".format(r_cesid))
             h2h_tags = []
             
             for num in range(0, total_connections):
@@ -743,7 +736,7 @@ class CETPManager:
                 if conn.connectiontype=="CONNECTION_H2H":
                     sstag, dstag = conn.sstag, conn.dstag
                     h2h_transaction = self.cetpstate_mgr.get_established_transaction((sstag,dstag))
-                    self.cetpstate_mgr.remove_established_transaction((sstag,dstag))
+                    h2h_transaction.set_terminated()
                     h2h_tags.append((sstag, dstag))
                     
             if len(h2h_tags)>0:
