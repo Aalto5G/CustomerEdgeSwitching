@@ -98,7 +98,6 @@ class PolicyManager(object):
         self._logger.setLevel(LOGLEVEL_PolicyManager)             # Within this class, logger will only handle message with this or higher level.    (Otherwise, default value of basicConfig() will apply)
         self.load_policies(self.config_file)
         self.assign_policy_to_host()
-        print("self.ces_policy", self._cespolicy)
         
     def load_policies(self, config_file):
         try:

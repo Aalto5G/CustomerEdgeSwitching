@@ -24,9 +24,18 @@ LOGLEVEL_H2HTransactionOutbound = logging.INFO
 LOGLEVEL_H2HTransactionInbound  = logging.INFO
 LOGLEVEL_H2HTransactionLocal    = logging.INFO
 
+# Global Variables
+KEY_INITIATED_TAGS        = 0
+KEY_ESTABLISHED_TAGS      = 1
+KEY_HOST_IDS              = 2
+KEY_RCESID                = 3
+KEY_CES_IDS               = 4
+    
 NEGOTIATION_RTT_THRESHOLD       = 2
 
+
 class CETPTransaction(object):
+
     def __init__(self, name="CETPTransaction"):
         self.name       = name
         self._logger    = logging.getLogger(name)
@@ -125,18 +134,18 @@ class CETPTransaction(object):
             sstag = random.randint(1, 2**32)
             if dstag == 0:
                 # For oCES, it checks the connecting transactions
-                if not self.cetpstate_mgr.has_initiated_transaction((sstag, 0)):
+                if not self.cetpstate_mgr.has(KEY_INITIATED_TAGS, (sstag, 0)):
                     return sstag
             
             elif dstag:
                 #self._logger.debug("iCES is requesting source session tag")
                 """ iCES checks if upon assigning 'sstag' the resulting (SST, DST) pair will lead to a unique transaction. """
-                if not self.cetpstate_mgr.has_established_transaction((sstag, dstag)):                   # Checks connected transactions
+                if not self.cetpstate_mgr.has(KEY_ESTABLISHED_TAGS, (sstag, dstag)):                   # Checks connected transactions
                     return sstag
 
     def _check_sessionTags_uniqueness(self, sstag=0, dstag=0):
         """ Checks whether (SST, DST) pair will be locally unique, if the H2H negotiation succeeds    - Since DST is assigned by remote CES. """
-        if dstg !=0 and self.cetpstate_mgr.has_established_transaction((sstag, dstag)):
+        if dstg !=0 and self.cetpstate_mgr.has(KEY_ESTABLISHED_TAGS, (sstag, dstag)):
             self._logger.error(" Failure: Resulting ({},{}) pair will not be locally unique in CES".format(sstag, dstag))
             return False
         return True
@@ -329,12 +338,15 @@ class H2HTransactionOutbound(H2HTransaction):
             self._unregister_h2h()
     
     def _unregister_h2h(self):
-        self.cetpstate_mgr.remove_initiated_transaction((self.sstag, 0))
+        self.cetpstate_mgr.remove(self)
         #self.cetp_h2h.update_H2H_transaction_count(initiated=False)
         self._execute_dns_callback(resolution=False)
     
     def is_negotiated(self):
         return self.h2h_negotiation_status
+
+    def set_negotiated(self, status=True):
+        self.h2h_negotiation_status = status
     
     @asyncio.coroutine
     def start_cetp_processing(self):
@@ -366,7 +378,7 @@ class H2HTransactionOutbound(H2HTransaction):
         #self.pprint(cetp_msg, m="Outbound H2H CETP")
         self.last_packet_sent = cetp_msg
         self.cetp_negotiation_history.append(cetp_msg)
-        self.cetpstate_mgr.add_initiated_transaction((self.sstag,0), self)                # Registering the H2H state
+        self.cetpstate_mgr.add(self)
         #self.cetp_h2h.update_H2H_transaction_count()
         self._schedule_completion_check()
         ##self._logger.info("start_cetp_processing delay: {}".format(now-start_time))
@@ -382,11 +394,8 @@ class H2HTransactionOutbound(H2HTransaction):
         return dstep_tlv
     
     def set_terminated(self):
-        if self.is_negotiated():
-            self.cetpstate_mgr.remove_established_transaction((self.sstag, self.dstag))
-        else:
-            self._unregister_h2h()
-            
+        self._unregister_h2h()
+        
         if hasattr(self, 'unregister_handler'):
             self.unregister_handler.cancel()
     
@@ -563,8 +572,7 @@ class H2HTransactionOutbound(H2HTransaction):
     
     def _process_negotiation_success(self):
         """ Executes DNS callback, AND session-tags management for an established transaction. """
-        self.cetpstate_mgr.remove_initiated_transaction((self.sstag, 0))
-        self.cetpstate_mgr.add_established_transaction((self.sstag, self.dstag), self)
+        self.cetpstate_mgr.reregister(self)
         self.unregister_handler.cancel()
         #self.cetp_h2h.update_H2H_transaction_count(initiated=False)                            # To reduce number of ongoing transactions.
         return True
@@ -629,10 +637,11 @@ class H2HTransactionOutbound(H2HTransaction):
     
     def lookupkeys(self):
         if self.is_negotiated():
-            keys = [(KEY_CETP_TAGID_TMP, (self.sstag, self.dstag)), (KEY, (self.src_id, self.dst_id)), (Key, self.r_cesid)]
+            keys = [(KEY_ESTABLISHED_TAGS, (self.sstag, self.dstag), False), (KEY_HOST_IDS, (self.src_id, self.dst_id), False), (KEY_RCESID, self.r_cesid, True)]
         else:
-            keys = [(KEY_CETP_TAGID_TMP, (self.sstag, 0)), (KEY, (self.src_id, self.dst_id)), (Key, self.r_cesid)]
-            
+            keys = [(KEY_INITIATED_TAGS, (self.sstag, 0), False), (KEY_HOST_IDS, (self.src_id, self.dst_id), False), (KEY_RCESID, self.r_cesid, True)]
+
+        return keys
         
     def post_h2h_negotiation(self, cetp_message):
         """  Processes a CETP packet received on a negotiated H2H session.  e.g. a 'terminate' TLV, or change in ratelimit of data connection. 
@@ -649,7 +658,7 @@ class H2HTransactionOutbound(H2HTransaction):
                 
                 if self._check_tlv(received_tlv, group="control") and self._check_tlv(received_tlv, code="terminate"):
                     self._logger.warning(" Terminate received for an established H2H Session ({}->{}).".format(self.sstag, self.dstag))
-                    self.cetpstate_mgr.remove_established_transaction((self.sstag, self.dstag))
+                    self.cetpstate_mgr.remove(self)
                     keytype = ConnectionTable.KEY_MAP_CES_TO_CES
                     key = (self.sstag, self.dstag)
                     
@@ -891,7 +900,7 @@ class H2HTransactionInbound(H2HTransaction):
         new_transaction.opolicy                 = self.ipolicy
         new_transaction.policy                  = self.policy
         new_transaction.last_received_packet    = self.packet
-        self.cetpstate_mgr.add_established_transaction((self.sstag, self.dstag), new_transaction)
+        self.cetpstate_mgr.add(new_transaction)
         return new_transaction
     
 

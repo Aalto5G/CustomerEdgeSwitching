@@ -308,7 +308,7 @@ class CETPManager:
         elif status==True:
             self._logger.debug(" CES-to-CES policies are negotiated")
             sstag, dstag = cetp_resp['SST'], cetp_resp['DST']
-            cetp_transaction = self.cetpstate_mgr.get_established_transaction((sstag, dstag))
+            cetp_transaction = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag, dstag))
             r_cesid = cetp_transaction.get_remote_cesid()
             
             if not self.has_c2c_layer(r_cesid): 
@@ -400,10 +400,12 @@ class CETPManager:
 
     """ Functions/Methods supported by CETPManager API, i.e. to drop, terminate or allow connections """
     
-    def blacklist_remote_host(self, r_hostid):
-        """ Blacklists the remote-host & Drops all the connection to and from to this remote host-id """
-        self.cetp_security.register_filtered_domains(CETPSecurity.KEY_BlacklistedRHosts, r_hostid)
-
+    def disable_local_domain(self, local_domain=""):
+        """ Disables connection initiations to and from this local_domain """
+        if len(local_domain) != 0:
+            timeout = self.ces_params["host_filtering_t0"]
+            self.cetp_security.register_filtered_domains(CETPSecurity.KEY_DisabledLHosts, local_domain, timeout)                 #Store the domain-name to filter
+        
     def block_connections_to_local_domain(self, l_domain="", r_cesid=""):
         """ Reports remote CES to stop sending connection requests to a 'l_domain' destination """
         self.block_local_domain_connections(l_domain=l_domain, r_cesid=r_cesid, to_ldomain=True)
@@ -446,6 +448,12 @@ class CETPManager:
             self._logger.info("Exception '{}'".format(ex))
             return
 
+
+    def blacklist_remote_host(self, r_hostid=""):
+        """ Blacklists & Drops all the connection to and from to this remote host-id """
+        if len(r_hostid) != 0:
+            timeout = self.ces_params["host_filtering_t0"]
+            self.cetp_security.register_filtered_domains(CETPSecurity.KEY_BlacklistedRHosts, r_hostid, timeout)
 
     def block_connections_from_remote_ces_host(self, r_hostid="", r_cesid=""):
         """ Reports (to block future connections) from a host served by a remote CES-ID """
@@ -560,8 +568,8 @@ class CETPManager:
                     if conn.connectiontype=="CONNECTION_H2H":
                         self.conn_table.delete(conn)
                         sstag, dstag = conn.sstag, conn.dstag
-                        h2h_transaction = self.cetpstate_mgr.get_established_transaction((sstag,dstag))
-                        self.cetpstate_mgr.remove_established_transaction((sstag,dstag))
+                        h2h_transaction = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag,dstag))
+                        self.cetpstate_mgr.remove(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag,dstag))
                         
             else:
                 self._logger.warning(" Terminating {} H2H sessions towards {}".format(len(tag_list), r_cesid))
@@ -576,8 +584,8 @@ class CETPManager:
                     
                     if conn.connectiontype=="CONNECTION_H2H" and ((dstag, sstag) in tag_list):          #Flipped the (SST, DST) order to match the sender perspective
                         self.conn_table.delete(conn)
-                        h2h_transaction = self.cetpstate_mgr.get_established_transaction((sstag,dstag))
-                        self.cetpstate_mgr.remove_established_transaction((sstag,dstag))
+                        h2h_transaction = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag,dstag))
+                        self.cetpstate_mgr.remove(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag,dstag))
                             
         except Exception as ex:
             self._logger.error("Exception {} in process_session_terminate_message()".format(ex))
@@ -599,9 +607,9 @@ class CETPManager:
         """ Terminates a CETP session identified by its tags """
         try:
             if (sstag!=0) and (dstag!=0):
-                if self.cetpstate_mgr.has_established_transaction((sstag, dstag)):
-                    cetp_transaction = self.cetpstate_mgr.get_established_transaction((sstag, dstag))
-                    self.cetpstate_mgr.remove_established_transaction((sstag, dstag))
+                if self.cetpstate_mgr.has(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag, dstag)):
+                    cetp_transaction = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag, dstag))
+                    self.cetpstate_mgr.remove(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag, dstag))
                 
                     #Delete the connection instances from Connection table
                     if cetp_transaction.name=="H2HTransactionOutbound":
@@ -627,8 +635,8 @@ class CETPManager:
             self.conn_table.delete(conn)
             if conn.connectiontype=="CONNECTION_H2H":
                 sstag, dstag = conn.sstag, conn.dstag
-                h2h_transaction = self.cetpstate_mgr.get_established_transaction((sstag,dstag))
-                self.cetpstate_mgr.remove_established_transaction((sstag,dstag))
+                h2h_transaction = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag,dstag))
+                self.cetpstate_mgr.remove(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag,dstag))
                 h2h_transaction.terminate_session()
 
             elif conn.connectiontype=="CONNECTION_LOCAL":
@@ -638,18 +646,6 @@ class CETPManager:
                 key = (rip, rpip)
                 r_conn = self.conn_table.get(keytype, key)
                 self.conn_table.delete(r_conn)                                              # Deleting the pair of local connection
-
-    
-    def disable_local_host(self, local_domain=""):
-        """ Allows to disable connection initiations towards a local_domain """
-        try:
-            if len(local_domain)!=0:
-                timeout = self.ces_params["host_filtering_t0"]
-                self.cetp_security.register_filtered_domains(CETPSecurity.KEY_DisabledLHosts, local_domain, timeout)                 #Store the domain-name to filter
-            
-        except Exception as ex:
-            self._logger.info("Exception '{}'".format(ex))
-            return
 
 
     def terminate_session(self, sstag, dstag, r_cesid="", r_host_id=""):
@@ -669,8 +665,8 @@ class CETPManager:
                 if conn.connectiontype=="CONNECTION_H2H":
                     self._logger.debug("Terminating H2HTransaction state")
                     sstag, dstag = conn.sstag, conn.dstag
-                    h2h_transaction = self.cetpstate_mgr.get_established_transaction((sstag,dstag))
-                    self.cetpstate_mgr.remove_established_transaction((sstag,dstag))
+                    h2h_transaction = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag,dstag))
+                    self.cetpstate_mgr.remove(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag,dstag))
                     h2h_transaction.terminate_session()
 
                 elif conn.connectiontype=="CONNECTION_LOCAL":
@@ -706,8 +702,8 @@ class CETPManager:
                 if conn.connectiontype=="CONNECTION_H2H":
                     self._logger.debug("Terminating H2HTransaction state")
                     sstag, dstag = conn.sstag, conn.dstag
-                    h2h_transaction = self.cetpstate_mgr.get_established_transaction((sstag,dstag))
-                    self.cetpstate_mgr.remove_established_transaction((sstag,dstag))
+                    h2h_transaction = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag,dstag))
+                    self.cetpstate_mgr.remove(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag,dstag))
                     h2h_transaction.terminate_session()
                 
                 elif conn.connectiontype=="CONNECTION_LOCAL":
@@ -735,7 +731,7 @@ class CETPManager:
                 
                 if conn.connectiontype=="CONNECTION_H2H":
                     sstag, dstag = conn.sstag, conn.dstag
-                    h2h_transaction = self.cetpstate_mgr.get_established_transaction((sstag,dstag))
+                    h2h_transaction = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag,dstag))
                     h2h_transaction.set_terminated()
                     h2h_tags.append((sstag, dstag))
                     

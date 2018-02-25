@@ -27,6 +27,12 @@ LOGLEVEL_iC2CTransaction        = logging.INFO
 
 NEGOTIATION_RTT_THRESHOLD       = 2
 
+KEY_INITIATED_TAGS        = H2HTransaction.KEY_INITIATED_TAGS
+KEY_ESTABLISHED_TAGS      = H2HTransaction.KEY_ESTABLISHED_TAGS
+KEY_HOST_IDS              = H2HTransaction.KEY_HOST_IDS
+KEY_RCESID                = H2HTransaction.KEY_RCESID
+KEY_CES_IDS               = H2HTransaction.KEY_CES_IDS
+
 """
 General_CES_policy
         cesid: cesa.lte.
@@ -355,10 +361,13 @@ class oC2CTransaction(C2CTransaction):
         """ Unregisters the incomplete negotiation upon timeout """
         if not self.is_negotiated():
             self._logger.error("C2C negotiation towards '{}' did not complete in '{}' sec.".format(self.r_cesid, self.completion_t0))
-            self.cetpstate_mgr.remove_initiated_transaction((self.sstag, 0))
+            self.cetpstate_mgr.remove(self)
     
     def is_negotiated(self):
         return self.c2c_negotiation_status
+
+    def set_negotiated(self, status=True):
+        self.c2c_negotiation_status = status
         
     @asyncio.coroutine
     def initiate_c2c_negotiation(self):
@@ -386,7 +395,7 @@ class oC2CTransaction(C2CTransaction):
             
             cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
             self.pprint(cetp_message, m="Outbound packet")
-            self.cetpstate_mgr.add_initiated_transaction((self.sstag,0), self)
+            self.cetpstate_mgr.add(self)
             self._schedule_completion_check()                   # Callback to unregister the incomplete C2C transaction
             self.last_packet_sent = cetp_message
             self._start_time = time.time()
@@ -398,10 +407,7 @@ class oC2CTransaction(C2CTransaction):
     
     def set_terminated(self, terminated=True):
         self.terminated = terminated
-        if self.is_negotiated():
-            self.cetpstate_mgr.remove_established_transaction((self.sstag, self.dstag))
-        else:
-            self.cetpstate_mgr.remove_initiated_transaction((self.sstag, 0))
+        self.cetpstate_mgr.remove(self)
         
         if hasattr(self, 'unregister_handler'):
             self.unregister_handler.cancel()
@@ -586,13 +592,12 @@ class oC2CTransaction(C2CTransaction):
 
     def _process_negotiation_failure(self):
         """ Steps to execute on failure of negotiation """
-        self.cetpstate_mgr.remove_initiated_transaction((self.sstag, 0))                # Since transaction didn't completed at oCES yet.
+        self.cetpstate_mgr.remove(self)                # Since transaction didn't completed at oCES yet.
         self.unregister_handler.cancel()
         
     def _process_negotiation_success(self):
         """ State management of established C2C transaction, and triggering the negotiated functions """
-        self.cetpstate_mgr.remove_initiated_transaction((self.sstag, 0))
-        self.cetpstate_mgr.add_established_transaction((self.sstag, self.dstag), self)
+        self.cetpstate_mgr.reregister(self)
         self.unregister_handler.cancel()
         self.trigger_negotiated_functionality()
         return True
@@ -623,6 +628,14 @@ class oC2CTransaction(C2CTransaction):
             self._logger.error("Exception in _create_connection(): '{}'".format(ex))
             return False
         
+    def lookupkeys(self):
+        if self.is_negotiated():
+            keys = [(KEY_ESTABLISHED_TAGS, (self.sstag, self.dstag), False), (KEY_CES_IDS, (self.l_cesid, self.r_cesid), False), (KEY_RCESID, self.r_cesid, True)]
+        else:
+            keys = [(KEY_INITIATED_TAGS, (self.sstag, 0), False), (KEY_CES_IDS, (self.l_cesid, self.r_cesid), False), (KEY_RCESID, self.r_cesid, True)]
+
+        return keys
+    
     def _assign_c2c_layer(self, c2c_layer):
         """ Assigned by CETP Manager """
         self.c2c_layer = c2c_layer
@@ -1131,6 +1144,6 @@ class iC2CTransaction(C2CTransaction):
         new_transaction.last_packet_received    = self.packet
         new_transaction.load_parameters()
         new_transaction.negotiated_params       = self.negotiated_params
-        self.cetpstate_mgr.add_established_transaction((self.sstag, self.dstag), new_transaction)
+        self.cetpstate_mgr.add(new_transaction)
         new_transaction.trigger_negotiated_functionality()
         return new_transaction

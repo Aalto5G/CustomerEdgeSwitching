@@ -302,15 +302,15 @@ class LocalConnection:
             CES_CONF.cache_table.delete(cached_entry)
         """
 
-class CETPState:
+LOGLEVELCETPSTATETABLE = logging.INFO
 
+class CETPStateTable:
     def __init__(self):
         """
         Initialize the CETPState object. 
         """
-        self.logger = logging.getLogger("CETP State")
-        self.logger.setLevel(LOGLEVELCETPSTATE)
-        self.obj_list = []
+        self._logger = logging.getLogger("CETP State")
+        self._logger.setLevel(LOGLEVELCETPSTATETABLE)
         self.obj_dict = {}
     
     def add(self, obj):
@@ -318,34 +318,50 @@ class CETPState:
         Add a transaction to the CETPState.
         @param obj: The transaction object.
         """
-        self.obj_list.append(obj)
-        for keytype, key in obj.lookupkeys():
-            if not keytype in self.obj_dict:
-                self.obj_dict[keytype] = {}
-            else:
-                self.obj_dict[keytype][key] = obj
-        
-        self.logger.debug("New transaction: %s" % (obj))
+        try:
+            for keytype, key, res_list in obj.lookupkeys():
+                if not keytype in self.obj_dict:
+                    self.obj_dict[keytype] = {}
+                    
+                    if not res_list:
+                        self.obj_dict[keytype][key] = obj
+                    else:
+                        self.obj_dict[keytype][key] = [obj]
+                
+                else:
+                    if not res_list:
+                        self.obj_dict[keytype][key] = obj
+                    else:
+                        lst = self.obj_dict[keytype][key]
+                        lst.append(obj)
+
+            #print("\n\n", self.obj_dict, "\n\n")
+                        
+        except Exception as ex:
+            self._logger.error("Exception: {}".format(ex))
     
-    def delete(self, obj):
+    def remove(self, obj):
         """
         Removes a transaction from the CETPState.
         @param obj: The transaction object.
         """
         try:
-            self.logger.debug("Delete transaction: %s" % (obj))
+            self._logger.debug("Delete transaction: %s" % (obj))
             #obj.delete()    
-            if obj in self.obj_list:
-                self.obj_list.remove(obj)
             
-            for keytype, key in obj.lookupkeys():
+            for keytype, key, res_list in obj.lookupkeys():
+                
                 if not keytype in self.obj_dict:
-                    self.logger.warning("CETP State does not have key '%s'" % (str(keytype)))
+                    self._logger.warning("CETP State does not have key {}".format(keytype))
                 else:
-                    del self.obj_dict[keytype][key]
+                    if res_list:
+                        lst = self.obj_dict[keytype][key]
+                        lst.remove(obj)
+                    else:
+                        del self.obj_dict[keytype][key]
                     
-        except Exception, ex:
-            Utils.exception_handler("CETPState - delete", ex)
+        except Exception as ex:
+            self._logger.error("Exception '{}' in remove()".format(ex))
     
     def reregister(self, obj):
         """
@@ -353,13 +369,13 @@ class CETPState:
         
         @param obj: The transaction object.
         """
-        self.logger.debug("Re-registering transaction: %s" % (obj))
+        self._logger.debug("Re-registering transaction: {}".format(obj))
         #Use the flag to modify the behavior of the lookupkeys() response
-        obj.set_ready_flag(False)
-        self.unregister(obj)
-        obj.set_ready_flag(True)
-        self.register(obj)
-            
+        obj.set_negotiated(status=False)
+        self.remove(obj)
+        obj.set_negotiated(status=True)
+        self.add(obj)
+        
     def get(self, keytype, key):
         """
         Obtain a transaction with the given key and keytype.
@@ -387,71 +403,8 @@ class CETPState:
             return False
     
     def clearall(self):
-        self.obj_list.clear()
         self.obj_dict.clear()
         
-    def __str__(self):
-        return "\n".join([str(obj) for obj in self.obj_list])
-
-
-class CETPStateTable(object):
-    def __init__(self):
-        self.cetp_transactions                          = {}                     #{(SST,0): A, (SST,DST): B}            #{KEY_ONgoing: [(SST,0): A, (SST,0): B], KEY_Established: [(SST,DST): C, (SST,DST): D]}
-        self.cetp_transactions[KEY_INITIATED_CETP]      = {}
-        self.cetp_transactions[KEY_ESTABLISHED_CETP]    = {}
-    
-    def has_initiated_transaction(self, session_tag):
-        keytype = KEY_INITIATED_CETP
-        return self._has(keytype, session_tag)
-        
-    def has_established_transaction(self, session_tag):
-        keytype = KEY_ESTABLISHED_CETP
-        return self._has(keytype, session_tag)
-    
-    def add_initiated_transaction(self, session_tag, transaction):
-        keytype = KEY_INITIATED_CETP
-        self._add(keytype, session_tag, transaction)
-        
-    def add_established_transaction(self, session_tag, transaction):
-        keytype = KEY_ESTABLISHED_CETP
-        self._add(keytype, session_tag, transaction)
-        #print("Upon adding an established transaction", self.cetp_transactions[KEY_ESTABLISHED_CETP])
-        
-    def remove_initiated_transaction(self, session_tag):
-        keytype = KEY_INITIATED_CETP
-        if self._has(keytype, session_tag):
-            self._remove(keytype, session_tag)
-
-    def remove_established_transaction(self, session_tag):
-        keytype = KEY_ESTABLISHED_CETP
-        if self._has(keytype, session_tag):
-            self._remove(keytype, session_tag)
-        #print("\n After removal", self.cetp_transactions[KEY_ESTABLISHED_CETP])
-            
-    def get_initiated_transaction(self, session_tag):
-        keytype = KEY_INITIATED_CETP
-        if self.has_initiated_transaction(session_tag):
-            return self._get(keytype, session_tag)
-
-    def get_established_transaction(self, session_tag):
-        keytype = KEY_ESTABLISHED_CETP
-        if self.has_established_transaction(session_tag):
-            return self._get(keytype, session_tag)
-
-    def _has(self, keytype, session_tag):
-        if keytype in self.cetp_transactions:
-            return session_tag in self.cetp_transactions[keytype]
-        return False
-
-    def _add(self, keytype, session_tag, transaction):
-        self.cetp_transactions[keytype][session_tag] = transaction
-        
-    def _get(self, keytype, session_tag):
-        return self.cetp_transactions[keytype][session_tag]
-    
-    def _remove(self, keytype, session_tag):
-        del self.cetp_transactions[keytype][session_tag]
-
     def allocate_proxy_address(self, lip):
         """ Emulates proxy-IP assigning function """
         ms_ip = "10.0.3."
@@ -460,3 +413,6 @@ class CETPStateTable(object):
         proxy_ip = ms_ip + ls_ip        
         return proxy_ip
     
+    def __str__(self):
+        return "\nNOthing to display"
+

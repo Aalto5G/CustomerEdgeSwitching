@@ -266,14 +266,14 @@ class CETPC2CLayer:
     def process_c2c(self, sstag, dstag, cetp_msg, transport):
         """ Calls corresponding C2CTransaction method, depending on whether its an ongoing or completed C2C Transaction. """
         
-        if self.cetpstate_mgr.has_established_transaction( (sstag, dstag) ):
+        if self.cetpstate_mgr.has(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag, dstag) ):
             self._logger.debug(" CETP for a negotiated C2C transaction (SST={}, DST={})".format(sstag, dstag))
-            o_c2c = self.cetpstate_mgr.get_established_transaction( (sstag, dstag) )
+            o_c2c = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag, dstag) )
             o_c2c.post_c2c_negotiation(cetp_msg, transport)
                 
-        elif self.cetpstate_mgr.has_initiated_transaction( (sstag, 0) ):
+        elif self.cetpstate_mgr.has(H2HTransaction.KEY_INITIATED_TAGS, (sstag, 0) ):
             self._logger.info(" Continue resolving c2c-transaction (SST={}, DST={})".format(sstag, 0))
-            o_c2c   = self.cetpstate_mgr.get_initiated_transaction( (sstag, 0) )
+            o_c2c   = self.cetpstate_mgr.get(H2HTransaction.KEY_INITIATED_TAGS, (sstag, 0) )
             result  = o_c2c.continue_c2c_negotiation(cetp_msg)
             (status, cetp_resp) = result
             
