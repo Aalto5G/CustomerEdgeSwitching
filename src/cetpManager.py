@@ -468,7 +468,7 @@ class CETPManager:
             timeout = int(self.ces_params["host_filtering_t0"])
             if len(r_hostid)==0:    return
             
-            if to_host:
+            if to_remoteHost:
                 if len(r_cesid)!=0:
                     #Stores the remote-host to be filtered in the security module.         # to detect non-compliance from remote CES
                     keytype = CETPSecurity.KEY_RCES_UnreachableRCESDestinations
@@ -494,7 +494,7 @@ class CETPManager:
 
         except Exception as ex:
             self._logger.info("Exception '{}'".format(ex))
-            
+
             
     def terminate_cetp_c2c_signalling(self, r_cesid="", terminate_h2h=False):
         """ Terminates the CETP signalling channel with remote-CESID """
@@ -513,83 +513,6 @@ class CETPManager:
         except Exception as ex:
             self._logger.info("Exception '{}' in terminating cetp signalling channel to '{}'".format(ex))
 
-    
-    def send_evidence(self, sstag=0, dstag=0, lip="", lpip="", evidence=""):
-        """ The method is used to send misbehavior evidence observed by the dataplane to a remote CES 
-        @params sstag & dstag:     CETP session tags of Host-to-host session for which misbehavior is observed.
-        @params lip & lpip:        IP address of the local-host and the proxy-IP address for remote host
-        @params evidence:          Evidence of misbehavior/attack observed at data-plane 
-        """
-        try:
-            r_cesid, r_hostid = None, None
-            if (evidence=="") and ( ((sstag<=0) and (dstag<=0)) or ((lip=="")and(lpip=="")) ):
-                self._logger.info("Insufficient information to associate misbehavior to a remote host.")
-                return
-
-            if (sstag>0) and (dstag>0):
-                key     = (sstag, dstag)
-                keytype = ConnectionTable.KEY_MAP_CES_TO_CES
-                conn    = self.conn_table.get(keytype, key)
-                r_cesid, r_hostid = conn.r_cesid, conn.remoteFQDN
-                self.cetp_security.record_misbehavior_evidence(r_cesid, r_hostid, evidence)
-            
-            elif (len(lip)>0) and (len(lpip)>0):
-                key = (lip, lpip)
-                keytype = ConnectionTable.KEY_MAP_CETP_PRIVATE_NW
-                conn = self.conn_table.get(keytype, key)
-                r_cesid, r_hostid = conn.r_cesid, conn.remoteFQDN
-                self.cetp_security.record_misbehavior_evidence(r_cesid, r_hostid, evidence)
-            
-            if self.has_c2c_layer(r_cesid):                 # if C2C-signalling channel is present, it forwards evidence to remote CES
-                c2c_layer = self.get_c2c_layer(r_cesid)
-                c2c_layer.report_evidence(sstag, dstag, r_hostid, r_cesid, evidence)
-            
-            
-        
-        except Exception as ex:
-            self._logger.info("Exception '{}' in terminating session".format(ex))
-
-
-    def process_session_terminate_message(self, r_cesid, tag_list=[]):
-        """ Terminate all H2H sessions to/from a remote-CESID """
-        try:
-            keytype = ConnectionTable.KEY_MAP_REMOTE_CESID
-            key = r_cesid
-            
-            if len(tag_list)==0:
-                self._logger.warning(" Terminating all H2H session with CES '{}'".format(r_cesid))
-                
-                if self.conn_table.has(keytype, key):
-                    conn_list = self.conn_table.get(keytype, key)
-            
-                for num in range(0, len(conn_list)):
-                    conn = conn_list[0]
-                    
-                    if conn.connectiontype=="CONNECTION_H2H":
-                        self.conn_table.delete(conn)
-                        sstag, dstag = conn.sstag, conn.dstag
-                        h2h_transaction = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag,dstag))
-                        self.cetpstate_mgr.remove(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag,dstag))
-                        
-            else:
-                self._logger.warning(" Terminating {} H2H sessions towards {}".format(len(tag_list), r_cesid))
-                #self.terminate_sessions_by_tags(tag_list)
-
-                if self.conn_table.has(keytype, key):
-                    conn_list = self.conn_table.get(keytype, key)
-                
-                for num in range(0, len(conn_list)):
-                    conn = conn_list[0]
-                    sstag, dstag = conn.sstag, conn.dstag
-                    
-                    if conn.connectiontype=="CONNECTION_H2H" and ((dstag, sstag) in tag_list):          #Flipped the (SST, DST) order to match the sender perspective
-                        self.conn_table.delete(conn)
-                        h2h_transaction = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag,dstag))
-                        self.cetpstate_mgr.remove(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag,dstag))
-                            
-        except Exception as ex:
-            self._logger.error("Exception {} in process_session_terminate_message()".format(ex))
-            
 
     def terminate_sessions_by_tags(self, tags_list):
         """ Terminates CETP sessions identified as a list of (SST, DST) pairs """
@@ -600,7 +523,6 @@ class CETPManager:
                         
         except Exception as ex:
             self._logger.info("Exception '{}' in terminate_sessions_by_tags()".format(ex))
-            return
 
 
     def terminate_session_by_tags(self, sstag, dstag):
@@ -609,7 +531,7 @@ class CETPManager:
             if (sstag!=0) and (dstag!=0):
                 if self.cetpstate_mgr.has(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag, dstag)):
                     cetp_transaction = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag, dstag))
-                    self.cetpstate_mgr.remove(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag, dstag))
+                    cetp_transaction.set_terminated()
                 
                     #Delete the connection instances from Connection table
                     if cetp_transaction.name=="H2HTransactionOutbound":
@@ -618,129 +540,181 @@ class CETPManager:
                         cetp_transaction.terminate_session()
                     
                     elif cetp_transaction.name=="oC2CTransaction":
-                        cetp_transaction.set_terminated()                   # TB Encode
-                        #conn = cetp_transaction.conn
-                        #self.conn_table.remove(conn)
+                        conn = cetp_transaction.conn
+                        self.conn_table.delete(conn)
                         
         except Exception as ex:
             self._logger.info("Exception '{}' in terminating session".format(ex))
             return
-
-    def terminate_session_by_fqdns(self, l_hostid="", r_hostid=""):
-        """ Terminates CETP session (and connection) between two hosts specified by their FQDNs """
-        keytype = ConnectionTable.KEY_MAP_CES_FQDN
-        key = (l_hostid, r_hostid)
-        if self.conn_table.has(keytype, key):
-            conn = self.conn_table.get(keytype, key)
-            self.conn_table.delete(conn)
-            if conn.connectiontype=="CONNECTION_H2H":
-                sstag, dstag = conn.sstag, conn.dstag
-                h2h_transaction = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag,dstag))
-                self.cetpstate_mgr.remove(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag,dstag))
-                h2h_transaction.terminate_session()
-
-            elif conn.connectiontype=="CONNECTION_LOCAL":
-                self._logger.debug("Terminating Local H2HTransaction")
-                rip, rpip = conn.rip, conn.rpip
-                keytype = ConnectionTable.KEY_MAP_CETP_PRIVATE_NW
-                key = (rip, rpip)
-                r_conn = self.conn_table.get(keytype, key)
-                self.conn_table.delete(r_conn)                                              # Deleting the pair of local connection
-
-
-    def terminate_session(self, sstag, dstag, r_cesid="", r_host_id=""):
-        pass
-
-    def terminate_remote_host_sessions(self, r_hostid):
-        """ Terminates a local CETP session """
-        keytype = ConnectionTable.KEY_MAP_REMOTE_FQDN
-        key = r_hostid
-        if self.conn_table.has(keytype, key):
-            conn_list = self.conn_table.get(keytype, key)
-            total_connections = len(conn_list)
-            for num in range(0, total_connections):
-                conn = conn_list[0]
-                self.conn_table.delete(conn)
-                
-                if conn.connectiontype=="CONNECTION_H2H":
-                    self._logger.debug("Terminating H2HTransaction state")
-                    sstag, dstag = conn.sstag, conn.dstag
-                    h2h_transaction = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag,dstag))
-                    self.cetpstate_mgr.remove(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag,dstag))
-                    h2h_transaction.terminate_session()
-
-                elif conn.connectiontype=="CONNECTION_LOCAL":
-                    self._logger.debug("Terminating Local H2HTransaction")
-                    rip, rpip = conn.rip, conn.rpip
-                    keytype = ConnectionTable.KEY_MAP_CETP_PRIVATE_NW
-                    key = (rip, rpip)
-                    r_conn = self.conn_table.get(keytype, key)
-                    self.conn_table.delete(r_conn)                                              # Deleting the pair of local connection
-
-            
-    def terminate_local_host_sessions(self, l_hostid="", lip=""):
-        """ Terminates all sessions to/from a local FQDN """
-        if len(l_hostid)!=0:
-            self._logger.info("Terminating sessions of local-hostID '{}'".format(l_hostid))
-            keytype = ConnectionTable.KEY_MAP_LOCAL_FQDN
-            key = l_hostid
-        elif len(lip)!=0:
-            self._logger.info("Terminating sessions of local-hostIP '{}'".format(lip))
-            keytype = ConnectionTable.KEY_MAP_LOCAL_HOST
-            key = lip            
-        else:
-            return
         
-        if self.conn_table.has(keytype, key):
-            conn_list = self.conn_table.get(keytype, key)
-            total_connections = len(conn_list)
-            for num in range(0, total_connections):
-                conn = conn_list[0]
-                #print("Before deleting connection: ", self.conn_table.connection_dict)
-                #print("After deleting connection")
-                self.conn_table.delete(conn)
-                if conn.connectiontype=="CONNECTION_H2H":
-                    self._logger.debug("Terminating H2HTransaction state")
-                    sstag, dstag = conn.sstag, conn.dstag
-                    h2h_transaction = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag,dstag))
-                    self.cetpstate_mgr.remove(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag,dstag))
-                    h2h_transaction.terminate_session()
-                
-                elif conn.connectiontype=="CONNECTION_LOCAL":
-                    self._logger.debug("Terminating Local H2HTransaction")
-                    rip, rpip = conn.rip, conn.rpip
-                    keytype = ConnectionTable.KEY_MAP_CETP_PRIVATE_NW
-                    key = (rip, rpip)
-                    r_conn = self.conn_table.get(keytype, key)
-                    self.conn_table.delete(r_conn)                                              # Deleting the pair of local connection
-                    # Terminate at the local transaction at H2HLocalTransaction level.
-
+    
     def terminate_rces_h2h_sessions(self, r_cesid):
         """ Terminate all H2H sessions to/from a remote-CESID """
+        keytype         = H2HTransaction.KEY_RCESID
+        key             = r_cesid
+        established_h2h = False
+        
+        if self.cetpstate_mgr.has(keytype, key):
+            cetpstates = self.cetpstate_mgr.get(keytype, key)
+            
+            for cetpstate in cetpstates:
+                if cetpstate.name == "H2HTransactionOutbound":
+                    cetpstate.set_terminated()
+                    if dstag != 0:  established_h2h = True
+            
+            # Reporting remote CES to close all established CETP session states.
+            if established_h2h and self.has_c2c_layer(r_cesid):
+                c2c_layer = self.get_c2c_layer(r_cesid)
+                c2c_layer.close_all_h2h_sessions()                  
+        
+        #Close DP connections for CETP states.
+        self._close_rces_h2h_connections(r_cesid=r_cesid)
+
+                
+    def process_session_terminate_message(self, r_cesid, tag_list=None):
+        """ Terminate all H2H sessions with a remote-CESID upon an inbound CETP terminate message 
+            @param tag_list: List of session tags provided by the remote CES.
+        """
+        try:
+            keytype  = H2HTransaction.KEY_RCESID
+            key      = r_cesid
+            
+            if self.cetpstate_mgr.has(keytype, key):
+                cetpstates = self.cetpstate_mgr.get(keytype, key)
+
+                if tag_list is None:
+                    self._logger.warning(" Terminating all H2H session with CES '{}'".format(r_cesid))
+                    self._close_rces_h2h_connections(r_cesid=r_cesid)
+                    
+                    for cetpstate in cetpstates:
+                        if cetpstate.name == "H2HTransactionOutbound":
+                            cetpstate.set_terminated()
+                
+                else:
+                    self._logger.warning(" Terminating {} H2H session with CES '{}'".format(len(tag_list), r_cesid))
+                    self._close_rces_h2h_connections(r_cesid=r_cesid, tag_list=tag_list)
+                    
+                    for cetpstate in cetpstates:
+                        if cetpstate.name == "H2HTransactionOutbound":
+                            sstag, dstag = cetpstate.sstag, cetpstate.dstag
+                            if (dstag, sstag) in tag_list:
+                                cetpstate.set_terminated()
+        except:
+            self._logger.error("Exception {} in process_session_terminate_message()".format(ex))
+
+        
+    def _close_rces_h2h_connections(self, r_cesid="", tag_list=None):
+        """ Closes dataplane H2H connections toward a remote CES """            # Question does removing the connection state affect ongoing DP connections as well?
         keytype = ConnectionTable.KEY_MAP_REMOTE_CESID
         key     = r_cesid
         
         if self.conn_table.has(keytype, key):
             conn_list = self.conn_table.get(keytype, key)
-            total_connections = len(conn_list)
-            h2h_tags = []
             
-            for num in range(0, total_connections):
-                conn = conn_list[0]
-                self.conn_table.delete(conn)
-                
-                if conn.connectiontype=="CONNECTION_H2H":
+            if tag_list is None:
+                for num in range(0, len(conn_list)):
+                    conn = conn_list[0]
+                    conn_list.remove(conn)
+                    self.conn_table.delete(conn)
+            else:
+                for num in range(0, len(conn_list)):
+                    conn = conn_list[0]
                     sstag, dstag = conn.sstag, conn.dstag
-                    h2h_transaction = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag,dstag))
-                    h2h_transaction.set_terminated()
-                    h2h_tags.append((sstag, dstag))
                     
-            if len(h2h_tags)>0:
-                if self.has_c2c_layer(r_cesid):
+                    if conn.connectiontype == "CONNECTION_H2H" and ((dstag, sstag) in tag_list):          #Flipped the (SST, DST) order to match the CES perspective
+                        self.conn_table.delete(conn)
+
+    
+    def report_misbehavior_evidence(self, sstag=0, dstag=0, lip="", lpip="", evidence=""):
+        """ The method is used to send misbehavior evidence observed by the dataplane to a remote CES 
+        @params sstag & dstag:     CETP session tags of Host-to-host session for which misbehavior is observed.
+        @params lip & lpip:        IP address of the local-host and the proxy-IP address for remote host
+        @params evidence:          Evidence of misbehavior/attack observed at data-plane 
+        """
+        try:
+            keytype, key = None, None
+            if evidence == "" and ( (sstag <= 0 and dstag <= 0) or (lip == "" and lpip == "") ):
+                self._logger.info("Insufficient information to associate misbehavior to a remote host.")
+                return
+
+            if (sstag > 0) and (dstag > 0):
+                keytype = ConnectionTable.KEY_MAP_CES_TO_CES
+                key     = (sstag, dstag)
+            
+            elif (len(lip) > 0) and (len(lpip) > 0):
+                keytype = ConnectionTable.KEY_MAP_CETP_PRIVATE_NW
+                key = (lip, lpip)
+            
+            if self.conn_table.has(keytype, key):
+                conn = self.conn_table.get(keytype, key)
+                r_cesid, r_hostid, sstag, dstag = conn.r_cesid, conn.remoteFQDN, conn.sstag, conn.dstag
+                self.cetp_security.record_misbehavior_evidence(r_cesid, r_hostid, evidence)
+            
+                if self.has_c2c_layer(r_cesid):                 # Forward the evidence to remote CES, if C2C-signalling channel is present
                     c2c_layer = self.get_c2c_layer(r_cesid)
-                    c2c_layer.close_all_h2h_sessions()
+                    c2c_layer.report_evidence(sstag, dstag, r_hostid, r_cesid, evidence)
+        
+        except Exception as ex:
+            self._logger.info("Exception '{}' in terminating session".format(ex))
 
 
+    def terminate_session_by_fqdns(self, l_hostid="", r_hostid=""):
+        """ Terminates CETP session (and connection) between two hosts specified by their FQDNs """
+        keytype = ConnectionTable.KEY_MAP_CES_FQDN
+        key     = (l_hostid, r_hostid)
+        self._terminate_host_connections(keytype, key)
+        
+    def terminate_remote_host_sessions(self, r_hostid):
+        """ Terminates a CETP session with remote host """
+        keytype = ConnectionTable.KEY_MAP_REMOTE_FQDN
+        key     = r_hostid
+        self._terminate_host_connections(keytype, key)
+        
+    def terminate_local_host_sessions(self, l_hostid="", lip=""):
+        """ Terminates all sessions to/from a local FQDN """
+        if len(l_hostid)!=0:
+            self._logger.warning("Terminating sessions of local-hostID '{}'".format(l_hostid))
+            keytype = ConnectionTable.KEY_MAP_LOCAL_FQDN
+            key = l_hostid
+            self._terminate_host_connections(keytype, key)
+            
+        elif len(lip)!=0:
+            self._logger.warning("Terminating sessions of local-hostIP '{}'".format(lip))
+            keytype = ConnectionTable.KEY_MAP_LOCAL_HOST
+            key = lip
+            self._terminate_host_connections(keytype, key)
+        
+
+    def _terminate_host_connections(self, keytype, key):
+        """ Deletes a connection object and corresponding CETP State """
+        if self.conn_table.has(keytype, key):
+            conns = self.conn_table.get(keytype, key)
+            
+            if type(conns) == type(list()):
+                for num in range(0, len(conns)):
+                    conn = conns[0]
+                    #print("Before deleting connection: ", self.conn_table.connection_dict)
+                    self.conn_table.delete(conn)
+                    self._terminate_host_connection(conn)
+            else:
+                self.conn_table.delete(conns)
+                self._terminate_host_connection(conns)
+                
+        
+    def _terminate_host_connection(self, conn):
+        """ Deletes a connection object and corresponding CETP State """
+        if conn.connectiontype=="CONNECTION_H2H":
+            sstag, dstag = conn.sstag, conn.dstag
+            h2h_transaction = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag,dstag))
+            h2h_transaction.terminate_session()
+            h2h_transaction.set_terminated()
+
+        elif conn.connectiontype=="CONNECTION_LOCAL":
+            rip, rpip = conn.rip, conn.rpip
+            keytype = ConnectionTable.KEY_MAP_CETP_PRIVATE_NW
+            key = (rip, rpip)
+            r_conn = self.conn_table.get(keytype, key)
+            self.conn_table.delete(r_conn)                                              # Deleting the pair of local connection
 
 
 """ Test functions """

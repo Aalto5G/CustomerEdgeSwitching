@@ -339,8 +339,9 @@ class H2HTransactionOutbound(H2HTransaction):
     
     def _unregister_h2h(self):
         self.cetpstate_mgr.remove(self)
-        #self.cetp_h2h.update_H2H_transaction_count(initiated=False)
-        self._execute_dns_callback(resolution=False)
+        if not self.is_negotiated():
+            #self.cetp_h2h.update_H2H_transaction_count(initiated=False)
+            self._execute_dns_callback(resolution=False)
     
     def is_negotiated(self):
         return self.h2h_negotiation_status
@@ -608,6 +609,9 @@ class H2HTransactionOutbound(H2HTransaction):
             cb_func(dns_q, addr, r_addr=r_addr, success=resolution)
         except Exception as ex:
             self._logger.error("Exception in _execute_dns_callback {}".format(ex))
+            
+    def terminate_session(self):
+        tlvs_to_send = self._get_terminate_tlv()
 
     def is_local_host_allowed(self, hostid):
         """ Checks in the CETPSecurity module if the traffic from the sender is permitted (towards remote CES).. OR  whether the host is blacklisted """
@@ -881,7 +885,7 @@ class H2HTransactionInbound(H2HTransaction):
             negotiated_params = [self.lfqdn, self.rfqdn, self.lid, self.rid, self.lip, self.lpip]
             #self._logger.info("Negotiated params: {}".format(negotiated_params))
     
-            conn = ConnectionTable.H2HConnection(120.0, self.lid, self.lip, self.lpip, self.rid, self.lfqdn, self.rfqdn, \
+            self.conn = ConnectionTable.H2HConnection(120.0, self.lid, self.lip, self.lpip, self.rid, self.lfqdn, self.rfqdn, \
                                                  self.sstag, self.dstag, self.r_cesid, self.conn_table)
             self.conn_table.add(conn)
             return True
@@ -900,6 +904,7 @@ class H2HTransactionInbound(H2HTransaction):
         new_transaction.opolicy                 = self.ipolicy
         new_transaction.policy                  = self.policy
         new_transaction.last_received_packet    = self.packet
+        new_transaction.conn                    = self.conn
         self.cetpstate_mgr.add(new_transaction)
         return new_transaction
     

@@ -1144,6 +1144,7 @@ class iC2CTransaction(C2CTransaction):
         new_transaction.last_packet_received    = self.packet
         new_transaction.load_parameters()
         new_transaction.negotiated_params       = self.negotiated_params
+        new_transaction.conn                    = self.conn
         self.cetpstate_mgr.add(new_transaction)
         new_transaction.trigger_negotiated_functionality()
         return new_transaction
