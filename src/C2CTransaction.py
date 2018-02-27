@@ -216,6 +216,7 @@ class C2CTransaction(CETPTransaction):
         rrlocs_list = list(set(rrlocs_list))
         #print("Filtered Local_RLOCs_list & Remote_RLOCs_list: ", lrlocs_list, rrlocs_list)
         lrlocs, rrlocs = _filter(lrlocs_list, rrlocs_list)
+        
         lrlocs = sorted(lrlocs, key=lambda s:s[0], reverse=True)
         rrlocs = sorted(rrlocs, key=lambda s:s[0], reverse=True)
         return (lrlocs, rrlocs)
@@ -233,8 +234,9 @@ class C2CTransaction(CETPTransaction):
                 l_payloads += lpayload
         
         lpayloads, rpayloads = self._filter_payload_list(l_payloads, r_payloads)
+        self.add_negotiated_params("lpayloads", lpayloads)
+        self.add_negotiated_params("rpayloads", rpayloads)
         return (lpayloads, rpayloads)
-                
 
 
     def _filter_payload_list(self, sent_tlvlist, recv_tlvlist):
@@ -246,8 +248,9 @@ class C2CTransaction(CETPTransaction):
                 if 'cmp' in p:
                     if p['cmp']=="notAvailable":
                         continue
-                #p["value"]
-                retlist.append(p["code"])
+                
+                typ, pref = p["code"], p["value"]
+                retlist.append((typ, pref))
             return retlist
 
         def _filter(base_payload, cmp_payload):
@@ -263,15 +266,14 @@ class C2CTransaction(CETPTransaction):
             return (lpayloads, rpayloads)
 
         
-        l_payloads = _build_list(sent_tlvlist)          #Build the payload list for comparison
         r_payloads = _build_list(recv_tlvlist)
+        l_payloads = _build_list(sent_tlvlist)          #Build the payload list for comparison
         l_payloads = list(set(l_payloads))
         r_payloads = list(set(r_payloads))
         (l_payloads, r_payloads) = _filter(l_payloads, r_payloads)
         
-        self.add_negotiated_params("lpayloads", l_payloads)
-        self.add_negotiated_params("rpayloads", r_payloads)
-        
+        l_payloads = sorted(l_payloads, key=lambda s:s[1], reverse=True)
+        r_payloads = sorted(r_payloads, key=lambda s:s[1], reverse=True)
         return (l_payloads, r_payloads)
     
     def add_negotiated_params(self, code, value):
@@ -549,8 +551,9 @@ class oC2CTransaction(C2CTransaction):
                 else:
                     self._logger.error(" C2C Negotiation failure with CES '{}' -> Responding remote CES with the terminate-TLV".format(self.r_cesid))
                     self._process_negotiation_failure()
-                    if len(error_tlvs)==0:   tlvs_to_send = [self._get_terminate_tlv()]
-                    tlvs_to_send = error_tlvs
+                    tlvs_to_send = [self._get_terminate_tlv()]
+                    if len(error_tlvs) != 0:   tlvs_to_send = error_tlvs
+                    
                     cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
                     self.pprint(cetp_message, m="Outbound Msg")
                     negotiation_status = False
@@ -610,7 +613,7 @@ class oC2CTransaction(C2CTransaction):
         try:
             self.lrloc, self.rrloc          = self._get_dp_connection_rlocs()
             self.lpayload, self.rpayload    = self._get_dp_connection_payloads()
-            #self._logger.info("Negotiated params: {}".format(self.get_negotiated_params()))
+            self._logger.info(" Negotiated params: {}".format(self.get_negotiated_params()))
             
             if len(self.lrloc)==0 or len(self.rrloc)==0:
                 self._logger.error("C2C negotiation with CES '{}' didn't provide RLOC information".format(self.r_cesid))
@@ -1115,7 +1118,7 @@ class iC2CTransaction(C2CTransaction):
             self.sstag                      = self.generate_session_tags(self.dstag)
             self.lrloc, self.rrloc          = self._get_dp_connection_rlocs()
             self.lpayload, self.rpayload    = self._get_dp_connection_payloads()
-            #self._logger.info(" Negotiated params: {}".format(self.get_negotiated_params()))            
+            self._logger.info(" Negotiated params: {}".format(self.get_negotiated_params()))            
             
             if len(self.lrloc)==0 or len(self.rrloc)==0:
                 self._logger.error(" Remote CES '{}' didn't negotiate RLOC information in C2C negotiation".format(self.r_cesid))

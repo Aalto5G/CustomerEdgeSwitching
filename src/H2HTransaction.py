@@ -532,8 +532,9 @@ class H2HTransactionOutbound(H2HTransaction):
                 else:
                     self._logger.error(" Failed to create connection -> Responding host session with the terminate-TLV")
                     self._process_negotiation_failure()
-                    if len(error_tlvs)==0:   tlvs_to_send = [self._get_terminate_tlv()]
-                    tlvs_to_send = error_tlvs
+                    tlvs_to_send = [self._get_terminate_tlv()]
+                    if len(error_tlvs) != 0:   tlvs_to_send = error_tlvs
+                    
                     cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
                     self.pprint(cetp_message, m="Outbound Msg")
                     self.h2h_negotiation_status = False

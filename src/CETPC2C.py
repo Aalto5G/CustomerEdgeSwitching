@@ -123,9 +123,10 @@ class CETPC2CLayer:
         
     def unregister_c2c(self):
         """ Terminates the tasks scheduled within C2C-transaction """
-        if self.c2c_transaction is not None:
-            self.c2c_transaction.set_terminated()
-            del(self.c2c_transaction)
+        if hasattr(self, 'c2c_transaction'):
+            if self.c2c_transaction is not None:
+                self.c2c_transaction.set_terminated()
+                del self.c2c_transaction
         
     def assign_cetp_h2h_layer(self, cetp_h2h):
         """ Assigns the CETP-H2H layer corresponding to this C2C layer """
@@ -269,7 +270,7 @@ class CETPC2CLayer:
         if self.cetpstate_mgr.has(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag, dstag) ):
             self._logger.debug(" CETP for a negotiated C2C transaction (SST={}, DST={})".format(sstag, dstag))
             o_c2c = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag, dstag) )
-            o_c2c.post_c2c_negotiation(cetp_msg, transport)
+            o_c2c.post_c2c_negotiation(cetp_msg)
                 
         elif self.cetpstate_mgr.has(H2HTransaction.KEY_INITIATED_TAGS, (sstag, 0) ):
             self._logger.info(" Continue resolving c2c-transaction (SST={}, DST={})".format(sstag, 0))
@@ -290,10 +291,7 @@ class CETPC2CLayer:
                     (r_ip, r_port), proto = t.remotepeer, t.proto
                     self.register_unreachable_cetp_addr(r_ip, r_port, proto)
                     
-                self.unregister_c2c()
-                self._logger.debug(" Close all transports towards {}.".format(self.r_cesid))
-                self._close_all_initiated_transports()
-                self._close_all_connected_transports()
+                self.terminate()
                 
             elif status == None:
                 if len(cetp_resp) > 0:
@@ -384,7 +382,7 @@ class CETPC2CLayer:
             self.initiated_transports.remove(transport)
 
     def _close_all_initiated_transports(self):
-        while len(self.connected_transports)>0:
+        while len(self.connected_transports) > 0:
             t = self.connected_transports[0]
             t.close()
         
@@ -396,7 +394,7 @@ class CETPC2CLayer:
             self.connected_transports.remove(transport)
 
     def _close_all_connected_transports(self):
-        while len(self.connected_transports)>0:
+        while len(self.connected_transports) > 0:
             t = self.connected_transports[0]
             t.close()
 
@@ -459,16 +457,14 @@ class CETPC2CLayer:
 
     def shutdown(self):
         """ Close the C2C link between two CES nodes """
-        c2c_transaction = self.get_c2c_transaction()
-        c2c_transaction.set_terminated()
-        c2c_transaction.send_cetp_terminate()
-        self.close_all_transport_connections()
-            
-    def close_all_transport_connections(self):
-        """ Closes all connected transports to remote CES """
-        for transport in self.connected_transports:
-            transport.close()
+        self.c2c_transaction.send_cetp_terminate()
+        self.terminate()
         
+    def terminate(self):
+        self.unregister_c2c()
+        self._close_all_connected_transports()
+        self._close_all_initiated_transports()
+    
     def report_evidence(self, h_sstag, h_dstag, r_hostid, r_cesid, misbehavior_evidence):
         """ Reports misbehavior evidence observed in H2H (sstag, dstag) to the remote CES """
         c2c_transaction = self.get_c2c_transaction()

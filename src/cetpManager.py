@@ -44,7 +44,7 @@ class CETPManager:
         self.cetpstate_mgr          = CETP.CETPStateTable()                                        # Records the established CETP transactions (both H2H & C2C). Required for preventing the re-allocation already in-use SST & DST (in CETP transaction).
         self.conn_table             = ConnectionTable.ConnectionTable()
         self.cetp_security          = CETPSecurity.CETPSecurity(loop, self.conn_table, ces_params)
-        self.interfaces             = PolicyManager.FakeInterfaceDefinition(cesid)
+        self.interfaces             = PolicyManager.FakeInterfaceDefinition(cesid, ces_params = ces_params)
         self.policy_mgr             = PolicyManager.PolicyManager(self.cesid, policy_file= cetp_policies)     # Shall ideally fetch the policies from Policy Management System (of Hassaan)    - And will be called, policy_sys_agent
         self.host_register          = PolicyManager.HostRegister()
         self._loop                  = loop

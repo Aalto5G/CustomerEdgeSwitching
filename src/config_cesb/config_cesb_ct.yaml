@@ -26,6 +26,11 @@ CESParameters:
     max_dp_ttl: 7200
     max_host_ratelimit: 10
     min_keepalive_timeout: 10
+    payload_preference:
+        ipsec:  100
+        geneve: 80
+        gre:    60
+        vxlan:  40
 
 DNS:
     soa: cesb.lte.

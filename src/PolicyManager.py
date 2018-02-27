@@ -47,12 +47,21 @@ class Configuration:
 
 class FakeInterfaceDefinition(object):
     """ To be replaced by actual Class defining the CES Network Interfaces """
-    def __init__(self, cesid, config_file=None, name="Interfaces"):
+    def __init__(self, cesid, ces_params=None, name="Interfaces"):
         self.cesid = cesid
-        self._interfaces = []
-        self.register_interfaces(config_file)
+        self._interfaces    = []
+        self.payload_pref   = {}                    # Pre-populate with preferences.
+        self.register_interfaces(ces_params)
+        self.register_payloads(ces_params)
 
-    def register_interfaces(self, config_file):
+    def register_payloads(self, ces_params):
+        pref_list = ces_params["payload_preference"]
+        self.payload_pref["ipsec"]  = pref_list["ipsec"]
+        self.payload_pref["vxlan"]  = pref_list["vxlan"]
+        self.payload_pref["gre"]    = pref_list["gre"]
+        self.payload_pref["geneve"] = pref_list["geneve"]
+    
+    def register_interfaces(self, ces_params):
         #r  = pref, order, rloc_type, rloc, iface
         rs = []
 
@@ -84,6 +93,10 @@ class FakeInterfaceDefinition(object):
                 ret_list.append(iface_info)
         
         return ret_list
+
+    def get_payload_preference(self, type):
+        if type in self.payload_pref:
+            return self.payload_pref[type]
     
     
 

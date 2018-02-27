@@ -691,11 +691,15 @@ def send_rloc(**kwargs):
 
 
 def send_payload(**kwargs):
-    tlv, code, query, policy = kwargs["tlv"], kwargs["code"], kwargs["query"], kwargs["policy"]
+    tlv, code, query, policy, interfaces = kwargs["tlv"], kwargs["code"], kwargs["query"], kwargs["policy"], kwargs["interfaces"]
     if query==True:
         if 'value' in tlv:
             tlv["value"] = ""
     else:
+        ret_value = interfaces.get_payload_preference(code)
+        if ret_value is not None:
+            tlv["value"] = ret_value
+        
         if 'value' not in tlv:
             tlv["value"] = ""
     return [tlv]
@@ -730,24 +734,29 @@ def response_rloc(**kwargs):
 
 def response_payload(**kwargs):
     try:
-        tlv, policy = kwargs["tlv"], kwargs["policy"]
+        tlv, policy, interfaces = kwargs["tlv"], kwargs["policy"], kwargs["interfaces"]
         new_tlv = copy.deepcopy(tlv)
-        ret = policy.get_available_policy(new_tlv)
+        ret_tlv = policy.get_available_policy(new_tlv)
         new_tlv["ope"] = "info"
         
-        if ret is None:                                 # Meaning that TLV is not supported by CES
-            new_tlv["cmp"]=="notAvailable"
+        if ret_tlv is None:                                 # Meaning that TLV is not supported by CES
+            new_tlv["cmp"] = "notAvailable"
             return [new_tlv]
         
-        ope, cmp, group, code, response_value = ret
+        ope, cmp, group, code, response_value = ret_tlv
         
         if cmp=="notAvailable":
-            new_tlv["cmp"]=="notAvailable"
+            new_tlv["cmp"] = "notAvailable"
         else:
-            response_value = ""                         # Some value or ID assigned by policy
-            #new_tlv["value"] = response_value
+            ret_value    = interfaces.get_payload_preference(code)
+            if ret_value is not None:
+                new_tlv["value"] = ret_value
+
+            if 'value' not in new_tlv:
+                new_tlv["value"] = ""
+
         return [new_tlv]
-    
+
     except Exception as ex:
         print("Exception in response_payload(): ", ex)
         return None
