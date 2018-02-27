@@ -801,14 +801,10 @@ def verify_payload(**kwargs):
     try:
         tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
         r_payload = code
-        if len(r_payload)==0:
-            return False
-        
-        ope, cmp, group, code, response_value = policy.get_available_policy(tlv)
-        l_payload = code
-        
-        if l_payload!=r_payload:
-            return False
+
+        if 'cmp' in tlv:
+            if tlv["cmp"] == "notAvailable":
+                return False
         
         return True
     except:
