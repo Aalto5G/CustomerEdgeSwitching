@@ -408,6 +408,9 @@ class oC2CTransaction(C2CTransaction):
     def set_terminated(self, terminated=True):
         self.terminated = terminated
         self.cetpstate_mgr.remove(self)
+
+        if self.is_negotiated():
+            self.conn_table.delete(self.conn)
         
         if hasattr(self, 'unregister_handler'):
             self.unregister_handler.cancel()
@@ -641,16 +644,17 @@ class oC2CTransaction(C2CTransaction):
         self.c2c_layer = c2c_layer
     
     def get_cetp_terminate_msg(self, error_tlv=None):
-        terminate_tlv = self._create_offer_tlv2(group="ces", code="terminate", value=error_tlv)
-        if terminate_tlv!=None:
+        terminate_tlv = self._create_offer_tlv2(group="ces", code="terminate")
+        if terminate_tlv != None:
+            if error_tlv != None:   terminate_tlv["value"] = error_tlv
+                
             cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=terminate_tlv)
-            cetp_packet = self.get_cetp_packet(cetp_message)
-            return cetp_packet
+            return cetp_message
     
     def send_cetp_terminate(self, error_tlv=None):
         """ Sends a terminate TLV towards remote CES """
-        cetp_packet = self.get_cetp_terminate_msg(error_tlv)
-        self._send(cetp_packet)
+        cetp_message = self.get_cetp_terminate_msg(error_tlv=error_tlv)
+        self._send(cetp_message)
     
     def trigger_negotiated_functionality(self):
         """ Triggers the flist of functions negotiated with remote CES upon completion of the C2C negotiation. """

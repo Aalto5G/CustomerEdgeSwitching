@@ -91,7 +91,7 @@ class DNSServer(asyncio.DatagramProtocol):
         flags      = [dns.flags.AA, dns.flags.RA]
 
         if success:
-            rrset = dns.rrset.from_text(domain, 10, dns.rdataclass.IN, dns_query.question[0].rdtype, r_addr)
+            rrset = dns.rrset.from_text(domain, 10, dns.rdataclass.IN, qtype, r_addr)
             dns_response = self.create_dns_response(dns_query, dns.rcode.NOERROR, flags, [rrset], authority_rr = [], additional_rr=[])
         else:
             dns_response = self.create_dns_response(dns_query, dns.rcode.NXDOMAIN, flags, [], authority_rr = [], additional_rr=[])

@@ -15,6 +15,7 @@ import CETPC2C
 import CETPH2H
 import cetpOperations
 import copy
+import H2HTransaction
 
 KEY_INITIATED_CETP                  = 0
 KEY_ESTABLISHED_CETP                = 1
@@ -192,7 +193,7 @@ class C2CConnection:
 
 
 class H2HConnection:
-    def __init__(self, timeout, lid, lip, lpip, rid, lfqdn, rfqdn, sstag, dstag, r_cesid, conn_table):
+    def __init__(self, cetpstate_mgr, timeout, lid, lip, lpip, rid, lfqdn, rfqdn, sstag, dstag, r_cesid, conn_table):
         """
         Initialize a H2HConnection object.
         
@@ -205,6 +206,7 @@ class H2HConnection:
         @param lrloc: The local RLOC of the connection -> [(int:order, int:preference, int:addrtype, str:addrvalue)]
         @param rrloc: The remote RLOC of the connection -> [(int:order, int:preference, int:addrtype, str:addrvalue)]
         """
+        self.cetpstate_mgr       = cetpstate_mgr
         self.timeout             = timeout
         self.lid, self.lip, self.lpip, self.rid  = lid, lip, lpip, rid
         self.localFQDN, self.remoteFQDN = lfqdn, rfqdn
@@ -230,7 +232,6 @@ class H2HConnection:
         self.lrloc, self.rrloc          = c2c_conn.get_rlocs()
         self.lpayload, self.rpayload    = c2c_conn.get_payloads()
 
-
     
     def lookupkeys(self):
         keys = []
@@ -247,6 +248,14 @@ class H2HConnection:
     def delete(self):
         self._logger.debug("Deleting a {} connection!".format(self.connectiontype))
         # Release the cached DNS responses, allocated proxy addresses and whatnot.
+        
+        keytype = H2HTransaction.KEY_ESTABLISHED_TAGS
+        key     = (self.sstag, self.dstag)
+        
+        if self.cetpstate_mgr.has(keytype, key):
+            cetp_transaction = CES_CONF.cache_table.get(keytype, key)
+            cetp_transaction.terminate()
+
         """
         if self.local_af == AF_INET:
             CES_CONF.address_pool.get(AP_PROXY4_HOST_ALLOCATION).release(self.lip, self.lpip)
@@ -301,118 +310,4 @@ class LocalConnection:
             cached_entry = CES_CONF.cache_table.get(KEY_CACHEDNS_HOST_LPIP, (self.lip, self.lpip))
             CES_CONF.cache_table.delete(cached_entry)
         """
-
-LOGLEVELCETPSTATETABLE = logging.INFO
-
-class CETPStateTable:
-    def __init__(self):
-        """
-        Initialize the CETPState object. 
-        """
-        self._logger = logging.getLogger("CETP State")
-        self._logger.setLevel(LOGLEVELCETPSTATETABLE)
-        self.obj_dict = {}
-    
-    def add(self, obj):
-        """
-        Add a transaction to the CETPState.
-        @param obj: The transaction object.
-        """
-        try:
-            for keytype, key, res_list in obj.lookupkeys():
-                if not keytype in self.obj_dict:
-                    self.obj_dict[keytype] = {}
-                    
-                    if not res_list:
-                        self.obj_dict[keytype][key] = obj
-                    else:
-                        self.obj_dict[keytype][key] = [obj]
-                
-                else:
-                    if not res_list:
-                        self.obj_dict[keytype][key] = obj
-                    else:
-                        lst = self.obj_dict[keytype][key]
-                        lst.append(obj)
-
-            #print("\n\n", self.obj_dict, "\n\n")
-                        
-        except Exception as ex:
-            self._logger.error("Exception: {}".format(ex))
-    
-    def remove(self, obj):
-        """
-        Removes a transaction from the CETPState.
-        @param obj: The transaction object.
-        """
-        try:
-            self._logger.debug("Delete transaction: %s" % (obj))
-            #obj.delete()    
-            
-            for keytype, key, res_list in obj.lookupkeys():
-                
-                if not keytype in self.obj_dict:
-                    self._logger.warning("CETP State does not have key {}".format(keytype))
-                else:
-                    if res_list:
-                        lst = self.obj_dict[keytype][key]
-                        lst.remove(obj)
-                    else:
-                        del self.obj_dict[keytype][key]
-                    
-        except Exception as ex:
-            self._logger.error("Exception '{}' in remove()".format(ex))
-    
-    def reregister(self, obj):
-        """
-        Re-register a transaction from the CETPState.
-        
-        @param obj: The transaction object.
-        """
-        self._logger.debug("Re-registering transaction: {}".format(obj))
-        #Use the flag to modify the behavior of the lookupkeys() response
-        obj.set_negotiated(status=False)
-        self.remove(obj)
-        obj.set_negotiated(status=True)
-        self.add(obj)
-        
-    def get(self, keytype, key):
-        """
-        Obtain a transaction with the given key and keytype.
-        @param keytype: The type of the transaction.
-        @param key: The values of the transaction.
-        @return: The transaction object.
-        """
-        try:
-            return self.obj_dict[keytype][key]
-        except KeyError:
-            return None
-    
-    def has(self, keytype, key):
-        """
-        Check if there is a transaction with the given key and keytype.
-        
-        @param keytype: The type of the transaction.
-        @param key: The values of the transaction.
-        @return: True if there is a transaction.
-        """
-        try:
-            self.obj_dict[keytype][key]
-            return True
-        except KeyError:
-            return False
-    
-    def clearall(self):
-        self.obj_dict.clear()
-        
-    def allocate_proxy_address(self, lip):
-        """ Emulates proxy-IP assigning function """
-        ms_ip = "10.0.3."
-        ls_ip_num = random.randint(0, 255)
-        ls_ip = str(ls_ip_num)
-        proxy_ip = ms_ip + ls_ip        
-        return proxy_ip
-    
-    def __str__(self):
-        return "\nNOthing to display"
 

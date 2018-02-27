@@ -397,8 +397,14 @@ class H2HTransactionOutbound(H2HTransaction):
     def set_terminated(self):
         self._unregister_h2h()
         
+        if self.is_negotiated():
+            self.conn_table.delete(self.conn)
+        
         if hasattr(self, 'unregister_handler'):
             self.unregister_handler.cancel()
+
+    def terminate(self):
+        self.cetpstate_mgr.remove(self)
     
     def _pre_process(self, cetp_msg):
         """ Checks for minimum packet detail & CETP format compliance in the inbound packet """
@@ -588,7 +594,7 @@ class H2HTransactionOutbound(H2HTransaction):
             
             negotiated_params = [self.lfqdn, self.rfqdn, self.lid, self.rid, self.lip, self.lpip]
             #self._logger.info("Negotiated params: {}".format(negotiated_params))
-            self.conn = ConnectionTable.H2HConnection(120.0, self.lid, self.lip, self.lpip, self.rid, self.lfqdn, self.rfqdn, \
+            self.conn = ConnectionTable.H2HConnection(self.cetpstate_mgr, 120.0, self.lid, self.lip, self.lpip, self.rid, self.lfqdn, self.rfqdn, \
                                                       self.sstag, self.dstag, self.r_cesid, self.conn_table)
             
             if self.lpip != None:
@@ -885,9 +891,9 @@ class H2HTransactionInbound(H2HTransaction):
             negotiated_params = [self.lfqdn, self.rfqdn, self.lid, self.rid, self.lip, self.lpip]
             #self._logger.info("Negotiated params: {}".format(negotiated_params))
     
-            self.conn = ConnectionTable.H2HConnection(120.0, self.lid, self.lip, self.lpip, self.rid, self.lfqdn, self.rfqdn, \
+            self.conn = ConnectionTable.H2HConnection(self.cetpstate_mgr, 120.0, self.lid, self.lip, self.lpip, self.rid, self.lfqdn, self.rfqdn, \
                                                  self.sstag, self.dstag, self.r_cesid, self.conn_table)
-            self.conn_table.add(conn)
+            self.conn_table.add(self.conn)
             return True
         
         except Exception as ex:
