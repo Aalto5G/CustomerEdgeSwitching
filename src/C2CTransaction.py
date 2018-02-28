@@ -138,6 +138,13 @@ class C2CTransaction(CETPTransaction):
             self._logger.error("Exception in _verify_tlv() '{}'".format(ex))
             return False
 
+    def _get_terminate_tlv(self, err_tlv=None):
+        terminate_tlv = {}
+        terminate_tlv['ope'], terminate_tlv['group'], terminate_tlv['code'], terminate_tlv['value'] = "info", "ces", "terminate", ""
+        if err_tlv is not None:
+            terminate_tlv['value'] = err_tlv
+        return terminate_tlv
+
     def _get_value(self, tlv):
         if 'value' in tlv:
             return tlv["value"]
@@ -249,8 +256,9 @@ class C2CTransaction(CETPTransaction):
                     if p['cmp']=="notAvailable":
                         continue
                 
-                typ, pref = p["code"], p["value"]
-                retlist.append((typ, pref))
+                typ = p["code"]
+                pref, tun_id_in = p["value"]
+                retlist.append((typ, pref, tun_id_in))
             return retlist
 
         def _filter(base_payload, cmp_payload):
@@ -259,15 +267,21 @@ class C2CTransaction(CETPTransaction):
 
             for p in range(0, len(base_payload)):
                 p_pay = base_payload[p]
-                if p_pay in cmp_payload:
-                    lpayloads.append(p_pay)
-                    rpayloads.append(p_pay)
+                ptyp, ppref = p_pay[0], p_pay[1]
+                
+                for q in range(0, len(cmp_payload)):
+                    q_pay = cmp_payload[q]
+                    qtyp, qpref = q_pay[0], q_pay[1]
+                
+                    if ptyp == qtyp:
+                        lpayloads.append(p_pay)
+                        rpayloads.append(q_pay)
                     
             return (lpayloads, rpayloads)
 
         
-        r_payloads = _build_list(recv_tlvlist)
         l_payloads = _build_list(sent_tlvlist)          #Build the payload list for comparison
+        r_payloads = _build_list(recv_tlvlist)
         l_payloads = list(set(l_payloads))
         r_payloads = list(set(r_payloads))
         (l_payloads, r_payloads) = _filter(l_payloads, r_payloads)
@@ -408,14 +422,15 @@ class oC2CTransaction(C2CTransaction):
             return None
     
     def set_terminated(self, terminated=True):
-        self.terminated = terminated
-        self.cetpstate_mgr.remove(self)
-
-        if self.is_negotiated():
-            self.conn_table.delete(self.conn)
-        
-        if hasattr(self, 'unregister_handler'):
-            self.unregister_handler.cancel()
+        if not self.terminated:
+            self.cetpstate_mgr.remove(self)
+            self.terminated = terminated
+            
+            if self.is_negotiated():
+                self.conn_table.delete(self.conn)
+            
+            if hasattr(self, 'unregister_handler'):
+                self.unregister_handler.cancel()
         
     def get_remote_cesid(self):
         return self.r_cesid
@@ -543,7 +558,7 @@ class oC2CTransaction(C2CTransaction):
             
         else:
             if self._is_ready():
-                if self._create_connection():
+                if self._create_connection_template():
                     self._logger.info(" '{}'\n C2C policy negotiation succeeded in {} RTT with CES '{}'".format(30*'#', self.rtt, self.r_cesid))
                     self._process_negotiation_success()
                     self.c2c_negotiation_status = True
@@ -608,7 +623,7 @@ class oC2CTransaction(C2CTransaction):
         self.trigger_negotiated_functionality()
         return True
 
-    def _create_connection(self):
+    def _create_connection_template(self):
         """ Extract the negotiated parameters to create a connection state """
         try:
             self.lrloc, self.rrloc          = self._get_dp_connection_rlocs()
@@ -626,12 +641,12 @@ class oC2CTransaction(C2CTransaction):
             keytype = ConnectionTable.KEY_MAP_RCESID_C2C
             key = self.r_cesid
             if not self.conn_table.has(keytype, key):
-                self.conn = ConnectionTable.C2CConnection(self.l_cesid, self.r_cesid, self.lrloc, self.rrloc, self.lpayload, self.rpayload)
+                self.conn = ConnectionTable.C2CConnectionTemplate(self.l_cesid, self.r_cesid, self.lrloc, self.rrloc, self.lpayload, self.rpayload)
                 self.conn_table.add(self.conn)                
             
             return True
         except Exception as ex:
-            self._logger.error("Exception in _create_connection(): '{}'".format(ex))
+            self._logger.error("Exception in _create_connection_template(): '{}'".format(ex))
             return False
         
     def lookupkeys(self):
@@ -1076,7 +1091,7 @@ class iC2CTransaction(C2CTransaction):
         else:
             if self._is_ready():                    # Checks if all the local CES requirements are met
                 # Create CETP connection
-                if self._create_connection():
+                if self._create_connection_template():
                     #self._logger.info("{} C2C-policy negotiation succeeded -> Created stateful transaction (SST={}, DST={})".format(30*'*', self.sstag, self.dstag) )
                     stateful_transaction = self._export_to_stateful()            #Export to stateful transaction for CETP messages in post-c2c negotiation
                     stateful_transaction.last_packet_received = self.packet
@@ -1087,6 +1102,7 @@ class iC2CTransaction(C2CTransaction):
                         error_tlvs = [self._get_terminate_tlv()]
                     tlvs_to_send        = error_tlvs
                     negotiation_status  = False
+                    self.sstag          = 0
                     
             else:
                 #self._logger.info(" Inbound packet didn't meet all the policy requirements.")
@@ -1113,7 +1129,7 @@ class iC2CTransaction(C2CTransaction):
         self.add_negotiated_params("lcesid", self.l_cesid)
         self.add_negotiated_params("rcesid", self.r_cesid)
     
-    def _create_connection(self):
+    def _create_connection_template(self):
         try:
             self.sstag                      = self.generate_session_tags(self.dstag)
             self.lrloc, self.rrloc          = self._get_dp_connection_rlocs()
@@ -1131,13 +1147,13 @@ class iC2CTransaction(C2CTransaction):
             keytype = ConnectionTable.KEY_MAP_RCESID_C2C
             key = self.r_cesid
             if not self.conn_table.has(keytype, key):
-                self.conn = ConnectionTable.C2CConnection(self.l_cesid, self.r_cesid, self.lrloc, self.rrloc, self.lpayload, self.rpayload)
+                self.conn = ConnectionTable.C2CConnectionTemplate(self.l_cesid, self.r_cesid, self.lrloc, self.rrloc, self.lpayload, self.rpayload)
                 self.conn_table.add(self.conn)
                 
             return True
         
         except Exception as ex:
-            self._logger.error("Exception in _create_connection(): '{}'".format(ex))
+            self._logger.error("Exception in _create_connection_template(): '{}'".format(ex))
             return False
 
     def _export_to_stateful(self):

@@ -56,11 +56,9 @@ class FakeInterfaceDefinition(object):
 
     def register_payloads(self, ces_params):
         pref_list = ces_params["payload_preference"]
-        self.payload_pref["ipsec"]  = pref_list["ipsec"]
-        self.payload_pref["vxlan"]  = pref_list["vxlan"]
-        self.payload_pref["gre"]    = pref_list["gre"]
-        self.payload_pref["geneve"] = pref_list["geneve"]
-    
+        for typ in pref_list:
+            self.payload_pref[typ] = pref_list[typ]
+            
     def register_interfaces(self, ces_params):
         #r  = pref, order, rloc_type, rloc, iface
         rs = []

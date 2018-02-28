@@ -698,7 +698,8 @@ def send_payload(**kwargs):
     else:
         ret_value = interfaces.get_payload_preference(code)
         if ret_value is not None:
-            tlv["value"] = ret_value
+            tun_id_in = random.randint(0, 2**24)
+            tlv["value"] = (ret_value, tun_id_in)
         
         if 'value' not in tlv:
             tlv["value"] = ""
@@ -745,12 +746,13 @@ def response_payload(**kwargs):
         
         ope, cmp, group, code, response_value = ret_tlv
         
-        if cmp=="notAvailable":
+        if cmp == "notAvailable":
             new_tlv["cmp"] = "notAvailable"
         else:
             ret_value    = interfaces.get_payload_preference(code)
             if ret_value is not None:
-                new_tlv["value"] = ret_value
+                tun_id_in = random.randint(0, 2**24)
+                new_tlv["value"] = (ret_value, tun_id_in)
 
             if 'value' not in new_tlv:
                 new_tlv["value"] = ""
@@ -768,15 +770,20 @@ def verify_rloc(**kwargs):
         tlv, code, policy, interfaces = kwargs["tlv"], kwargs["code"], kwargs["policy"], kwargs["interfaces"]
         h2h_session = False
         
+        if 'cmp' in tlv:
+            if tlv['cmp'] == "notAvailable":
+                return False
+        
         if 'value' not in tlv:
             return False
         
         rrloc = tlv["value"]
         #print("rrloc: ", rrloc)
         
-        if len(rrloc)==0:
+        if len(rrloc) == 0:
             return False
-        if type(rrloc)!=type(list()):
+        
+        if type(rrloc) != type(list()):
             return False
         
         r_pref, r_order, r_rloc, r_iface = rrloc

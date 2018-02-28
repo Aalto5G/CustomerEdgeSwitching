@@ -20,7 +20,7 @@ import H2HTransaction
 KEY_INITIATED_CETP                  = 0
 KEY_ESTABLISHED_CETP                = 1
 LOGLEVELCETP                        = logging.DEBUG
-LOGLEVEL_C2CConnection              = logging.INFO
+LOGLEVEL_C2CConnectionTemplate      = logging.INFO
 
 # Keys for indexing connections
 KEY_MAP_LOCAL_FQDN          = 0     # Indexes host connections against FQDN of local host
@@ -138,32 +138,40 @@ LOGLEVEL_H2HConnection   = logging.INFO
 LOGLEVEL_LocalConnection = logging.INFO
 
 
-class C2CConnection:
-    def __init__(self, l_cesid, r_cesid, lrloc, rrloc, lpayload, rpayload):
+class C2CConnectionTemplate:
+    def __init__(self, l_cesid, r_cesid, lrlocs, rrlocs, lpayloads, rpayloads, name="C2CConnectionTemplate"):
         """
-        Initialize a C2CConnection object.
+        Initialize a C2CConnectionTemplate object.
         
-        @param timeout: The expiration time of the connection
-        @param direction: The direction of the connection  -> 'E'stablished / 'I'ncoming / 'O'utgoing  
-        @param lid: The ID of the local host -> (int:idtype, str:value)
-        @param lip: The IP address of the local host
-        @param lpip: The IP proxy address of the local host
-        @param rid: The ID of the remote host -> (int:idtype, str:value)
-        @param lrloc: The local RLOC of the connection -> [(int:order, int:preference, int:addrtype, str:addrvalue)]
-        @param rrloc: The remote RLOC of the connection -> [(int:order, int:preference, int:addrtype, str:addrvalue)]
+        @param l_cesid:     Local CES-ID
+        @param r_cesid:     Remote CES-ID
+        @param lrlocs:      List of dataplane connection RLOCs of local CES   --  Each RLOC represented as  [(int:order, int:preference, int:addrtype, str:addrvalue)]
+        @param rrlocs:      List of dataplane connection RLOCs of remote CES  --  Each RLOC represented as  [(int:order, int:preference, int:addrtype, str:addrvalue)]
+        @param lpayloads:   List of negotiated dataplane payloads of local CES -- Each payload represented as [(str:type, int:preference, int:tunnel_id_out)]
+        @param rpayloads:   List of negotiated dataplane payloads of remote CES-- Each payload represented as [(str:type, int:preference, int:tunnel_id_in)]
         """
         self.l_cesid, self.r_cesid      = l_cesid, r_cesid
-        self.lrloc, self.rrloc          = lrloc, rrloc
-        self.lpayload, self.rpayload    = lpayload, rpayload
+        self.lrlocs, self.rrlocs        = lrlocs, rrlocs
+        self.lpayloads, self.rpayloads  = lpayloads, rpayloads
+        self._select_conn_params()
         self.connectiontype = "CONNECTION_C2C"
-        #self._set_address_family(lip=lip)
-        #self.remote_af = AF_INET
-        #self._set_encapsulation()
-        self.active_af = 0
-        #Set b port based on local rloc
-        self._logger = logging.getLogger("C2CConnection")
-        self._logger.setLevel(LOGLEVEL_C2CConnection)
+        self._logger = logging.getLogger(name)
+        self._logger.setLevel(LOGLEVEL_C2CConnectionTemplate)
 
+    def _select_conn_params(self):
+        # Picking the most preferred entry out of a list of negotiated RLOC and payloads
+        lrloc      = self.lrlocs[0]
+        rrloc      = self.rrlocs[0]
+        lpayload   = self.lpayloads[0]
+        rpayload   = self.rpayloads[0]
+        
+        # Extracts the RLOC and payload values
+        self.lrloc      = lrloc[3]
+        self.rrloc      = rrloc[3]
+        self.lpayload   = (lpayload[0], rpayload[2])
+        self.rpayload   = (rpayload[0], rpayload[2])
+
+    
     def get_rlocs(self):
         return (self.lrloc, self.rrloc)
 
@@ -193,7 +201,7 @@ class C2CConnection:
 
 
 class H2HConnection:
-    def __init__(self, cetpstate_mgr, timeout, lid, lip, lpip, rid, lfqdn, rfqdn, sstag, dstag, r_cesid, conn_table):
+    def __init__(self, cetpstate_mgr, timeout, lid, lip, lpip, rid, lfqdn, rfqdn, sstag, dstag, r_cesid, conn_table, name="H2HConnection"):
         """
         Initialize a H2HConnection object.
         
@@ -206,33 +214,36 @@ class H2HConnection:
         @param lrloc: The local RLOC of the connection -> [(int:order, int:preference, int:addrtype, str:addrvalue)]
         @param rrloc: The remote RLOC of the connection -> [(int:order, int:preference, int:addrtype, str:addrvalue)]
         """
+        self.localFQDN           = lfqdn
+        self.remoteFQDN          = rfqdn
+        self.lid, self.rid       = lid, rid
+        self.lip, self.lpip      = lip, lpip
+        self.sstag, self.dstag   = sstag, dstag
+        self.r_cesid             = r_cesid
+        self.conn_table          = conn_table        
         self.cetpstate_mgr       = cetpstate_mgr
         self.timeout             = timeout
-        self.lid, self.lip, self.lpip, self.rid  = lid, lip, lpip, rid
-        self.localFQDN, self.remoteFQDN = lfqdn, rfqdn
-        self.sstag, self.dstag = sstag, dstag
-        self.r_cesid=r_cesid
-        self.conn_table = conn_table        
-        self.connectiontype = "CONNECTION_H2H"
-        
-        #self._set_address_family(lip=lip)
-        #self.remote_af = AF_INET
-        #self._set_encapsulation()
-        self.active_af = 0
-        #Set b port based on local rloc
-        self._logger = logging.getLogger("H2HConnection")
+        self.connectiontype      = "CONNECTION_H2H"
+        self._logger             = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HConnection)
         self._logger.debug("Connection tags: {} -> {}".format(sstag, dstag))
 
-    def _get_connection_params(self):
+
+    def _get_c2c_connection_params(self):
         keytype     = KEY_MAP_RCESID_C2C
         key         = self.r_cesid
         c2c_conn    = self.conn_table.get(keytype, key)
-        
         self.lrloc, self.rrloc          = c2c_conn.get_rlocs()
         self.lpayload, self.rpayload    = c2c_conn.get_payloads()
-
+        self.tunnel_type                = self.lpayload[0]
+        self.tunnel_id_in               = self.lpayload[2]
+        self.tunnel_id_out              = self.rpayload[2]
     
+    def add(self):
+        #add_tunnel_connection(src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, diffserv=False)
+        add_tunnel_connection(self.lip, self.lpip, self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type)
+        
+        
     def lookupkeys(self):
         keys = []
         keys +=[(KEY_MAP_LOCAL_HOST, self.lip), (KEY_MAP_CETP_PRIVATE_NW, (self.lip, self.lpip)),
@@ -256,15 +267,13 @@ class H2HConnection:
             cetp_transaction = CES_CONF.cache_table.get(keytype, key)
             cetp_transaction.terminate()
 
+        #delete_tunnel_connection(self.lip, self.lpip, self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type)
+
         """
         if self.local_af == AF_INET:
             CES_CONF.address_pool.get(AP_PROXY4_HOST_ALLOCATION).release(self.lip, self.lpip)
         elif self.local_af == AF_INET6:
             CES_CONF.address_pool.get(AP_PROXY6_HOST_ALLOCATION).release(self.lip, self.lpip)
-        #Delete the DNS cached information
-        if CES_CONF.cache_table.has(KEY_CACHEDNS_HOST_LPIP, (self.lip, self.lpip)):
-            cached_entry = CES_CONF.cache_table.get(KEY_CACHEDNS_HOST_LPIP, (self.lip, self.lpip))
-            CES_CONF.cache_table.delete(cached_entry)
         """
 
 
