@@ -284,6 +284,7 @@ class H2HTransactionOutbound(H2HTransaction):
         self.conn_table         = conn_table
         self.cetp_security      = cetp_security
         self.rtt                = 0
+        self.terminated         = False
         self.name               = name
         self._logger            = logging.getLogger(name)
         self.start_time         = time.time()
@@ -338,7 +339,7 @@ class H2HTransactionOutbound(H2HTransaction):
             self._unregister_h2h()
     
     def _unregister_h2h(self):
-        self.cetpstate_mgr.remove(self)
+        self.terminate()
         if not self.is_negotiated():
             #self.cetp_h2h.update_H2H_transaction_count(initiated=False)
             self._execute_dns_callback(resolution=False)
@@ -395,15 +396,19 @@ class H2HTransactionOutbound(H2HTransaction):
         return dstep_tlv
     
     def set_terminated(self):
-        self._unregister_h2h()
+        if not self.terminated:
+            self.terminated = True
+            self._unregister_h2h()
         
-        if self.is_negotiated():
-            self.conn_table.delete(self.conn)
-        
-        if hasattr(self, 'unregister_handler'):
-            self.unregister_handler.cancel()
+            if self.is_negotiated():
+                self.conn_table.delete(self.conn)
+            
+            if hasattr(self, 'unregister_handler'):
+                self.unregister_handler.cancel()
 
     def terminate(self):
+        """ Execute to unregister H2HTransaction """
+        self.terminated = True
         self.cetpstate_mgr.remove(self)
     
     def _pre_process(self, cetp_msg):
@@ -614,6 +619,7 @@ class H2HTransactionOutbound(H2HTransaction):
             (cb_func, cb_args) = self.cb
             dns_q, addr = cb_args
             cb_func(dns_q, addr, r_addr=r_addr, success=resolution)
+            
         except Exception as ex:
             self._logger.error("Exception in _execute_dns_callback {}".format(ex))
             
@@ -669,7 +675,7 @@ class H2HTransactionOutbound(H2HTransaction):
                 
                 if self._check_tlv(received_tlv, group="control") and self._check_tlv(received_tlv, code="terminate"):
                     self._logger.warning(" Terminate received for an established H2H Session ({}->{}).".format(self.sstag, self.dstag))
-                    self.cetpstate_mgr.remove(self)
+                    self.terminate()
                     keytype = ConnectionTable.KEY_MAP_CES_TO_CES
                     key = (self.sstag, self.dstag)
                     
@@ -911,6 +917,7 @@ class H2HTransactionInbound(H2HTransaction):
         new_transaction.opolicy                 = self.ipolicy
         new_transaction.policy                  = self.policy
         new_transaction.last_received_packet    = self.packet
+        new_transaction.h2h_negotiation_status  = True
         new_transaction.conn                    = self.conn
         self.cetpstate_mgr.add(new_transaction)
         return new_transaction
@@ -918,13 +925,14 @@ class H2HTransactionInbound(H2HTransaction):
 
 
 class H2HTransactionLocal(H2HTransaction):
-    def __init__(self, loop=None, host_ip="", cb=None, src_id="", dst_id="", policy_mgr= None, host_register=None, cetpstate_mgr=None, cetp_h2h=None, \
+    def __init__(self, loop=None, host_ip="", cb=None, src_id="", dst_id="", dst_ip="", policy_mgr= None, host_register=None, cetpstate_mgr=None, cetp_h2h=None, \
                  interfaces=None, conn_table=None, cetp_security=None, name="H2HTransactionLocal"):
         self._loop              = loop
         self.cb                 = cb
         self.host_ip            = host_ip                   # IP of the sender host
         self.src_id             = src_id                    # FQDN
         self.dst_id             = dst_id
+        self.dst_ip             = dst_ip
         self.policy_mgr         = policy_mgr
         self.cetpstate_mgr      = cetpstate_mgr
         self.cetp_h2h           = cetp_h2h
@@ -933,7 +941,7 @@ class H2HTransactionLocal(H2HTransaction):
         self.conn_table         = conn_table
         self.cetp_security      = cetp_security
         self.l_cesid            = ""
-        self.r_cesid            = ""
+        self.r_cesid            = ""                        # For compatbility with H2HTransaction sake 
         self.name               = name
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HTransactionLocal)
@@ -945,7 +953,7 @@ class H2HTransactionLocal(H2HTransaction):
             self.src_id             = self.host_register.ip_to_fqdn_mapping(self.host_ip)           # To be replaced with proper function.
             sender_permitted        = self.check_outbound_permission(self.src_id)
             destination_permitted   = self.check_inbound_permission(self.dst_id)
-            print("sender_permitted, destination_permitted", sender_permitted, destination_permitted)
+            #print("sender_permitted, destination_permitted", sender_permitted, destination_permitted)
             
             if (not sender_permitted) or (not destination_permitted):
                 self._logger.warning("Communication from sender <{}> to destination <{}> is not allowed.".format(self.src_id, self.dst_id))
@@ -974,10 +982,12 @@ class H2HTransactionLocal(H2HTransaction):
             return False
         
         # If a host is reaching its ownself or own services, we shall return its own IP address in DNS callback.
+        """
         if self.src_id in self.dst_id:
             self._execute_dns_callback(r_addr=self.host_ip)
             return True
-            
+        """
+         
         ##self._logger.info("Local-host policy: {}".format(self.opolicy))
         ##self._logger.info("Remote-host policy: {}".format(self.ipolicy))
         
@@ -1038,18 +1048,10 @@ class H2HTransactionLocal(H2HTransaction):
         lfqdn, rfqdn    = self.src_id, self.dst_id
         lid, rid        = None, None
         rpip            = self._allocate_proxy_address(rip)
+        #self._logger.info("Creating Local connection between '{}' and '{}'.format(lfqdn, rfqdn))
         
-        connection_direction = "" #both outbound and inbound
-
-        #self._logger.info("Creating Local connection between %s and %s" % (lfqdn, rfqdn))
-        
-        self.o_connection = ConnectionTable.LocalConnection(120.0, "CONNECTION_OUTBOUND", lid=lid,lip=lip,lpip=lpip,lfqdn=lfqdn,
-                                                       rid=rid,rip=rip,rpip=rpip,rfqdn=rfqdn)
-        
-        self.i_connection = ConnectionTable.LocalConnection(120.0, "CONNECTION_INBOUND", rid=lid,rip=lip,rpip=lpip,rfqdn=lfqdn,
-                                                       lid=rid,lip=rip,lpip=rpip,lfqdn=rfqdn)        
-        self.conn_table.add(self.o_connection)
-        self.conn_table.add(self.i_connection)
+        self.conn = ConnectionTable.LocalConnection(120.0, lip=lip, lpip=lpip, rip=rip, rpip=rpip, lfqdn=lfqdn, rfqdn=rfqdn)
+        self.conn_table.add(self.conn)
         return lpip
         
     def _execute_dns_callback(self, r_addr="", resolution=True):

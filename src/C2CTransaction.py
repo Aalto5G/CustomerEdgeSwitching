@@ -832,6 +832,7 @@ class oC2CTransaction(C2CTransaction):
         #self._logger.info(" Post-C2C negotiation packet from '{}' (SST={}, DST={})".format(self.r_cesid, self.sstag, self.dstag))
         self.pprint(cetp_msg, m="Inbound packet")
         self.recvd_tlvs    = cetp_msg['TLV']
+        self.packet        = cetp_msg
 
         if len(self.recvd_tlvs) == 0:
             return                              # No TLVs to process
@@ -901,11 +902,12 @@ class oC2CTransaction(C2CTransaction):
     
                     # Check if the remote CES is sending request for a supported policy element.
                     elif self._check_tlv2(received_tlv, code=["evidence", "host_filtering"]):
-                        self._logger.warning(" '{}.{}' TLV request is received from remote CES '{}'".format(received_tlv["code"], received_tlv["code"], self.r_cesid))
+                        self._logger.warning(" '{}.{}' TLV request is received from remote CES '{}'".format(received_tlv["group"], received_tlv["code"], self.r_cesid))
                         continue
                         
                     elif self._check_tlv(received_tlv, code = "ack"):
                         ret_tlv = self._create_response_tlv(received_tlv, post_c2c=True)
+                        print(tlvs_to_send, ret_tlv)
                         tlvs_to_send += ret_tlv
                         continue
                     

@@ -17,23 +17,21 @@ import cetpOperations
 import copy
 import H2HTransaction
 
-KEY_INITIATED_CETP                  = 0
-KEY_ESTABLISHED_CETP                = 1
 LOGLEVELCETP                        = logging.DEBUG
 LOGLEVEL_C2CConnectionTemplate      = logging.INFO
 
 # Keys for indexing connections
 KEY_MAP_LOCAL_FQDN          = 0     # Indexes host connections against FQDN of local host
-KEY_MAP_REMOTE_FQDN         = 1     # Indexes host connections against FQDN of remote host
+KEY_MAP_REMOTE_FQDN         = 1     # Indexes host connections against FQDN of remote host in another CES node
 
 KEY_MAP_LOCAL_HOST          = 2     # Indexes host connections against local host's IP
 KEY_MAP_CETP_PRIVATE_NW     = 3     # Indexes host connections against (lip, lpip) pair
 KEY_MAP_REMOTE_CESID        = 4     # Indexes host connections against remote CESID 
 
-KEY_MAP_CES_FQDN            = 5     # Indexes host connection against pair of FQDN (of local and remote host)
-KEY_MAP_CES_TO_CES          = 6     # Indexes host connection against an (SST, DST) pair
-
-KEY_MAP_RCESID_C2C          = 7     # Indexes C2C connection against a remote CESID
+KEY_MAP_CES_FQDN            = 5     # Indexes host connection against pair of FQDN (of local and remote host) across two CES nodes
+KEY_MAP_LOCAL_FQDNs         = 6     # Indexes host connection against pair of FQDN (of local and remote host) in same CES node
+KEY_MAP_CES_TO_CES          = 7     # Indexes host connection against an (SST, DST) pair
+KEY_MAP_RCESID_C2C          = 8     # Indexes C2C connection against a remote CESID
 
     
 def is_IPv4(ip4_addr):
@@ -171,7 +169,6 @@ class C2CConnectionTemplate:
         self.lpayload   = (lpayload[0], rpayload[2])
         self.rpayload   = (rpayload[0], rpayload[2])
 
-    
     def get_rlocs(self):
         return (self.lrloc, self.rrloc)
 
@@ -182,10 +179,9 @@ class C2CConnectionTemplate:
         keys = []
         keys +=[(KEY_MAP_RCESID_C2C, self.r_cesid)]
         return keys
-        
 
     def delete(self):
-        self._logger.debug("Deleting a {} connection!".format(self.connectiontype))
+        self._logger.debug("Deleting a '{}' connection!".format(self.connectiontype))
         # Release the cached DNS responses, allocated proxy addresses and whatnot.
         """
         if self.local_af == AF_INET:
@@ -240,14 +236,15 @@ class H2HConnection:
         self.tunnel_id_out              = self.rpayload[2]
     
     def add(self):
+        pass
         #add_tunnel_connection(src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, diffserv=False)
-        add_tunnel_connection(self.lip, self.lpip, self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type)
-        
+        #add_tunnel_connection(self.lip, self.lpip, self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type)
         
     def lookupkeys(self):
         keys = []
-        keys +=[(KEY_MAP_LOCAL_HOST, self.lip), (KEY_MAP_CETP_PRIVATE_NW, (self.lip, self.lpip)),
-                (KEY_MAP_LOCAL_FQDN, self.localFQDN), (KEY_MAP_REMOTE_FQDN, self.remoteFQDN), (KEY_MAP_REMOTE_CESID, self.r_cesid)]
+        keys +=[(KEY_MAP_LOCAL_HOST, self.lip),         (KEY_MAP_CETP_PRIVATE_NW, (self.lip, self.lpip)),     (KEY_MAP_LOCAL_FQDN, self.localFQDN),
+                (KEY_MAP_REMOTE_FQDN, self.remoteFQDN), (KEY_MAP_REMOTE_CESID, self.r_cesid)
+                ]
         
         if (self.localFQDN is not None) and (self.remoteFQDN is not None):
             keys.append((KEY_MAP_CES_FQDN, (self.localFQDN, self.remoteFQDN)))
@@ -259,15 +256,16 @@ class H2HConnection:
     def delete(self):
         self._logger.debug("Deleting a {} connection!".format(self.connectiontype))
         # Release the cached DNS responses, allocated proxy addresses and whatnot.
-        
+
+        #delete_tunnel_connection(self.lip, self.lpip, self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type)
+
         keytype = H2HTransaction.KEY_ESTABLISHED_TAGS
         key     = (self.sstag, self.dstag)
         
         if self.cetpstate_mgr.has(keytype, key):
-            cetp_transaction = CES_CONF.cache_table.get(keytype, key)
+            cetp_transaction = self.cetpstate_mgr.get(keytype, key)
             cetp_transaction.terminate()
 
-        #delete_tunnel_connection(self.lip, self.lpip, self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type)
 
         """
         if self.local_af == AF_INET:
@@ -278,12 +276,11 @@ class H2HConnection:
 
 
 class LocalConnection:
-    def __init__(self, timeout, direction, lid=None, lip=None, lpip=None, rid=None, rip=None, rpip=None,lfqdn=None, rfqdn=None):
+    def __init__(self, timeout, lid=None, lip=None, lpip=None, rid=None, rip=None, rpip=None, lfqdn=None, rfqdn=None, name="LocalConnection"):
         """
         Initialize a LocalConnection object.
         
         @param timeout: The expiration time of the connection
-        @param direction: The direction of the connection -> 'E'stablished / 'I'ncoming / 'O'utgoing  
         @param lid: The ID of the local host -> (int:idtype, str:value)
         @param lip: The IP address of the local host
         @param lpip: The IP proxy address of the local host
@@ -291,24 +288,35 @@ class LocalConnection:
         @param rip: The IP address of the remote host
         @param rpip: The IP proxy address of the remote host
         """
-        self.timeout, self.direction    = timeout, direction
-        self.lid, self.lip, self.lpip   = lid, lip, lpip
-        self.rid, self.rip, self.rpip   = rid, rip, rpip
-        self.localFQDN, self.remoteFQDN = lfqdn, rfqdn
-        self.connectiontype = "CONNECTION_LOCAL"
-        #self._set_address_family(lip=lip, rip=rip)
-        self._logger = logging.getLogger("LocalConnection")
+        self.timeout          = timeout
+        self.lip, self.lpip   = lip, lpip
+        self.rip, self.rpip   = rip, rpip
+        self.localFQDN        = lfqdn
+        self.remoteFQDN       = rfqdn
+        self.connectiontype   = "CONNECTION_LOCAL"
+        self._logger = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_LocalConnection)
 
     def lookupkeys(self):
         keys = []
-        keys += [(KEY_MAP_CETP_PRIVATE_NW, (self.lip, self.lpip)), (KEY_MAP_CES_FQDN, (self.localFQDN, self.remoteFQDN)),
-                 (KEY_MAP_LOCAL_HOST, self.lip), (KEY_MAP_LOCAL_FQDN, self.localFQDN), (KEY_MAP_REMOTE_FQDN, self.remoteFQDN)]
+        keys += [(KEY_MAP_LOCAL_HOST, self.lip),     (KEY_MAP_CETP_PRIVATE_NW, (self.lip, self.lpip)),          (KEY_MAP_LOCAL_FQDN, self.localFQDN),
+                 (KEY_MAP_LOCAL_FQDNs, (self.localFQDN, self.remoteFQDN))
+                 ]
+        
+        keys += [(KEY_MAP_LOCAL_HOST, self.rip),     (KEY_MAP_CETP_PRIVATE_NW, (self.rip, self.rpip)),          (KEY_MAP_LOCAL_FQDN, self.remoteFQDN),
+                 ]
+        
         return keys
+
+    def add(self):
+        pass
+        #add_local_connection(self.lip, self.lpip, self.rip, self.rpip)
 
     def delete(self):
         self._logger.debug("Deleting a {} connection!".format(self.connectiontype))
         # Release the cached DNS responses, allocated proxy addresses and whatnot.
+        #delete_local_connection(self.lip, self.lpip, self.rip, self.rpip)
+
         """
         if self.local_af == AF_INET:
             CES_CONF.address_pool.get(AP_PROXY4_HOST_ALLOCATION).release(self.lip, self.lpip)

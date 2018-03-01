@@ -375,19 +375,19 @@ RESPONSE_TLV_GROUP = {TLV_GROUP["id"]:RESPONSE_TLV_ID_CODE,
 
 VERIFY_TLV_CONTROl_CODE = {"dstep":cetpOperations.verify_ctrl_dstep,
                            "fqdn":cetpOperations.verify_ctrl_fqdn,
-                      "certificate":cetpOperations.verify_ctrl_certificate,
-                      "caep":cetpOperations.verify_ctrl_caep,
-                      "dp_ttl":cetpOperations.verify_ctrl_dp_ttl,
-                      "dp_keepalive_cycle":cetpOperations.verify_ctrl_dp_keepalive_cycle,
-                      "qos":cetpOperations.verify_ctrl_qos,
-                      "ack":cetpOperations.verify_ack,
-                      "os_version":cetpOperations.verify_ctrl_os_version,
-                      "policy_caching":cetpOperations.verify_ctrl_policy_caching,
-                      "dp_proto":cetpOperations.verify_ctrl_dp_proto,
-                      "dp_port":cetpOperations.verify_ctrl_dp_port,
-                      "dp_ratelimit":cetpOperations.verify_ctrl_dp_ratelimit,
-                      "terminate":cetpOperations.verify_ctrl_terminate,
-                      "warning":cetpOperations.verify_ctrl_warning
+                          "certificate":cetpOperations.verify_ctrl_certificate,
+                          "caep":cetpOperations.verify_ctrl_caep,
+                          "dp_ttl":cetpOperations.verify_ctrl_dp_ttl,
+                          "dp_keepalive_cycle":cetpOperations.verify_ctrl_dp_keepalive_cycle,
+                          "qos":cetpOperations.verify_ctrl_qos,
+                          "ack":cetpOperations.verify_ack,
+                          "os_version":cetpOperations.verify_ctrl_os_version,
+                          "policy_caching":cetpOperations.verify_ctrl_policy_caching,
+                          "dp_proto":cetpOperations.verify_ctrl_dp_proto,
+                          "dp_port":cetpOperations.verify_ctrl_dp_port,
+                          "dp_ratelimit":cetpOperations.verify_ctrl_dp_ratelimit,
+                          "terminate":cetpOperations.verify_ctrl_terminate,
+                          "warning":cetpOperations.verify_ctrl_warning
                       }
 
 

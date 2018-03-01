@@ -151,7 +151,7 @@ class CETPSecurity:
                         if len(self.filtered_domains[keytype])==0:
                             del self.filtered_domains[keytype]
             
-            print("After deletion: ", self.filtered_domains)
+            #print("After deletion: ", self.filtered_domains)
 
 
     def has_filtered_domain(self, keytype, value, key=None):
