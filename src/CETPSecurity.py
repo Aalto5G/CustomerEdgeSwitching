@@ -24,14 +24,16 @@ import ConnectionTable
 
 LOGLEVEL_CETPSecurity       = logging.INFO
 
-#Local record
+#Local CES record
 KEY_BlacklistedLHosts                       = 0
 KEY_BlacklistedRHosts                       = 1
 KEY_DisabledLHosts                          = 2
 
+#Local CES record
 KEY_LocalHosts_Inbound_Disabled             = 10
 KEY_LocalHosts_Outbound_Disabled            = 11
 
+#Local CES record
 KEY_RemoteHosts_inbound_Disabled            = 12
 KEY_RemoteHosts_outbound_Disabled           = 13
 
@@ -41,7 +43,7 @@ KEY_LCES_BlockedHostsOfRCES                 = 3
 KEY_LCES_UnreachableDestinationsForRCES     = 4
 KEY_LCES_FilteredSourcesTowardsRCES         = 14
 
-#Remote CES specific record   (Remote view)
+#Remote CES specific record   (Remote view)            - Executed on request of remote CES, and recorded against remote CES
 KEY_RCES_BlockedHostsByRCES                 = 5
 KEY_RCES_UnreachableRCESDestinations        = 6
 KEY_RCES_FilteredSourcesFromRCES            = 15
@@ -107,8 +109,10 @@ class CETPSecurity:
     def register_filtered_domains(self, keytype, value, key=None, timeout=None):
         try:
             self.add_filtered_domains(keytype, value, key)
-            if timeout!=None:
-                self._loop.call_later(timeout, self.remove_filtered_domains, keytype, value, key)
+            if timeout is None:
+                timeout = self.ces_params["host_filtering_t0"]
+            
+            self._loop.call_later(timeout, self.remove_filtered_domains, keytype, value, key)
 
         except Exception as ex:
             self._logger.error("Exception '{}' in 'register_filtered_domains()' ".format(ex))

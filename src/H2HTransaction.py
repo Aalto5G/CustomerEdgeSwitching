@@ -309,7 +309,7 @@ class H2HTransactionOutbound(H2HTransaction):
             self.src_id = self.host_register.ip_to_fqdn_mapping(self.host_ip)
             
             if not self.is_local_host_allowed(self.src_id):
-                self._logger.error(" Sender '{}' is forbidden to initiate connection towards destination '{}' in CES '{}'".format(self.src_id, self.dst_id, self.r_cesid))
+                self._logger.error(" Connection from sender '{}' is not allowed to '{}' behind CES '{}'".format(self.src_id, self.dst_id, self.r_cesid))
                 return False
             
             if not self.is_remote_destination_allowed(self.dst_id):
@@ -410,6 +410,9 @@ class H2HTransactionOutbound(H2HTransaction):
         """ Execute to unregister H2HTransaction """
         self.terminated = True
         self.cetpstate_mgr.remove(self)
+        
+    def get_remote_cesid(self):
+        return self.r_cesid
     
     def _pre_process(self, cetp_msg):
         """ Checks for minimum packet detail & CETP format compliance in the inbound packet """
@@ -622,10 +625,16 @@ class H2HTransactionOutbound(H2HTransaction):
             
         except Exception as ex:
             self._logger.error("Exception in _execute_dns_callback {}".format(ex))
-            
+    
     def terminate_session(self):
-        tlvs_to_send = self._get_terminate_tlv()
-
+        """ Sends a terminate TLV towards remote CES """
+        tlvs_to_send = [self._get_terminate_tlv()]
+        cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
+        self._send(cetp_message)
+    
+    def _send(self, msg):
+        self.cetp_h2h.send(msg)
+    
     def is_local_host_allowed(self, hostid):
         """ Checks in the CETPSecurity module if the traffic from the sender is permitted (towards remote CES).. OR  whether the host is blacklisted """
         if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlacklistedLHosts, hostid):

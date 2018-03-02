@@ -17,6 +17,7 @@ import cetpOperations
 import CETP
 import copy
 import ConnectionTable
+import CETPSecurity
 import H2HTransaction
 from H2HTransaction import CETPTransaction
 
@@ -98,13 +99,16 @@ class C2CTransaction(CETPTransaction):
             self._logger.error("Exception in _create_request_tlv() '{}'".format(ex))
             return None
 
-    def _create_request_tlv2(self, group=None, code=None, value=None):
+    def _create_request_tlv2(self, group=None, code=None, value=None, create_basic_tlv=False):
         try:
             tlv = {}
             tlv['ope'], tlv['group'], tlv['code'], tlv['value'] = "query", group, code, ""
-            if value!=None:
+            if value != None:
                 tlv["value"] = value
-                
+            
+            if create_basic_tlv is True:
+                return [tlv]                
+
             if group in ["ces", "rloc", "payload"]:
                 func = CETP.SEND_TLV_GROUP[group][code]
                 tlv  = func(tlv=tlv, code=code, ces_params=self.ces_params, cesid=self.l_cesid, r_cesid=self.r_cesid, r_addr=self.remote_addr, \
@@ -661,17 +665,10 @@ class oC2CTransaction(C2CTransaction):
         """ Assigned by CETP Manager """
         self.c2c_layer = c2c_layer
     
-    def get_cetp_terminate_msg(self, error_tlv=None):
-        terminate_tlv = self._create_offer_tlv2(group="ces", code="terminate")
-        if terminate_tlv != None:
-            if error_tlv != None:   terminate_tlv["value"] = error_tlv
-                
-            cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=terminate_tlv)
-            return cetp_message
-    
     def send_cetp_terminate(self, error_tlv=None):
         """ Sends a terminate TLV towards remote CES """
-        cetp_message = self.get_cetp_terminate_msg(error_tlv=error_tlv)
+        tlvs_to_send = [self._get_terminate_tlv()]
+        cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
         self._send(cetp_message)
     
     def trigger_negotiated_functionality(self):
@@ -712,38 +709,33 @@ class oC2CTransaction(C2CTransaction):
         #self._logger.info(" Sending misbehavior evidence towards remote CES '{}' )".format(self.r_cesid, r_hostid))
         evidence = {"h2h_session":(h_sstag, h_dstag), "misbehavior":misbehavior_evidence}             # misbehavior_evidence="FSecure-MalwarePayload"
         evidence_value = json.dumps(evidence)
-        evidence_tlv = self._create_request_tlv2(group="ces", code="evidence", value=evidence_value)
+        evidence_tlv = self._create_request_tlv2(group="ces", code="evidence", value=evidence_value, create_basic_tlv=True)
         tlvs_to_send = evidence_tlv
         self.seek_response(tlvs_to_send)
         
     def block_remote_host(self, r_hostid):
         #self._logger.info(" Blocking a remote host '{}' at remote CES '{}'.".format(r_hostid, self.r_cesid))
-        blocking_msg = {"remote_host": r_hostid}             # misbehavior_evidence="FSecure-MalwarePayload"
-        blocking_payload = json.dumps(blocking_msg)
-        host_filter_tlv = self._create_request_tlv2(group="ces", code="host_filtering", value=blocking_payload)
+        blocking_payload = {"remote_host": r_hostid}
+        host_filter_tlv = self._create_request_tlv2(group="ces", code="host_filtering", value=blocking_payload, create_basic_tlv=True)
         tlvs_to_send = host_filter_tlv
         self.seek_response(tlvs_to_send)        
         
     def drop_connection_to_local_domain(self, l_domain):
         #self._logger.info(" Preventing remote CES '{}' from forwarding traffic to '{}'.".format(self.r_cesid, l_domain))
-        blocking_msg = {"local_domain": l_domain}             # misbehavior_evidence="FSecure-MalwarePayload"
-        blocking_payload = json.dumps(blocking_msg)
-        host_filter_tlv = self._create_request_tlv2(group="ces", code="host_filtering", value=blocking_payload)
+        blocking_payload = {"local_domain": l_domain}
+        host_filter_tlv = self._create_request_tlv2(group="ces", code="host_filtering", value=blocking_payload, create_basic_tlv=True)
         tlvs_to_send = host_filter_tlv
         self.seek_response(tlvs_to_send)        
 
-    def drop_all_h2h_sessions(self):
-        self._logger.warning(" Closing all H2H sessions with remote CES '{}'.".format(self.r_cesid))
-        h2h_sessions = {"sessions": '*' }
-        host_filter_tlv = self._create_offer_tlv2(group="ces", code="terminate", value=h2h_sessions)
-        tlvs_to_send = host_filter_tlv
-        self.send_message(tlvs_to_send)
-
-    def drop_h2h_sessions(self, tags_list):
+    def drop_h2h_sessions(self, tags_list=None):
         """ Provide a list of (SST, DST) pairs for H2H sessions that shall be closed """
-        self._logger.warning(" Closing all H2H sessions with remote CES '{}'.".format(self.r_cesid))
-        h2h_sessions = {"sessions": tags_list }
-        host_filter_tlv = self._create_offer_tlv2(group="ces", code="terminate", value=h2h_sessions)
+        self._logger.warning(" Closing H2H sessions with remote CES '{}'.".format(self.r_cesid))
+        if tags_list is None:
+            terminate_payload = {"sessions": '*' }
+        else:
+            terminate_payload = {"sessions": tags_list }
+            
+        host_filter_tlv = self._create_offer_tlv2(group = "ces", code = "terminate", value = terminate_payload, create_basic_tlv=True)
         tlvs_to_send = host_filter_tlv
         self.send_message(tlvs_to_send)
         
@@ -799,7 +791,6 @@ class oC2CTransaction(C2CTransaction):
     def _process_terminate_tlv(self, received_tlv):
         """ Processing the received TLV to terminate C2C connectivity, OR 1 or more H2H sessions """
         value = self._get_value(received_tlv)
-        print("Value:", value)
         
         if (value is None) or (value is '') or ('tlv' in value): 
             self._logger.info(" Terminate received with value: {}".format(received_tlv['value']) )
@@ -816,6 +807,25 @@ class oC2CTransaction(C2CTransaction):
                 self._logger.warning(" Remote CES requested to close {} H2H sessions.".format(len(h2h_sessions)))
                 self.cetp_mgr.process_session_terminate_message(self.r_cesid, tag_list = h2h_sessions)
             
+
+    def process_blocking_request(self, payload):
+        """ Process the payload of request to block connection to a remote domain or from a local host """
+        print("received payload: ", payload)
+        
+        if 'remote_host' in payload:
+            local_domain  = payload['remote_host']                      # remote_host for a remote CES is local domain for local CES.
+            keytype = CETPSecurity.KEY_RCES_BlockedHostsByRCES
+            key     = self.r_cesid
+            value   = local_domain
+            self.cetp_security.register_filtered_domains(keytype, value, key=key)
+            
+        elif 'local_domain' in payload:
+            remote_domain = payload['local_domain']
+            keytype = CETPSecurity.KEY_RCES_UnreachableRCESDestinations
+            key     = self.r_cesid
+            value   = remote_domain
+            self.cetp_security.register_filtered_domains(keytype, value, key=key)
+
         
     def post_c2c_negotiation(self, cetp_msg):
         """
@@ -903,11 +913,11 @@ class oC2CTransaction(C2CTransaction):
                     # Check if the remote CES is sending request for a supported policy element.
                     elif self._check_tlv2(received_tlv, code=["evidence", "host_filtering"]):
                         self._logger.warning(" '{}.{}' TLV request is received from remote CES '{}'".format(received_tlv["group"], received_tlv["code"], self.r_cesid))
+                        self.process_blocking_request(received_tlv["value"])
                         continue
                         
                     elif self._check_tlv(received_tlv, code = "ack"):
                         ret_tlv = self._create_response_tlv(received_tlv, post_c2c=True)
-                        print(tlvs_to_send, ret_tlv)
                         tlvs_to_send += ret_tlv
                         continue
                     

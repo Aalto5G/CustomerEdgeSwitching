@@ -86,7 +86,7 @@ class CETPTransport(asyncio.Protocol):
     def connection_lost(self, ex):
         """ Called by asyncio framework """
         if self.is_connected:
-            self._logger.info(" Transport connection to remote CES '{}' is closed (or lost)".format(self.r_cesid))
+            self._logger.debug(" Transport connection to remote CES '{}' is closed (or lost)".format(self.r_cesid))
             self._cleanup()
             
             if type(ex) == TimeoutError:
@@ -95,7 +95,7 @@ class CETPTransport(asyncio.Protocol):
     def close(self):
         """ Closes the connection towards remote CES """
         if self.is_connected:
-            self._logger.info(" Closing the client CETP Transport towards '{}'".format(self.r_cesid))
+            self._logger.debug(" Closing the client CETP Transport towards '{}'".format(self.r_cesid))
             self._cleanup()
     
     def _cleanup(self):

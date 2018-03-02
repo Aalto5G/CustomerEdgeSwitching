@@ -270,34 +270,38 @@ class CETPC2CLayer:
         if self.cetpstate_mgr.has(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag, dstag) ):
             self._logger.debug(" CETP for a negotiated C2C transaction (SST={}, DST={})".format(sstag, dstag))
             o_c2c = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag, dstag) )
-            o_c2c.post_c2c_negotiation(cetp_msg)
+            
+            if self.r_cesid == o_c2c.get_remote_cesid():
+                o_c2c.post_c2c_negotiation(cetp_msg)
                 
         elif self.cetpstate_mgr.has(H2HTransaction.KEY_INITIATED_TAGS, (sstag, 0) ):
             self._logger.info(" Continue resolving c2c-transaction (SST={}, DST={})".format(sstag, 0))
             o_c2c   = self.cetpstate_mgr.get(H2HTransaction.KEY_INITIATED_TAGS, (sstag, 0) )
-            result  = o_c2c.continue_c2c_negotiation(cetp_msg)
-            (status, cetp_resp) = result
             
-            if status == True:
-                self.set_c2c_negotiation()
-                self._update_connectivity_status()
-            
-            elif status == False:
-                if len(cetp_resp) > 0:
-                    cetp_packet = self._packetize(cetp_resp)
-                    transport.send_cetp(cetp_packet)
-                    
-                for t in self.connected_transports:
-                    (r_ip, r_port), proto = t.remotepeer, t.proto
-                    self.register_unreachable_cetp_addr(r_ip, r_port, proto)
-                    
-                self.terminate()
+            if self.r_cesid == o_c2c.get_remote_cesid():
+                result  = o_c2c.continue_c2c_negotiation(cetp_msg)
+                (status, cetp_resp) = result
                 
-            elif status == None:
-                if len(cetp_resp) > 0:
-                    self._logger.info(" CES-to-CES towards <{}> is not negotiated yet.".format(self.r_cesid))
-                    cetp_packet = self._packetize(cetp_resp)
-                    transport.send_cetp(cetp_packet)
+                if status == True:
+                    self.set_c2c_negotiation()
+                    self._update_connectivity_status()
+                
+                elif status == False:
+                    if len(cetp_resp) > 0:
+                        cetp_packet = self._packetize(cetp_resp)
+                        transport.send_cetp(cetp_packet)
+                        
+                    for t in self.connected_transports:
+                        (r_ip, r_port), proto = t.remotepeer, t.proto
+                        self.register_unreachable_cetp_addr(r_ip, r_port, proto)
+                        
+                    self.terminate()
+                    
+                elif status == None:
+                    if len(cetp_resp) > 0:
+                        self._logger.info(" CES-to-CES towards <{}> is not negotiated yet.".format(self.r_cesid))
+                        cetp_packet = self._packetize(cetp_resp)
+                        transport.send_cetp(cetp_packet)
 
 
     """  ***************    ***************    ***************    *************** ************
@@ -457,7 +461,8 @@ class CETPC2CLayer:
 
     def shutdown(self):
         """ Close the C2C link between two CES nodes """
-        self.c2c_transaction.send_cetp_terminate()
+        if hasattr(self, 'c2c_transaction'):
+            self.c2c_transaction.send_cetp_terminate()
         self.terminate()
         
     def terminate(self):
@@ -480,11 +485,11 @@ class CETPC2CLayer:
 
     def close_all_h2h_sessions(self):
         c2c_transaction = self.get_c2c_transaction()
-        c2c_transaction.drop_all_h2h_sessions()
+        c2c_transaction.drop_h2h_sessions()
 
     def close_h2h_sessions(self, h2h_tags):
         c2c_transaction = self.get_c2c_transaction()
-        c2c_transaction.drop_h2h_sessions(h2h_tags)
+        c2c_transaction.drop_h2h_sessions(tags_list = h2h_tags)
     
 
     """ ***********************    ***********************    ***********************

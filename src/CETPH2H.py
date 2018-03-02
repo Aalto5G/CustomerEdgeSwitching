@@ -131,27 +131,30 @@ class CETPH2H:
     def process_h2h_transaction(self, cetp_msg):
         self.count += 1
         #self._logger.debug("self.count: {}".format(self.count))
-        o_transaction = None
         inbound_sstag, inbound_dstag = cetp_msg['SST'], cetp_msg['DST']
         sstag, dstag    = inbound_dstag, inbound_sstag
         
         if self.cetpstate_mgr.has(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag, dstag) ):
             self._logger.info(" CETP message for a negotiated transaction (SST={} -> DST={})".format(sstag, dstag))
             o_h2h = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag, dstag) )
-            o_h2h.post_h2h_negotiation(cetp_msg)
+            
+            if o_h2h.get_remote_cesid() == self.r_cesid:
+                o_h2h.post_h2h_negotiation(cetp_msg)
 
         elif self.cetpstate_mgr.has(H2HTransaction.KEY_INITIATED_TAGS, (sstag, 0) ):
             self._logger.debug(" Continue resolving H2H-transaction (SST={} -> DST={})".format(sstag, 0))
             o_h2h = self.cetpstate_mgr.get(H2HTransaction.KEY_INITIATED_TAGS, (sstag, 0) )
-            cetp_resp = o_h2h.continue_cetp_processing(cetp_msg)
-            if cetp_resp is not None:
-                self.send(cetp_resp)
+            
+            if o_h2h.get_remote_cesid() == self.r_cesid:
+                cetp_resp = o_h2h.continue_cetp_processing(cetp_msg)
+                if cetp_resp is not None:
+                    self.send(cetp_resp)
             
         elif inbound_dstag == 0:
             #self._logger.info(" No prior H2H-transaction found -> Initiating Inbound H2HTransaction (SST={} -> DST={})".format(inbound_sstag, inbound_dstag))
             ih2h = H2HTransaction.H2HTransactionInbound(sstag=sstag, dstag=dstag, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, \
                                                          interfaces=self.interfaces, conn_table=self.conn_table, cetp_h2h=self, cetp_security=self.cetp_security, ces_params=self.ces_params)
-            #asyncio.ensure_future(i_h2h.start_cetp_processing(cetp_msg))
+
             asyncio.ensure_future(self.process_inbound_transaction(ih2h, cetp_msg))
             
         # Add try, except?
