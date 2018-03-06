@@ -174,13 +174,6 @@ class PolicyManager(object):
             #self._logger.error("No '{}' policy exists for host_id: '{}'".format(direction, host_id))
             return None
         
-    def get_policy_copy(self, policy):
-        """ The search key for host-policy number 0 is 'policy-0' """
-        try:
-            return copy.deepcopy(policy)
-        except Exception as ex:
-            return None
-
     def load_CES_policy(self):
         for policy in self._config:
             if 'type' in policy:

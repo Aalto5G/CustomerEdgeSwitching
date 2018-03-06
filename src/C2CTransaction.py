@@ -357,12 +357,12 @@ class oC2CTransaction(C2CTransaction):
         """ Retrieves the policies stored in the Policy file"""
         yield from asyncio.sleep(0.000)
         self.oces_policy      = self.policy_mgr.get_ces_policy(proto=self.proto)
-        self.oces_policy_tmp  = self.policy_mgr.get_policy_copy(self.oces_policy)
+        self.oces_policy_tmp  = self.get_policy_copy(self.oces_policy)
         self.ces_policy       = self.oces_policy
         return self.ces_policy
 
     @asyncio.coroutine
-    def load_policies2(self, host_id=""):
+    def load_policies2(self):
         """ Downloads the CES policy from Policy Management System """
         timeout     = 2
         proto       = self.proto
@@ -373,7 +373,7 @@ class oC2CTransaction(C2CTransaction):
         if response is not None:
             ces_policy           = json.loads(response)
             self.oces_policy     = PolicyManager.PolicyCETP(ces_policy)
-            self.oces_policy_tmp = self.policy_mgr.get_policy_copy(self.oces_policy)
+            self.oces_policy_tmp = self.get_policy_copy(self.oces_policy)
             self.ces_policy      = self.oces_policy
             return self.ces_policy
         
@@ -1019,12 +1019,12 @@ class iC2CTransaction(C2CTransaction):
         yield from asyncio.sleep(0.000)
         self.ices_policy, self.ices_policy_tmp  = None, None
         self.ices_policy        = self.policy_mgr.get_ces_policy(proto=self.proto)
-        self.ices_policy_tmp    = self.policy_mgr.get_policy_copy(self.ices_policy)
+        self.ices_policy_tmp    = self.get_policy_copy(self.ices_policy)
         self.ces_policy         = self.ices_policy
         return self.ces_policy
 
     @asyncio.coroutine
-    def load_policies2(self, host_id=""):
+    def load_policies2(self):
         """ Downloads the CES policy from Policy Management System """
         timeout     = 2
         proto       = self.proto
@@ -1035,7 +1035,7 @@ class iC2CTransaction(C2CTransaction):
         if response is not None:
             ces_policy           = json.loads(response)
             self.ices_policy     = PolicyManager.PolicyCETP(ces_policy)
-            self.ices_policy_tmp = self.policy_mgr.get_policy_copy(self.ices_policy)
+            self.ices_policy_tmp = self.get_policy_copy(self.ices_policy)
             self.ces_policy      = self.ices_policy
             return self.ces_policy
         

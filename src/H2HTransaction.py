@@ -150,6 +150,12 @@ class CETPTransaction(object):
             return False
         return True
         
+    def get_policy_copy(self, policy):
+        """ Creates a copy of PolicyCETP object """
+        try:
+            return copy.deepcopy(policy)
+        except Exception as ex:
+            return None
                 
     def show(self, packet):
         s = ""
@@ -300,8 +306,8 @@ class H2HTransactionOutbound(H2HTransaction):
     def load_policies(self, host_id=None):
         """ Returns the host-policy from the local policy file on success, or None on failure """
         yield from asyncio.sleep(0.000)
-        self.opolicy     = self.policy_mgr.get_host_policy(self.direction, host_id=src_id)
-        self.opolicy_tmp = self.policy_mgr.get_policy_copy(self.opolicy)
+        self.opolicy     = self.policy_mgr.get_host_policy(self.direction, host_id = host_id)
+        self.opolicy_tmp = self.get_policy_copy(self.opolicy)
         self.policy      = self.opolicy
         return self.policy
 
@@ -317,7 +323,7 @@ class H2HTransactionOutbound(H2HTransaction):
         if response is not None:
             host_policy      = json.loads(response)
             self.opolicy     = PolicyManager.PolicyCETP(host_policy)
-            self.opolicy_tmp = self.policy_mgr.get_policy_copy(self.opolicy)
+            self.opolicy_tmp = self.get_policy_copy(self.opolicy)
             self.policy      = self.opolicy
             return self.policy
 
@@ -748,7 +754,7 @@ class H2HTransactionInbound(H2HTransaction):
         #index = self.policy_mgr.mapping_srcId_to_policy(host_id)
         yield from asyncio.sleep(0.000)
         self.ipolicy     = self.policy_mgr.get_host_policy(self.direction, host_id=host_id)
-        self.ipolicy_tmp = self.policy_mgr.get_policy_copy(self.ipolicy)
+        self.ipolicy_tmp = self.get_policy_copy(self.ipolicy)
         self.policy      = self.ipolicy
         return self.policy
 
@@ -764,7 +770,7 @@ class H2HTransactionInbound(H2HTransaction):
         if response is not None:             
             host_policy      = json.loads(response)
             self.ipolicy     = PolicyManager.PolicyCETP(host_policy)
-            self.ipolicy_tmp = self.policy_mgr.get_policy_copy(self.ipolicy)
+            self.ipolicy_tmp = self.get_policy_copy(self.ipolicy)
             self.policy      = self.ipolicy
             return self.policy
     
