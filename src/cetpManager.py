@@ -35,7 +35,7 @@ class CETPManager:
     It also aggregates different CETPTransport endpoints from a remote CES-ID under one C2C-Layer.
     """
     
-    def __init__(self, cetp_policies, cesid, ces_params, loop=None, name="CETPManager"):
+    def __init__(self, cetpPolicyFile, cesid, ces_params, loop=None, name="CETPManager"):
         self._cetp_endpoints        = {}                           # Dictionary of endpoints towards remote CES nodes.
         self._serverEndpoints       = []                           # List of server endpoint offering CETP listening service.
         self.c2c_register           = {}
@@ -45,7 +45,8 @@ class CETPManager:
         self.conn_table             = ConnectionTable.ConnectionTable()
         self.cetp_security          = CETPSecurity.CETPSecurity(loop, self.conn_table, ces_params)
         self.interfaces             = PolicyManager.FakeInterfaceDefinition(cesid, ces_params = ces_params)
-        self.policy_mgr             = PolicyManager.PolicyManager(self.cesid, policy_file= cetp_policies)     # Shall ideally fetch the policies from Policy Management System (of Hassaan)    - And will be called, policy_sys_agent
+        self.policy_mgr             = PolicyManager.PolicyManager(self.cesid, policy_file = cetpPolicyFile)     # Gets cetp policies from a local configuration file.
+        #self.policy_mgr             = PolicyAgent.RESTPolicyClient(loop, tcp_conn_limit=100)                    # Fetches cetp policies from the Policy Management System.
         self.host_register          = PolicyManager.HostRegister()
         self._loop                  = loop
         self.name                   = name

@@ -297,13 +297,29 @@ class H2HTransactionOutbound(H2HTransaction):
         self.completion_t0      = self.ces_params['incomplete_cetp_state_t0']
 
     @asyncio.coroutine
-    def load_policies(self, l_cesid=None, r_cesid=None, src_id=None, dst_id=None):
-        """ Returns either the host-policy on success, or None on failure """
+    def load_policies(self, host_id=None):
+        """ Returns the host-policy from the local policy file on success, or None on failure """
         yield from asyncio.sleep(0.000)
         self.opolicy     = self.policy_mgr.get_host_policy(self.direction, host_id=src_id)
         self.opolicy_tmp = self.policy_mgr.get_policy_copy(self.opolicy)
         self.policy      = self.opolicy
         return self.policy
+
+    @asyncio.coroutine
+    def load_policies2(self, host_id=""):
+        """ Downloads the host policy from Policy Management System """
+        timeout     = 2
+        direction   = "EGRESS"
+        url         = "http://100.64.254.24/API/host_cetp_user?"
+        params      = {'lfqdn': host_id, 'direction': direction}
+        response    = yield from self.policy_mgr.get(url, params=params, timeout=timeout)
+        
+        if response is not None:
+            host_policy      = json.loads(response)
+            self.opolicy     = PolicyManager.PolicyCETP(host_policy)
+            self.opolicy_tmp = self.policy_mgr.get_policy_copy(self.opolicy)
+            self.policy      = self.opolicy
+            return self.policy
 
     @asyncio.coroutine
     def _initialize(self):
@@ -319,7 +335,7 @@ class H2HTransactionOutbound(H2HTransaction):
                 self._logger.error(" Connection to destination '{}' is not allowed.".format(self.dst_id))
                 return False
             
-            host_policy = yield from self.load_policies(src_id = self.src_id)
+            host_policy = yield from self.load_policies(host_id = self.src_id)
             
             if host_policy is None:
                 self._logger.error("Failure to load policies for host-ID '{}'".format(self.src_id))
@@ -735,6 +751,22 @@ class H2HTransactionInbound(H2HTransaction):
         self.ipolicy_tmp = self.policy_mgr.get_policy_copy(self.ipolicy)
         self.policy      = self.ipolicy
         return self.policy
+
+    @asyncio.coroutine
+    def load_policies2(self, host_id):
+        """ Download the host policy from Policy management System """         
+        url         = "http://100.64.254.24/API/host_cetp_user?"
+        direction   = "INGRESS"
+        params      = {'lfqdn': host_id, 'direction': direction}
+        timeout     = 2
+        response    = yield from self.policy_mgr.get(url, params=params, timeout=timeout)
+        
+        if response is not None:             
+            host_policy      = json.loads(response)
+            self.ipolicy     = PolicyManager.PolicyCETP(host_policy)
+            self.ipolicy_tmp = self.policy_mgr.get_policy_copy(self.ipolicy)
+            self.policy      = self.ipolicy
+            return self.policy
     
     @asyncio.coroutine
     def _pre_process(self, cetp_msg):
@@ -969,11 +1001,24 @@ class H2HTransactionLocal(H2HTransaction):
         self._logger.setLevel(LOGLEVEL_H2HTransactionLocal)
     
     @asyncio.coroutine
-    def load_policies(self, direction, host_id):
+    def load_policies(self, host_id = "", direction = ""):
         yield from asyncio.sleep(0.000)
         policy = self.policy_mgr.get_host_policy( direction, host_id = host_id)
         return policy
 
+    @asyncio.coroutine
+    def load_policies2(self, host_id="", direction=""):
+        """ Downloads the host policy from Policy Management System """
+        timeout     = 2
+        url         = "http://100.64.254.24/API/host_cetp_user?"
+        params      = {'lfqdn': host_id, 'direction': direction}
+        response    = yield from self.policy_mgr.get(url, params=params, timeout=timeout)
+        
+        if response is not None:
+            policy      = json.loads(response)
+            host_policy = PolicyManager.PolicyCETP(host_policy)
+            return host_policy
+        
     @asyncio.coroutine
     def _pre_process(self):
         try:
@@ -986,8 +1031,8 @@ class H2HTransactionLocal(H2HTransaction):
                 self._logger.warning("Communication from sender <{}> to destination <{}> is not allowed.".format(self.src_id, self.dst_id))
                 return False
             
-            self.opolicy = yield from self.load_policies("outbound", self.src_id)
-            self.ipolicy = yield from self.load_policies("inbound", self.src_id)
+            self.opolicy = yield from self.load_policies(host_id = self.src_id, direction = "EGRESS")
+            self.ipolicy = yield from self.load_policies(host_id = self.dst_id, direction = "INGRESS")
             
             if self.opolicy is None or (self.ipolicy is None):
                 return False

@@ -31,6 +31,7 @@ class RESTPolicyClient(object):
         self.tcp_conn_limit     = tcp_conn_limit
         self.verify_ssl         = verify_ssl
         self.policy_cache       = {}
+        self._timeout           = 2.0
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_RESTPolicyClient)
         self._logger.info("Initiating RESTPolicyClient towards Policy Management System ")
@@ -52,19 +53,25 @@ class RESTPolicyClient(object):
 
     @asyncio.coroutine
     def get(self, url, params=None, timeout=None):
+        if timeout is None:
+            timeout = self._timeout
+        
         with aiohttp.Timeout(timeout):
             resp = None                                     # To handles issues related to connectivity with url
             try:
                 resp = yield from self.client_session.get(url, params=params) 
-                policy_response = yield from resp.text()
-                #print(policy_response)
-                return policy_response
+                if resp.status == 200:
+                    policy_response = yield from resp.text()
+                    #print(policy_response)
+                    return policy_response
+                else:
+                    return None
             
             except Exception as ex:
                 # .close() on exception.
                 if resp!=None:
                     resp.close()
-                self._logger.error(ex)
+                self._logger.error("Exception {} in getting REST response: ".format(ex))
             finally:
                 if resp!=None:
                     yield from resp.release()               # .release() - returns connection into free connection pool.
@@ -72,6 +79,9 @@ class RESTPolicyClient(object):
 
     @asyncio.coroutine
     def delete(self, url, timeout=None):
+        if timeout is None:
+            timeout = self._timeout
+            
         with aiohttp.Timeout(timeout):
             resp = yield from self.client_session.delete(url)
             try:
@@ -85,7 +95,10 @@ class RESTPolicyClient(object):
 
 def main(policy_client):
     for i in range(0,1):
-        asyncio.ensure_future(policy_client.get('http://www.sarolahti.fi'))
+        #asyncio.ensure_future(policy_client.get('http://www.sarolahti.fi'))
+        url = 'http://100.64.254.24/API/host_cetp_user?'
+        params = {'lfqdn':"hosta1.cesa.lte.", 'direction': 'EGRESS'}
+        asyncio.ensure_future(policy_client.get(url, params=params, timeout=2))
         #asyncio.ensure_future(policy_client.get('http://www.thomas-bayer.com/sqlrest/'))
         #yield from asyncio.sleep(1)
 

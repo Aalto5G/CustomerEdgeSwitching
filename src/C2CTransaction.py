@@ -362,6 +362,22 @@ class oC2CTransaction(C2CTransaction):
         return self.ces_policy
 
     @asyncio.coroutine
+    def load_policies2(self, host_id=""):
+        """ Downloads the CES policy from Policy Management System """
+        timeout     = 2
+        proto       = self.proto
+        url         = "http://100.64.254.24/API/ces?"
+        params      = {'cesid': self.l_cesid, 'proto': proto}
+        response    = yield from self.policy_mgr.get(url, params=params, timeout=timeout)
+        
+        if response is not None:
+            ces_policy           = json.loads(response)
+            self.oces_policy     = PolicyManager.PolicyCETP(ces_policy)
+            self.oces_policy_tmp = self.policy_mgr.get_policy_copy(self.oces_policy)
+            self.ces_policy      = self.oces_policy
+            return self.ces_policy
+        
+    @asyncio.coroutine
     def _initialize(self):
         """ Loads policies, generates session tags, and initiates event handlers """
         try:
@@ -1006,6 +1022,22 @@ class iC2CTransaction(C2CTransaction):
         self.ices_policy_tmp    = self.policy_mgr.get_policy_copy(self.ices_policy)
         self.ces_policy         = self.ices_policy
         return self.ces_policy
+
+    @asyncio.coroutine
+    def load_policies2(self, host_id=""):
+        """ Downloads the CES policy from Policy Management System """
+        timeout     = 2
+        proto       = self.proto
+        url         = "http://100.64.254.24/API/ces?"
+        params      = {'cesid': self.l_cesid, 'proto': proto}
+        response    = yield from self.policy_mgr.get(url, params=params, timeout=timeout)
+        
+        if response is not None:
+            ces_policy           = json.loads(response)
+            self.ices_policy     = PolicyManager.PolicyCETP(ces_policy)
+            self.ices_policy_tmp = self.policy_mgr.get_policy_copy(self.ices_policy)
+            self.ces_policy      = self.ices_policy
+            return self.ces_policy
         
     @asyncio.coroutine
     def _pre_process(self, cetp_msg):
