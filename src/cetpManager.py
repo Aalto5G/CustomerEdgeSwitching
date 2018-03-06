@@ -300,8 +300,7 @@ class CETPManager:
 
     def process_inbound_message(self, packet, transport):
         """ 
-        Processes first few packets from a newly connected 'endpoint',
-        Upon successful negotiation of C2C policies, it assigns CETP-H2H and CETP-C2C layer to the remote CETP endpoint
+        Pre-processes first few packets received from a newly connected transport, and initiates C2C negotiation upon successful pre-processing.
         """
         cetp_msg = self._pre_process(packet)
         
@@ -309,7 +308,14 @@ class CETPManager:
             self._close_unverified_transport(transport)
             return
         
-        response = self.prcoess_c2c_negotiation(cetp_msg, transport)
+        asyncio.ensure_future( self.process_c2c_message(cetp_msg, transport) )
+
+    @asyncio.coroutine
+    def process_c2c_message(self, cetp_msg, transport):
+        """
+        Evaluates C2C policy negotiation, and upon success it assigns CETP-H2H and CETP-C2C layer to the connected endpoint
+        """
+        response = yield from self.process_c2c_negotiation(cetp_msg, transport)
         status, cetp_resp = response
         
         if status == False:
@@ -327,7 +333,7 @@ class CETPManager:
                 cetp_packet = self._packetize(cetp_resp)
                 transport.send_cetp(cetp_packet)
         
-        elif status==True:
+        elif status == True:
             self._logger.debug(" CES-to-CES policies are negotiated")
             sstag, dstag = cetp_resp['SST'], cetp_resp['DST']
             cetp_transaction = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag, dstag))
@@ -340,8 +346,9 @@ class CETPManager:
                 transport.send_cetp(cetp_packet)
 
     
-    def prcoess_c2c_negotiation(self, cetp_msg, transport):
-        """ Checks whether inbound message is part of existing or new CETP-C2C negotiation from a legitimate node... """ 
+    @asyncio.coroutine
+    def process_c2c_negotiation(self, cetp_msg, transport):
+        """ Initiates CETP C2C negotiation message  """ 
         inbound_sstag, inbound_dstag = cetp_msg['SST'], cetp_msg['DST']
         sstag, dstag    = inbound_dstag, inbound_sstag
         r_addr          = transport.get_remotepeer()
@@ -352,7 +359,7 @@ class CETPManager:
         ic2c_transaction = C2CTransaction.iC2CTransaction(self._loop, r_addr=r_addr, sstag=sstag, dstag=sstag, l_cesid=self.cesid, r_cesid= r_cesid, policy_mgr=self.policy_mgr, \
                                                            cetpstate_mgr=self.cetpstate_mgr, ces_params=self.ces_params, proto=proto, cetp_security=self.cetp_security, \
                                                            interfaces=self.interfaces, conn_table=self.conn_table, cetp_mgr=self)
-        response = ic2c_transaction.process_c2c_transaction(cetp_msg)
+        response = yield from ic2c_transaction.process_c2c_transaction(cetp_msg)
         return response
 
 

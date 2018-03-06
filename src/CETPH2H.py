@@ -84,9 +84,8 @@ class CETPH2H:
     
     def trigger_h2h_negotiation(self, dst_id, naptr_rr, cb, from_queue=False):
         try:
-            #print("Via tasks")
             #if self.ongoing_h2h_transactions < self.max_session_limit:              # Number of simultaneous H2H-transactions are below the upper limit  
-            asyncio.ensure_future(self.h2h_transaction_start(cb, dst_id))       # "try, except" within task can consume a task-related exception
+            asyncio.ensure_future( self.h2h_transaction_start(cb, dst_id) )       # "try, except" within task can consume a task-related exception
             if from_queue:  self.h2h_q.task_done()
             #else:
             #    self._logger.error(" Number of simultaneous connections to remote CES '<%s>' exceeded limit.".format(self.r_cesid))

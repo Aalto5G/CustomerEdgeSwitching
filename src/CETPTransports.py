@@ -181,6 +181,7 @@ class iCESServerTCPTransport(CETPTransport):
         self._logger.setLevel(LOGLEVEL_iCESTCPServerTransport)
         self.data_buffer     = b''
         self.c2c_negotiation_t0 = int(ces_params['c2c_establishment_t0'])              # In seconds
+        self.negotiation_pkts= 0
 
     def connection_made(self, transport):
         self.transport  = transport
@@ -195,7 +196,7 @@ class iCESServerTCPTransport(CETPTransport):
         
         self.is_connected   = True
         self._set_keepalives()
-        self._loop.call_later(self.c2c_negotiation_t0, self.is_c2c_negotiated)     # Schedules a check for C2C-policy negotiation.
+        self._cb = self._loop.call_later(self.c2c_negotiation_t0, self.is_c2c_negotiated)     # Schedules a check for C2C-policy negotiation.
 
     def get_remotepeer(self):
         if self.transport is not None:
@@ -204,7 +205,7 @@ class iCESServerTCPTransport(CETPTransport):
     def is_c2c_negotiated(self):
         """ Terminates transport connection if C2C negotiation doesn't complete in t<To """        
         if self.is_connected and (self.c2c_layer is None):
-            self._logger.info(" Remote end did not complete C2C negotiation in To={}".format(str(self.c2c_negotiation_t0)))
+            self._logger.info(" Remote end did not complete C2C negotiation in due time ={} or RTTs.".format(str(self.c2c_negotiation_t0)))
             ip_addr, port = self.remotepeer
             self.cetp_security.register_unverifiable_cetp_sender(ip_addr)
             self.close()
@@ -213,10 +214,23 @@ class iCESServerTCPTransport(CETPTransport):
         """ CETPManager uses this method to assign C2C-layer to transport """
         self.r_cesid    = r_cesid
         self.c2c_layer  = c2c_layer
-            
+    
+    def _check_flooding(self):
+        if self.negotiation_pkts > 2:
+            return True
+        else:
+            return False
+
     def _to_c2c(self, cetp_msg):
         if self.c2c_layer is None:
-            self.cetp_mgr.process_inbound_message(cetp_msg, self)      # Forwards the message to CETPManager for C2C negotiation.
+            
+            if not self._check_flooding():
+                self.negotiation_pkts += 1
+                self.cetp_mgr.process_inbound_message(cetp_msg, self)      # Forwards the message to CETPManager for C2C negotiation.
+            else:
+                self._logger.warning(" Flood of inbound messages on a newly connected transport '{}' of cesid = '{}'".format(self.remotepeer[0], self.r_cesid))
+                self._cb.cancel()
+                self.is_c2c_negotiated()
         else:
             self.c2c_layer.consume_transport_message(cetp_msg, self)   # Forwarding the message to C2C layer
     

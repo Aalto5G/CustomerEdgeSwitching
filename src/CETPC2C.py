@@ -204,11 +204,9 @@ class CETPC2CLayer:
     
     
     def is_c2c_transaction(self, sstag, dstag):
-        """ Determines whether CETP message belongs to an ongoing or completed C2C Transaction of this C2C layer """
+        """ Determines whether the CETP message belongs to the established C2C Transaction of this C2C layer """
         c_sstag, c_dstag = self.c2c_transaction.sstag, self.c2c_transaction.dstag
-        if (c_sstag==sstag) and (c_dstag==dstag): 
-            return True
-        if (c_sstag==sstag) and (c_dstag==0) and (dstag!=0):                        # Ongoing C2CTransaction - completed at iCES, but still in-complete at oCES
+        if (c_sstag == sstag) and (c_dstag == dstag): 
             return True
         return False
 
@@ -242,67 +240,54 @@ class CETPC2CLayer:
         
     
     def consume_transport_message(self, packet, transport):
-        """ Consumes CETP messages from transport. """
+        """ Consumes CETP messages from transport, and processes it at C2C layer or forwards to H2H layer """
         try:
-            outcome = self._pre_process(packet)
-            if not outcome:     return                        # For repeated non-CETP packets, shall we terminate the connection?
-            sstag, dstag, cetp_msg = outcome
-            
-            if not self.is_connected():
-                self._logger.debug(" C2C policy is not negotiated with remote CES '{}'".format(self.r_cesid))
-                self.process_c2c(sstag, dstag, cetp_msg, transport)
+            pre_processed = self._pre_process(packet)
+            if not pre_processed:     return                        # For repeated non-CETP packets, shall we terminate the connection?
+            sstag, dstag, cetp_msg = pre_processed
 
+            if self.is_c2c_transaction(sstag, dstag) or (not self._is_c2c_negotiated()) :
+                self.process_c2c( cetp_msg, transport)
             else:
-                if self.is_c2c_transaction(sstag, dstag):
-                    self._logger.debug(" Inbound packet belongs to a C2C transaction.")
-                    self.process_c2c(sstag, dstag, cetp_msg, transport)
-                else:
-                    self.forward_h2h(cetp_msg)                       # Forwarding packet to H2H-layer
+                self.forward_h2h(cetp_msg)                       # Forwarding packet to H2H-layer
                     
         except Exception as ex:
             self._logger.info("Exception in consuming messages from CETP Transport: {}".format(ex))
             traceback.print_exc(file=sys.stdout)
             
     
-    def process_c2c(self, sstag, dstag, cetp_msg, transport):
+    def process_c2c(self, cetp_msg, transport):
         """ Calls corresponding C2CTransaction method, depending on whether its an ongoing or completed C2C Transaction. """
-        
-        if self.cetpstate_mgr.has(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag, dstag) ):
-            self._logger.debug(" CETP for a negotiated C2C transaction (SST={}, DST={})".format(sstag, dstag))
-            o_c2c = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag, dstag) )
-            
-            if self.r_cesid == o_c2c.get_remote_cesid():
-                o_c2c.post_c2c_negotiation(cetp_msg)
-                
-        elif self.cetpstate_mgr.has(H2HTransaction.KEY_INITIATED_TAGS, (sstag, 0) ):
-            self._logger.info(" Continue resolving c2c-transaction (SST={}, DST={})".format(sstag, 0))
-            o_c2c   = self.cetpstate_mgr.get(H2HTransaction.KEY_INITIATED_TAGS, (sstag, 0) )
-            
-            if self.r_cesid == o_c2c.get_remote_cesid():
-                result  = o_c2c.continue_c2c_negotiation(cetp_msg)
-                (status, cetp_resp) = result
-                
-                if status == True:
-                    self.set_c2c_negotiation()
-                    self._update_connectivity_status()
-                
-                elif status == False:
-                    if len(cetp_resp) > 0:
-                        cetp_packet = self._packetize(cetp_resp)
-                        transport.send_cetp(cetp_packet)
-                        
-                    for t in self.connected_transports:
-                        (r_ip, r_port), proto = t.remotepeer, t.proto
-                        self.register_unreachable_cetp_addr(r_ip, r_port, proto)
-                        
-                    self.terminate()
-                    
-                elif status == None:
-                    if len(cetp_resp) > 0:
-                        self._logger.info(" CES-to-CES towards <{}> is not negotiated yet.".format(self.r_cesid))
-                        cetp_packet = self._packetize(cetp_resp)
-                        transport.send_cetp(cetp_packet)
 
+        if self._is_c2c_negotiated():
+            self._logger.debug(" C2C policy is not negotiated with remote CES '{}'".format(self.r_cesid))
+            self.c2c_transaction.post_c2c_negotiation(cetp_msg)
+        else:
+            self._logger.debug(" Inbound packet belongs to the established C2C transaction.")
+            result = self.c2c_transaction.continue_c2c_negotiation(cetp_msg)
+            (status, cetp_resp) = result
+            
+            if status == True:
+                self.set_c2c_negotiation()
+                self._update_connectivity_status()
+            
+            elif status == False:
+                if len(cetp_resp) > 0:
+                    cetp_packet = self._packetize(cetp_resp)
+                    transport.send_cetp(cetp_packet)
+                    
+                for t in self.connected_transports:
+                    (r_ip, r_port), proto = t.remotepeer, t.proto
+                    self.register_unreachable_cetp_addr(r_ip, r_port, proto)
+                    
+                self.terminate()
+                
+            elif status == None:
+                if len(cetp_resp) > 0:
+                    self._logger.info(" CES-to-CES towards <{}> is not negotiated yet.".format(self.r_cesid))
+                    cetp_packet = self._packetize(cetp_resp)
+                    transport.send_cetp(cetp_packet)
+            
 
     """  ***************    ***************    ***************    *************** ************
     ******  Functions handling transport-layer connection establishment (& termination) *****

@@ -296,13 +296,16 @@ class H2HTransactionOutbound(H2HTransaction):
     def load_parameters(self):
         self.completion_t0      = self.ces_params['incomplete_cetp_state_t0']
 
+    @asyncio.coroutine
     def load_policies(self, l_cesid=None, r_cesid=None, src_id=None, dst_id=None):
         """ Returns either the host-policy on success, or None on failure """
+        yield from asyncio.sleep(0.000)
         self.opolicy     = self.policy_mgr.get_host_policy(self.direction, host_id=src_id)
         self.opolicy_tmp = self.policy_mgr.get_policy_copy(self.opolicy)
         self.policy      = self.opolicy
         return self.policy
 
+    @asyncio.coroutine
     def _initialize(self):
         """ Loads policies, generates session tags, and initiates event handlers """
         try:
@@ -316,7 +319,9 @@ class H2HTransactionOutbound(H2HTransaction):
                 self._logger.error(" Connection to destination '{}' is not allowed.".format(self.dst_id))
                 return False
             
-            if self.load_policies(src_id = self.src_id) is None:
+            host_policy = yield from self.load_policies(src_id = self.src_id)
+            
+            if host_policy is None:
                 self._logger.error("Failure to load policies for host-ID '{}'".format(self.src_id))
                 return False
             
@@ -354,7 +359,9 @@ class H2HTransactionOutbound(H2HTransaction):
     def start_cetp_processing(self):
         """ Returns CETP message containing Policy Offers & Request towards remote-host """
         #try:
-        if not self._initialize():
+        initialized = yield from self._initialize()
+        
+        if not initialized:
             self._logger.error(" Failure in initiating the Host-to-Host session.")
             return None
         
@@ -719,14 +726,17 @@ class H2HTransactionInbound(H2HTransaction):
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HTransactionInbound)
 
+    @asyncio.coroutine
     def load_policies(self, host_id):
         """ Returns None OR host policy """
         #index = self.policy_mgr.mapping_srcId_to_policy(host_id)
+        yield from asyncio.sleep(0.000)
         self.ipolicy     = self.policy_mgr.get_host_policy(self.direction, host_id=host_id)
         self.ipolicy_tmp = self.policy_mgr.get_policy_copy(self.ipolicy)
         self.policy      = self.ipolicy
         return self.policy
     
+    @asyncio.coroutine
     def _pre_process(self, cetp_msg):
         """ Pre-process the inbound packet for the minimum necessary details. """
         try:
@@ -762,7 +772,9 @@ class H2HTransactionInbound(H2HTransaction):
                 self._logger.warning(" Connection to local destination '{}' is not allowed".format(self.dst_id))
                 return False
             
-            if self.load_policies(self.dst_id) is None:
+            host_policy = yield from self.load_policies(self.dst_id)
+            
+            if host_policy is None:
                 self._logger.error(" Failure to load inbound CETP policy of Local Destination '{}'".format(self.dst_id))
                 return False
             
@@ -805,8 +817,9 @@ class H2HTransactionInbound(H2HTransaction):
         negotiation_status  = None
         cetp_response       = ""
         error               = False
+        pre_processed       = yield from self._pre_process(cetp_message)
 
-        if not self._pre_process(cetp_message):
+        if not pre_processed:
             self._logger.error(" Inbound CETP packet ({}->{}) failed pre-processing()".format(self.sstag, self.dstag))
             negotiation_status = False
             return
@@ -954,11 +967,16 @@ class H2HTransactionLocal(H2HTransaction):
         self.name               = name
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HTransactionLocal)
+    
+    @asyncio.coroutine
+    def load_policies(self, direction, host_id):
+        yield from asyncio.sleep(0.000)
+        policy = self.policy_mgr.get_host_policy( direction, host_id = host_id)
+        return policy
 
     @asyncio.coroutine
     def _pre_process(self):
         try:
-            yield from asyncio.sleep(0.000)          # Simulating the delay in loading policies from the Policy System
             self.src_id             = self.host_register.ip_to_fqdn_mapping(self.host_ip)           # To be replaced with proper function.
             sender_permitted        = self.check_outbound_permission(self.src_id)
             destination_permitted   = self.check_inbound_permission(self.dst_id)
@@ -968,10 +986,10 @@ class H2HTransactionLocal(H2HTransaction):
                 self._logger.warning("Communication from sender <{}> to destination <{}> is not allowed.".format(self.src_id, self.dst_id))
                 return False
             
-            self.opolicy  = self.policy_mgr.get_host_policy("outbound", host_id=self.src_id)
-            self.ipolicy  = self.policy_mgr.get_host_policy("inbound",  host_id=self.dst_id)
+            self.opolicy = yield from self.load_policies("outbound", self.src_id)
+            self.ipolicy = yield from self.load_policies("inbound", self.src_id)
             
-            if (self.opolicy is None) or (self.ipolicy is None):
+            if self.opolicy is None or (self.ipolicy is None):
                 return False
             
             return True
@@ -984,9 +1002,9 @@ class H2HTransactionLocal(H2HTransaction):
     def start_cetp_processing(self):
         """ Starts the CETPLocal policy negotiation """
         error = False
-        processed = yield from self._pre_process()
+        pre_processed = yield from self._pre_process()
         
-        if not processed:
+        if not pre_processed:
             self._logger.error(" Failure in initiating the local H2H session towards '{}'.".format(self.dst_id))
             return False
         

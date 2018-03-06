@@ -352,20 +352,24 @@ class oC2CTransaction(C2CTransaction):
         self.keepalive_timeout  = self.ces_params['keepalive_interval']
         self.completion_t0      = self.ces_params['incomplete_cetp_state_t0']
     
+    @asyncio.coroutine
     def load_policies(self):
         """ Retrieves the policies stored in the Policy file"""
+        yield from asyncio.sleep(0.000)
         self.oces_policy      = self.policy_mgr.get_ces_policy(proto=self.proto)
         self.oces_policy_tmp  = self.policy_mgr.get_policy_copy(self.oces_policy)
         self.ces_policy       = self.oces_policy
         return self.ces_policy
 
+    @asyncio.coroutine
     def _initialize(self):
         """ Loads policies, generates session tags, and initiates event handlers """
         try:
             self.load_parameters()            
             self.sstag = self.generate_session_tags()
+            ces_policy = yield from self.load_policies()
             
-            if self.load_policies() is None:
+            if ces_policy is None:
                 self._logger.error("Failure to load policies for local CES '{}'".format(self.l_cesid))
                 return False
             
@@ -393,7 +397,9 @@ class oC2CTransaction(C2CTransaction):
     def initiate_c2c_negotiation(self):
         """ Sends C2C policy offers and requirements to remote CES """
         try:
-            if not self._initialize():
+            initialized = yield from self._initialize()
+            
+            if not initialized:
                 self._logger.error(" Failure in initiating CES-to-CES session towards: '{}'".format(self.r_cesid))
                 return None
             
@@ -807,7 +813,9 @@ class oC2CTransaction(C2CTransaction):
                 self._logger.warning(" Remote CES requested to close {} H2H sessions.".format(len(h2h_sessions)))
                 self.cetp_mgr.process_session_terminate_message(self.r_cesid, tag_list = h2h_sessions)
             
-
+    def process_evidence(self, evidence):
+        pass
+    
     def process_blocking_request(self, payload):
         """ Process the payload of request to block connection to a remote domain or from a local host """
         print("received payload: ", payload)
@@ -913,9 +921,12 @@ class oC2CTransaction(C2CTransaction):
                     # Check if the remote CES is sending request for a supported policy element.
                     elif self._check_tlv2(received_tlv, code=["evidence", "host_filtering"]):
                         self._logger.warning(" '{}.{}' TLV request is received from remote CES '{}'".format(received_tlv["group"], received_tlv["code"], self.r_cesid))
-                        self.process_blocking_request(received_tlv["value"])
-                        continue
                         
+                        if received_tlv["code"] == "host_filtering":
+                            self.process_blocking_request(received_tlv["value"])
+                        elif received_tlv["code"] == "evidence":
+                            self.process_evidence(received_tlv["value"])
+                    
                     elif self._check_tlv(received_tlv, code = "ack"):
                         ret_tlv = self._create_response_tlv(received_tlv, post_c2c=True)
                         tlvs_to_send += ret_tlv
@@ -986,14 +997,17 @@ class iC2CTransaction(C2CTransaction):
         self.negotiated_params          = {} 
         self._logger.setLevel(LOGLEVEL_iC2CTransaction)        
         
+    @asyncio.coroutine
     def load_policies(self):
         """ Retrieves the policies stored in the policy file"""
+        yield from asyncio.sleep(0.000)
         self.ices_policy, self.ices_policy_tmp  = None, None
         self.ices_policy        = self.policy_mgr.get_ces_policy(proto=self.proto)
         self.ices_policy_tmp    = self.policy_mgr.get_policy_copy(self.ices_policy)
         self.ces_policy         = self.ices_policy
         return self.ces_policy
         
+    @asyncio.coroutine
     def _pre_process(self, cetp_msg):
         """ Pre-process the inbound packet for the minimum necessary details, AND loads the CES-to-CES policies. """
         try:
@@ -1013,8 +1027,10 @@ class iC2CTransaction(C2CTransaction):
             if len(r_cesid)==0 or len(r_cesid) > 256 or (r_cesid != self.r_cesid) or (r_cesid==self.l_cesid):
                 self._logger.error(" Invalid Remote CES-ID '{}'".format(r_cesid))
                 return False
-
-            if self.load_policies() is None:
+            
+            ces_policy = yield from self.load_policies()
+            
+            if ces_policy is None:
                 self._logger.error("Failure to load the CES policies '{}'".format(self.l_cesid))
                 return False
             
@@ -1024,6 +1040,8 @@ class iC2CTransaction(C2CTransaction):
             self._logger.error(" Exception in pre-processing the CETP packet: '{}'".format(ex))
             return False
     
+    
+    @asyncio.coroutine
     def process_c2c_transaction(self, cetp_message):
         """ Processes the inbound CETP-packet for negotiating the CES-to-CES (CETP) policies """
         #self._logger.info("{}\n {}".format(42*'*', self.ices_policy))
@@ -1033,9 +1051,10 @@ class iC2CTransaction(C2CTransaction):
         negotiation_status       = None
         cetp_response            = ""
         error                    = False
+        pre_processed            = yield from self._pre_process(cetp_message)
         #time.sleep(3)
         
-        if not self._pre_process(cetp_message):
+        if not pre_processed:
             self._logger.error("Inbound CETP packet ({}->{}) failed pre-processing()".format(self.sstag, self.dstag))
             negotiation_status = False
             return (negotiation_status, cetp_response)
