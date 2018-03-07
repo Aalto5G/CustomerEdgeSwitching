@@ -11,8 +11,7 @@ cd src
 ./rgw.py  --name gwa.demo                                                    \
           --dns-soa gwa.demo. 0.168.192.in-addr.arpa. 1.64.100.in-addr.arpa. \
           --dns-server-local 127.0.0.1 53                                    \
-          --dns-server-lan   192.168.0.1 53                                  \
-          --dns-server-wan   100.64.1.130 53                                 \
+          --dns-server-lan   10.0.3.101 53                                   \
           --dns-resolver     8.8.8.8 53                                      \
           --ddns-server      127.0.0.2 53                                    \
           --dns-timeout      0.010 0.100 0.200                               \
@@ -33,4 +32,5 @@ cd src
           --network-api-url  http://127.0.0.1:8081/                          \
           --repository-subscriber-folder ../config.d/gwa.demo.subscriber.d/  \
           --repository-policy-folder     ../config.d/gwa.demo.policy.d/      \
+          --cetp-config  		     config_cesa/config_cesa_ct.yaml     \
           --repository-api-url  http://127.0.0.1:8082/
