@@ -213,7 +213,7 @@ class CETPManager:
         try:
             self._logger.info("Initiating CETPServer on {} protocol @ {}.{}".format(proto, server_ip, server_port))
             if proto == "tcp":
-                coro = self._loop.create_server(lambda: CETPTransports.iCESServerTCPTransport(self._loop, self.ces_params, cetp_mgr=self),\
+                server = yield from self._loop.create_server(lambda: CETPTransports.iCESServerTCPTransport(self._loop, self.ces_params, cetp_mgr=self),\
                                                  host=server_ip, port=server_port)
                 
             elif proto == "tls":
@@ -222,13 +222,12 @@ class CETPManager:
                 sc.load_cert_chain(self.ces_certificate_path, self.ces_privatekey_path)
                 #sc.check_hostname = True
                 sc.load_verify_locations(self.ca_certificate_path)
-                coro = self._loop.create_server(lambda: CETPTransports.iCESServerTLSTransport(self._loop, self.ces_params, cetp_mgr=self), \
+                server = yield from self._loop.create_server(lambda: CETPTransports.iCESServerTLSTransport(self._loop, self.ces_params, cetp_mgr=self), \
                                                 host=server_ip, port=server_port, ssl=sc)
                 
-            server = self._loop.run_until_complete(coro)            # Returns the server
             self.register_server_endpoint(server)
             self._logger.info(" CETP Server is listening on '{}' protocol: {}:{}".format(proto.upper(), server_ip, server_port))
-                
+            
         except Exception as ex:
             self._logger.warning(" Exception '{}' in creating CETP server on {} protocol @ {}:{}".format(ex, proto, server_ip, server_port))
 
