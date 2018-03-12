@@ -13,6 +13,7 @@ import yaml
 import ssl
 import functools
 import copy
+import dns
 
 import CETP
 import C2CTransaction
@@ -23,6 +24,9 @@ import CETPTransports
 import PolicyManager
 import CETPSecurity
 import ConnectionTable
+import host
+import customdns
+from customdns import dnsutils 
 
 LOGLEVEL_CETPManager    = logging.DEBUG            # Any message above this level will be printed.    WARNING > INFO > DEBUG
 
@@ -47,8 +51,7 @@ class CETPManager:
         self.interfaces             = PolicyManager.FakeInterfaceDefinition(cesid, ces_params = ces_params)
         self.policy_mgr             = PolicyManager.PolicyManager(self.cesid, policy_file = cetpPolicyFile)     # Gets cetp policies from a local configuration file.
         #self.policy_mgr             = PolicyAgent.RESTPolicyClient(loop, tcp_conn_limit=100)                    # Fetches cetp policies from the Policy Management System.
-        self.host_register          = hosttable
-        self.host_register          = PolicyManager.HostRegister()
+        self.host_table             = hosttable
         self._loop                  = loop
         self.name                   = name
         self.record_inbound_transports = {}                        # {'cesid': [transports]} - Temporary record of list of transports connected against a cesid
@@ -56,7 +59,7 @@ class CETPManager:
         self._logger.setLevel(LOGLEVEL_CETPManager)
         self.read_cetp_params()
         self.local_cetp             = CETPH2H.CETPH2HLocal(l_cesid=self.cesid, cetpstate_mgr=self.cetpstate_mgr, policy_mgr=self.policy_mgr, cetp_mgr=self, \
-                                                           cetp_security=self.cetp_security, host_register=self.host_register, conn_table=self.conn_table)
+                                                           cetp_security=self.cetp_security, host_table=self.host_table, conn_table=self.conn_table)
 
     def read_cetp_params(self):
         try:
@@ -73,7 +76,7 @@ class CETPManager:
     def create_cetp_endpoint(self, r_cesid, c2c_layer=None, c2c_negotiated=False):
         """ Creates the CETP-H2H layer towards remote CES-ID """
         cetp_ep = CETPH2H.CETPH2H(l_cesid = self.cesid, r_cesid = r_cesid, cetpstate_mgr= self.cetpstate_mgr, policy_mgr=self.policy_mgr, policy_client=None, \
-                                  loop=self._loop, cetp_mgr=self, ces_params=self.ces_params, cetp_security=self.cetp_security, host_register=self.host_register, \
+                                  loop=self._loop, cetp_mgr=self, ces_params=self.ces_params, cetp_security=self.cetp_security, host_table=self.host_table, \
                                   interfaces=self.interfaces, c2c_layer=c2c_layer, c2c_negotiated=c2c_negotiated, conn_table=self.conn_table)
         self.add_cetp_endpoint(r_cesid, cetp_ep)
         return cetp_ep
@@ -141,39 +144,44 @@ class CETPManager:
         cb = (dns_cb, cb_args)
         self.local_cetp.resolve_cetp(dst_id, cb)
         
-    def has_connection(self, sender_ip, dst_id):
-        return False
-        sender_id = self.host_register.ip_to_fqdn_mapping(sender_ip)            # TBR
-        if sender_id is None:
+    def has_connection(self, src_id, dst_id):
+        #return False
+        if src_id is None:
             return False
         
         keytype = ConnectionTable.KEY_MAP_CES_FQDN
-        key     = (sender_id, dst_id) 
+        key     = (src_id, dst_id) 
         if self.conn_table.has(keytype, key):
             return True
         else:
             return False
 
-    def get_connection(self, sender_ip, dst_id):
-        key  = (KEY_HOST_IPV4, sender_ip)
-        host = self.host_register.get(key)
-        sender_id = host.fqdn
-        
+    def get_connection(self, src_id, dst_id):
         keytype     = ConnectionTable.KEY_MAP_CES_FQDN
-        key         = (sender_id, dst_id) 
+        key         = (src_id, dst_id) 
         conn        = self.conn_table.get(keytype, key)
         return conn
 
     def process_outbound_cetp(self, dns_cb, cb_args, dst_id, r_cesid, naptr_list):
         """ Gets/Creates the CETPH2H instance AND enqueues the NAPTR response for handling the H2H transactions """
         try:
-            dns_q, addr            = cb_args
-            sender_ip, sender_port = addr
+            dns_q, addr      = cb_args
+            src_ip, src_port = addr
+            key              = (host.KEY_HOST_IPV4, src_ip)
+            print("here")
+
+            if not self.host_table.has(key):
+                self._logger.info("Sender IP '{}' is not a registered host".format(src_ip))
+                return
             
-            if self.has_connection(sender_ip, dst_id):
-                conn = self.get_connection(sender_ip, dst_id)
-                resp = conn.lpip
-                dns_cb(dns_q, addr, r_addr=resp)
+            host_obj  = self.host_table.get(key)
+            src_id    = host_obj.fqdn
+        
+            if self.has_connection(src_id, dst_id):
+                conn = self.get_connection(src_id, dst_id)
+                lpip = conn.lpip
+                response = dnsutils.make_response_answer_rr(dns_q, dst_id, dns.rdatatype.A, lpip, rdclass=1, ttl=120, recursion_available=True)
+                dns_cb(dns_q, addr, response)
                 
             else:
                 if self.has_cetp_endpoint(r_cesid):

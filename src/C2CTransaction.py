@@ -21,12 +21,12 @@ import CETPSecurity
 import H2HTransaction
 from H2HTransaction import CETPTransaction
 
-LOGLEVELCETP                    = logging.DEBUG
-LOGLEVEL_C2CTransaction         = logging.INFO
-LOGLEVEL_oC2CTransaction        = logging.INFO
-LOGLEVEL_iC2CTransaction        = logging.INFO
+LOGLEVELCETP              = logging.DEBUG
+LOGLEVEL_C2CTransaction   = logging.INFO
+LOGLEVEL_oC2CTransaction  = logging.INFO
+LOGLEVEL_iC2CTransaction  = logging.INFO
 
-NEGOTIATION_RTT_THRESHOLD       = 2
+NEGOTIATION_RTT_THRESHOLD = 2
 
 KEY_INITIATED_TAGS        = H2HTransaction.KEY_INITIATED_TAGS
 KEY_ESTABLISHED_TAGS      = H2HTransaction.KEY_ESTABLISHED_TAGS

@@ -16,6 +16,7 @@ import CETP
 import copy
 import ConnectionTable
 import CETPSecurity
+import host
 import dns
 import customdns
 from customdns import dnsutils
@@ -255,6 +256,12 @@ class H2HTransaction(CETPTransaction):
             return False
 
 
+    def has_domain(self, fqdn):
+        """ Checks if an FQDN is hosted by this CES node. """
+        key = (host.KEY_HOST_SERVICE, fqdn)
+        res = self.host_table.has(key)
+        return res
+
     def is_IPv4(self, ip4_addr):
         return CETP.is_IPv6(ip4_addr)
     
@@ -271,7 +278,7 @@ class H2HTransaction(CETPTransaction):
 
 
 class H2HTransactionOutbound(H2HTransaction):
-    def __init__(self, loop=None, sstag=0, dstag=0, cb=None, host_ip="", src_id="", dst_id="", l_cesid="", r_cesid="", policy_mgr= None, host_register=None, cetp_security=None, \
+    def __init__(self, loop=None, sstag=0, dstag=0, cb=None, host_ip="", src_id="", dst_id="", l_cesid="", r_cesid="", policy_mgr= None, host_table=None, cetp_security=None, \
                  cetpstate_mgr=None, cetp_h2h=None, ces_params=None, interfaces=None, conn_table=None, direction="outbound", name="H2HTransactionOutbound", rtt_time=[]):
         self.sstag, self.dstag  = sstag, dstag
         self.cb                 = cb
@@ -286,7 +293,7 @@ class H2HTransactionOutbound(H2HTransaction):
         self.cetp_h2h           = cetp_h2h
         self.ces_params         = ces_params
         self.direction          = direction
-        self.host_register      = host_register
+        self.host_table         = host_table
         self.interfaces         = interfaces
         self.conn_table         = conn_table
         self.cetp_security      = cetp_security
@@ -332,8 +339,6 @@ class H2HTransactionOutbound(H2HTransaction):
     def _initialize(self):
         """ Loads policies, generates session tags, and initiates event handlers """
         try:
-            self.src_id = self.host_register.ip_to_fqdn_mapping(self.host_ip)
-            
             if not self.is_local_host_allowed(self.src_id):
                 self._logger.error(" Connection from sender '{}' is not allowed to '{}' behind CES '{}'".format(self.src_id, self.dst_id, self.r_cesid))
                 return False
@@ -738,7 +743,7 @@ class H2HTransactionOutbound(H2HTransaction):
 
 class H2HTransactionInbound(H2HTransaction):
     def __init__(self, sstag=None, dstag=None, l_cesid="", r_cesid="", policy_mgr= None, cetpstate_mgr= None, interfaces=None, conn_table=None, \
-                 cetp_h2h=None, cetp_security=None, ces_params=None, name="H2HTransactionInbound"):
+                 cetp_h2h=None, cetp_security=None, ces_params=None, host_table=None, name="H2HTransactionInbound"):
         self.sstag              = sstag
         self.dstag              = dstag
         self.l_cesid            = l_cesid
@@ -751,6 +756,7 @@ class H2HTransactionInbound(H2HTransaction):
         self.cetp_h2h           = cetp_h2h
         self.cetp_security      = cetp_security
         self.ces_params         = ces_params
+        self.host_table         = host_table
         self.name               = name
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HTransactionInbound)
@@ -804,13 +810,13 @@ class H2HTransactionInbound(H2HTransaction):
                 return False
             if (len(self.dst_id)==0) or (len(self.dst_id)>256):
                 return False
-
-            if not self.if_destination_exists(self.dst_id):
-                self._logger.warning(" Destination '{}' is not served by our CES '{}'.".format(self.dst_id, self.l_cesid))
+            
+            if not self.has_domain(self.dst_id):
+                self._logger.warning(" Destination '{}' is not served by local CES '{}'.".format(self.dst_id, self.l_cesid))
                 return False
             
             if not self.is_remote_host_allowed(self.src_id):
-                self._logger.warning(" Sender '{}' is blocked.".format(self.src_id))
+                self._logger.warning(" Sender '{}' is not allowed to communicate.".format(self.src_id))
                 return False
             
             if not self.is_local_destination_allowed(self.dst_id):
@@ -950,15 +956,12 @@ class H2HTransactionInbound(H2HTransaction):
     def _is_ready(self):
         return len(self.ipolicy_tmp.required)==0
 
-    def if_destination_exists(self, host):
-        """ Emulates that host exists behind CES.. Check from host-register """
-        return True
-
     def _create_connection(self):
         try:
             self.sstag                      = self.generate_session_tags(self.dstag)
             self.lfqdn, self.rfqdn          = self.src_id, self.dst_id
-            self.lip                        = "10.0.3.111"                                    # Use Jesus defined functions
+            host_obj                        = self.host_table.get((host.KEY_HOST_SERVICE, self.dst_id))
+            self.lip                        = host_obj.ipv4
             self.lpip                       = self._allocate_proxy_address(self.lip)          # Use Jesus defined functions
             self.lid, self.rid              = None, None
             
@@ -992,7 +995,7 @@ class H2HTransactionInbound(H2HTransaction):
 
 
 class H2HTransactionLocal(H2HTransaction):
-    def __init__(self, loop=None, host_ip="", cb=None, src_id="", dst_id="", dst_ip="", policy_mgr= None, host_register=None, cetpstate_mgr=None, cetp_h2h=None, \
+    def __init__(self, loop=None, host_ip="", cb=None, src_id="", dst_id="", dst_ip="", policy_mgr= None, host_table=None, cetpstate_mgr=None, cetp_h2h=None, \
                  interfaces=None, conn_table=None, cetp_security=None, name="H2HTransactionLocal"):
         self._loop              = loop
         self.cb                 = cb
@@ -1003,7 +1006,7 @@ class H2HTransactionLocal(H2HTransaction):
         self.policy_mgr         = policy_mgr
         self.cetpstate_mgr      = cetpstate_mgr
         self.cetp_h2h           = cetp_h2h
-        self.host_register      = host_register
+        self.host_table         = host_table
         self.interfaces         = interfaces
         self.conn_table         = conn_table
         self.cetp_security      = cetp_security
@@ -1035,7 +1038,6 @@ class H2HTransactionLocal(H2HTransaction):
     @asyncio.coroutine
     def _pre_process(self):
         try:
-            self.src_id             = self.host_register.ip_to_fqdn_mapping(self.host_ip)           # To be replaced with proper function.
             sender_permitted        = self.check_outbound_permission(self.src_id)
             destination_permitted   = self.check_inbound_permission(self.dst_id)
             #print("sender_permitted, destination_permitted", sender_permitted, destination_permitted)
@@ -1128,8 +1130,9 @@ class H2HTransactionLocal(H2HTransaction):
         
     def _create_local_connection(self):
         lip             = self.host_ip
-        rip             = "10.0.3.103"                            # Get IP of destination from host-register (IPv4 or IPv6 address depending on sender address type)
-        lpip            = self._allocate_proxy_address(lip)
+        host_obj        = self.host_table.get((host.KEY_HOST_SERVICE, self.dst_id))
+        rip             = host_obj.ipv4
+        lpip            = self._allocate_proxy_address(lip)       # Use address pool reserved for CETP communication
         lfqdn, rfqdn    = self.src_id, self.dst_id
         lid, rid        = None, None
         rpip            = self._allocate_proxy_address(rip)

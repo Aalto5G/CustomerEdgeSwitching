@@ -392,8 +392,7 @@ class RealmGateway(object):
             for ipaddr, port in self._config.dns_server_lan:
                 cb_soa   = lambda x,y,z: asyncio.ensure_future(self.dnscb.dns_process_rgw_lan_soa(x,y,z))
                 cb_nosoa = lambda x,y,z: asyncio.ensure_future(self.dnscb.dns_process_rgw_lan_nosoa(x,y,z))
-                print("self._cetp_mgr: ", self._cetp_mgr)
-                transport, protocol = yield from self._loop.create_datagram_endpoint(functools.partial(DNSProxy, cetp_mgr = self._cetp_mgr, soa_list = soa_list, cb_soa = cb_soa, cb_nosoa = cb_nosoa), local_addr=(ipaddr, port))
+                transport, protocol = yield from self._loop.create_datagram_endpoint(functools.partial(DNSProxy, soa_list = soa_list, cb_soa = cb_soa, cb_nosoa = cb_nosoa), local_addr=(ipaddr, port))
                 self._logger.info('Creating DNS Proxy endpoint @{}:{}'.format(ipaddr, port))
                 self.dnscb.register_object('DNSProxy@{}:{}'.format(ipaddr, port), protocol)
 

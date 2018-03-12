@@ -20,30 +20,6 @@ import copy
 
 LOGLEVEL_PolicyCETP         = logging.INFO
 LOGLEVEL_PolicyManager      = logging.INFO
-LOGLEVEL_HostRegister       = logging.INFO
-
-
-class HostRegister(object):
-    def __init__(self, name="HostRegister"):
-        self.load_ip_fqdn_mapping()
-        self.name       = name
-        self._logger    = logging.getLogger(name)
-        self._logger.setLevel(LOGLEVEL_HostRegister)
-        
-    def load_ip_fqdn_mapping(self):
-        """ Acting as a static Identity assignment server to IP addresses """
-        #self.ip_fqdn_map = {"127.0.0.1":"raimo_son1.cesa.fi.", "10.0.3.118":"son1.raimo.aalto.lte.", "10.0.3.219":"raimo.aalto.lte.", "10.0.2.15":"son1.raimo.aalto.lte.", "10.0.2.16":"son2.raimo.aalto.lte."}
-        self.ip_fqdn_map = {"10.0.3.111":"hosta1.cesa.lte.", "10.0.3.112":"hosta2.cesa.lte.", "10.0.3.121":"hostb1.cesb.lte.", "10.0.3.122":"hostb2.cesb.lte.", \
-                            "10.0.3.189":"raimo_son1.cesa.lte.", "10.0.3.53":"raimo.cesb.lte.", "127.0.0.1":"raimo_son1.cesa.lte."}
- 
-    def ip_to_fqdn_mapping(self, l_ip):
-        if l_ip in self.ip_fqdn_map:
-            l_fqdn = self.ip_fqdn_map[l_ip]
-            return l_fqdn
-
-class Configuration:
-    def __init__(self):
-        pass
 
 class FakeInterfaceDefinition(object):
     """ To be replaced by actual Class defining the CES Network Interfaces """
@@ -63,7 +39,7 @@ class FakeInterfaceDefinition(object):
         #r  = pref, order, rloc_type, rloc, iface
         rs = []
 
-        if self.cesid=="cesa.lte.":
+        if self.cesid == "cesa.lte.":
             r1 = 100, 80, "ipv4", "10.0.3.101",         "ISP"
             r2 = 100, 60, "ipv4", "10.1.3.101",         "IXP"
             r3 = 100, 40, "ipv6", "11:22:33:44:55:66:77:01", "ICP"
