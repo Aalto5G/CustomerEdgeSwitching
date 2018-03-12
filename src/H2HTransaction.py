@@ -2,14 +2,12 @@
 
 import asyncio
 import logging
-import signal
-import socket
 import sys
 import random
 import time
 import traceback
 import json
-import ssl
+
 import cetpManager
 import CETPH2H
 import CETPC2C
@@ -18,6 +16,9 @@ import CETP
 import copy
 import ConnectionTable
 import CETPSecurity
+import dns
+import customdns
+from customdns import dnsutils
 
 LOGLEVEL_H2HTransaction         = logging.INFO
 LOGLEVEL_H2HTransactionOutbound = logging.INFO
@@ -369,7 +370,7 @@ class H2HTransactionOutbound(H2HTransaction):
         self.terminate()
         if not self.is_negotiated():
             #self.cetp_h2h.update_H2H_transaction_count(initiated=False)
-            self._execute_dns_callback(resolution=False)
+            self._execute_dns_callback()
     
     def is_negotiated(self):
         return self.h2h_negotiation_status
@@ -645,12 +646,18 @@ class H2HTransactionOutbound(H2HTransaction):
             self._logger.error("Exception in connection creation: '{}'".format(ex))
             return False
     
-    def _execute_dns_callback(self, r_addr="", resolution=True):
+    
+    def _execute_dns_callback(self, r_addr=None):
         """ Executes DNS callback towards host """
         try:
-            (cb_func, cb_args) = self.cb
+            (cb_f, cb_args) = self.cb
             dns_q, addr = cb_args
-            cb_func(dns_q, addr, r_addr=r_addr, success=resolution)
+            
+            if r_addr is None:
+                cb_f(dns_q, addr)
+            else:
+                response = dnsutils.make_response_answer_rr(dns_q, self.dst_id, dns.rdatatype.A, r_addr, rdclass=1, ttl=120, recursion_available=True)
+                cb_f(dns_q, addr, response)
             
         except Exception as ex:
             self._logger.error("Exception in _execute_dns_callback {}".format(ex))
@@ -1037,8 +1044,8 @@ class H2HTransactionLocal(H2HTransaction):
                 self._logger.warning("Communication from sender <{}> to destination <{}> is not allowed.".format(self.src_id, self.dst_id))
                 return False
             
-            self.opolicy = yield from self.load_policies(host_id = self.src_id, direction = "EGRESS")
-            self.ipolicy = yield from self.load_policies(host_id = self.dst_id, direction = "INGRESS")
+            self.opolicy = yield from self.load_policies(host_id = self.src_id, direction = "outbound")
+            self.ipolicy = yield from self.load_policies(host_id = self.dst_id, direction = "inbound")
             
             if self.opolicy is None or (self.ipolicy is None):
                 return False
@@ -1109,13 +1116,13 @@ class H2HTransactionLocal(H2HTransaction):
 
         if error:
             self._logger.warning("Local CETP Policy mismatched! Connection refused {} -> {}".format(self.src_id, self.dst_id))
-            self._execute_dns_callback(resolution=False)
+            self._execute_dns_callback()
             #self.dns_state.delete(stateobj)
             return False
         else:
             #self._logger.info(" Local CETP Policy matched! Allocate proxy address. {} -> {}".format(self.src_id, self.dst_id))
             lpip = self._create_local_connection()
-            self._execute_dns_callback(r_addr=lpip)
+            self._execute_dns_callback(r_addr = lpip)
             return True
         
         
@@ -1132,12 +1139,22 @@ class H2HTransactionLocal(H2HTransaction):
         self.conn_table.add(self.conn)
         return lpip
         
-    def _execute_dns_callback(self, r_addr="", resolution=True):
+    def _execute_dns_callback(self, r_addr=None):
         """ Executes DNS callback towards host """
-        (cb_func, cb_args) = self.cb
-        dns_q, addr = cb_args
-        cb_func(dns_q, addr, r_addr=r_addr, success=resolution)
-    
+        try:
+            (cb_f, cb_args) = self.cb
+            dns_q, addr = cb_args
+            
+            if r_addr is None:
+                cb_f(dns_q, addr)
+            else:
+                response = dnsutils.make_response_answer_rr(dns_q, self.dst_id, dns.rdatatype.A, r_addr, rdclass=1, ttl=120, recursion_available=True)
+                cb_f(dns_q, addr, response)
+            
+        except Exception as ex:
+            self._logger.error("Exception in _execute_dns_callback {}".format(ex))
+
+
     def check_outbound_permission(self, hostid):
         """ Checks in the CETPSecurity module if traffic from the sender is permitted """
         if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlacklistedLHosts, hostid):

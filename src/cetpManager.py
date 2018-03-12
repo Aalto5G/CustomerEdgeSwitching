@@ -35,7 +35,7 @@ class CETPManager:
     It also aggregates different CETPTransport endpoints from a remote CES-ID under one C2C-Layer.
     """
     
-    def __init__(self, cetpPolicyFile, cesid, ces_params, loop=None, name="CETPManager"):
+    def __init__(self, cetpPolicyFile, cesid, ces_params, hosttable, loop=None, name="CETPManager"):
         self._cetp_endpoints        = {}                           # Dictionary of endpoints towards remote CES nodes.
         self._serverEndpoints       = []                           # List of server endpoint offering CETP listening service.
         self.c2c_register           = {}
@@ -47,6 +47,7 @@ class CETPManager:
         self.interfaces             = PolicyManager.FakeInterfaceDefinition(cesid, ces_params = ces_params)
         self.policy_mgr             = PolicyManager.PolicyManager(self.cesid, policy_file = cetpPolicyFile)     # Gets cetp policies from a local configuration file.
         #self.policy_mgr             = PolicyAgent.RESTPolicyClient(loop, tcp_conn_limit=100)                    # Fetches cetp policies from the Policy Management System.
+        self.host_register          = hosttable
         self.host_register          = PolicyManager.HostRegister()
         self._loop                  = loop
         self.name                   = name
@@ -141,6 +142,7 @@ class CETPManager:
         self.local_cetp.resolve_cetp(dst_id, cb)
         
     def has_connection(self, sender_ip, dst_id):
+        return False
         sender_id = self.host_register.ip_to_fqdn_mapping(sender_ip)            # TBR
         if sender_id is None:
             return False
@@ -153,7 +155,10 @@ class CETPManager:
             return False
 
     def get_connection(self, sender_ip, dst_id):
-        sender_id   = self.host_register.ip_to_fqdn_mapping(sender_ip)          # TBR
+        key  = (KEY_HOST_IPV4, sender_ip)
+        host = self.host_register.get(key)
+        sender_id = host.fqdn
+        
         keytype     = ConnectionTable.KEY_MAP_CES_FQDN
         key         = (sender_id, dst_id) 
         conn        = self.conn_table.get(keytype, key)

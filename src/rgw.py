@@ -27,7 +27,7 @@ Run as:
           --ipt-markdnat                                                     \
           --ipt-flush                                                        \
           --network-api-url  http://127.0.0.1:8081/                          \
-          --repository-subscriber-folder ../config.d/gwa.demo.subscriber.d/  \
+          ---subscriber-folder ../config.d/gwa.demo.subscriber.d/  \
           --repository-policy-folder     ../config.d/gwa.demo.policy.d/      \
           --cetp-config config_cesa/config_cesa_ct.yaml                      \
           --repository-api-url  http://127.0.0.1:8082/                       \
@@ -204,10 +204,10 @@ class RealmGateway(object):
         yield from self._init_pbra()
         # Initialize PacketCallbacks
         yield from self._init_packet_callbacks()
-        # Initialize DNS
-        yield from self._init_dns()
         # Initialize CETP
         yield from self._init_cetp()
+        # Initialize DNS
+        yield from self._init_dns()
         # Create task: CircularPool cleanup
         _t = asyncio.ensure_future(self._init_cleanup_cpool(0.1))
         RUNNING_TASKS.append((_t, 'cleanup_cpool'))
@@ -322,12 +322,12 @@ class RealmGateway(object):
         self.ca_certificate  = self.ces_params['ca_certificate']                     # Could be a list of popular/trusted (certificate issuing) CA's certificates
         self._cetp_policies  = self.ces_conf["cetp_policy_file"]
         
-        self.cetp_mgr = cetpManager.CETPManager(self._cetp_policies, self.cesid, self.ces_params, loop=self._loop)
+        self._cetp_mgr = cetpManager.CETPManager(self._cetp_policies, self.cesid, self.ces_params, self._hosttable, loop=self._loop)
         cetp_server_list = self.ces_conf["CETPServers"]["serverNames"]
         for srv in cetp_server_list:
             srv_info = self.ces_conf["CETPServers"][srv]
             srv_addr, srv_port, srv_proto = srv_info["ip"], srv_info["port"], srv_info["transport"]
-            yield from self.cetp_mgr.initiate_cetp_service(srv_addr, srv_port, srv_proto)
+            yield from self._cetp_mgr.initiate_cetp_service(srv_addr, srv_port, srv_proto)
         
 
     @asyncio.coroutine
@@ -339,6 +339,7 @@ class RealmGateway(object):
                                   hosttable       = self._hosttable,
                                   pooltable       = self._pooltable,
                                   connectiontable = self._connectiontable,
+                                  cetp_mgr        = self._cetp_mgr,
                                   pbra            = self._pbra)
 
         # Register defined DNS timeouts
@@ -391,7 +392,8 @@ class RealmGateway(object):
             for ipaddr, port in self._config.dns_server_lan:
                 cb_soa   = lambda x,y,z: asyncio.ensure_future(self.dnscb.dns_process_rgw_lan_soa(x,y,z))
                 cb_nosoa = lambda x,y,z: asyncio.ensure_future(self.dnscb.dns_process_rgw_lan_nosoa(x,y,z))
-                transport, protocol = yield from self._loop.create_datagram_endpoint(functools.partial(DNSProxy, soa_list = soa_list, cb_soa = cb_soa, cb_nosoa = cb_nosoa), local_addr=(ipaddr, port))
+                print("self._cetp_mgr: ", self._cetp_mgr)
+                transport, protocol = yield from self._loop.create_datagram_endpoint(functools.partial(DNSProxy, cetp_mgr = self._cetp_mgr, soa_list = soa_list, cb_soa = cb_soa, cb_nosoa = cb_nosoa), local_addr=(ipaddr, port))
                 self._logger.info('Creating DNS Proxy endpoint @{}:{}'.format(ipaddr, port))
                 self.dnscb.register_object('DNSProxy@{}:{}'.format(ipaddr, port), protocol)
 
@@ -453,9 +455,9 @@ class RealmGateway(object):
         self._datarepository.rest_api_close()
         
         # Close CETP listening service
-        self.cetp_mgr.close_server_endpoints()
+        self._cetp_mgr.close_server_endpoints()
         # Closing the connected CETPEndpoints with remote CES nodes
-        self.cetp_mgr.close_all_cetp_endpoints()
+        self._cetp_mgr.close_all_cetp_endpoints()
         yield from asyncio.sleep(0.2)
 
         for task_obj, task_name in RUNNING_TASKS:
