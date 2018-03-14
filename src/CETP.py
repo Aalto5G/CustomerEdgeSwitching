@@ -63,7 +63,7 @@ class CETPTLV(object):
         self.value = value
         
     def remove_value(self):
-        self.value=None
+        self.value = None
 
 
 LOGLEVELCETPSTATETABLE = logging.INFO

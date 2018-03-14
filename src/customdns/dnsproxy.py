@@ -27,10 +27,12 @@ class DNSProxy(asyncio.DatagramProtocol):
             query.transport = 'udp'
             fqdn = format(query.question[0].name)
             cb_f = self.callback_send
+            
             if self._name_in_soa(fqdn) and self.cb_soa:
                 self.cb_soa(query, addr, cb_f)
             elif self.cb_nosoa:
                 self.cb_nosoa(query, addr, cb_f)
+                
         except Exception as e:
             self._logger.error('Failed to process DNS message: {}\n{}'.format(e, data))
 
@@ -54,7 +56,7 @@ class DNSProxy(asyncio.DatagramProtocol):
         response = dns.message.make_response(query, recursion_available=True)
         response.set_rcode(rcode)
         self._send_msg(response, addr)
-
+        
 
 class DNSTCPProxy(asyncio.Protocol):
     # start -> connection_made() [-> data_received() *] [-> eof_received() ?] -> connection_lost() -> end
@@ -88,6 +90,7 @@ class DNSTCPProxy(asyncio.Protocol):
             query.transport = 'tcp'
             fqdn = format(query.question[0].name)
             cb_f = self.callback_send
+            
             if self._name_in_soa(fqdn) and self.cb_soa:
                 self.cb_soa(query, addr, cb_f)
             elif self.cb_nosoa:

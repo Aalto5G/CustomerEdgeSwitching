@@ -681,7 +681,7 @@ def send_rloc(**kwargs):
     else:
         #Create an offer TLV
         group, code = tlv["group"], tlv["code"]
-        ret_list = interfaces.get_interface_rlocs(rloc_type=code)
+        ret_list = interfaces.get_rlocs(rloc_type=code)
         for p in range(0, len(ret_list)):
             new_tlv = copy.deepcopy(tlv)
             new_tlv["value"] = ret_list[p]      # pref, order, rloc, iface_alias
@@ -713,7 +713,7 @@ def response_rloc(**kwargs):
         new_tlv = copy.deepcopy(tlv)
         ret = policy.get_available_policy(new_tlv)
         ope, cmp, group, code, response_value = ret        
-        ret_list = interfaces.get_interface_rlocs(rloc_type=code)             # Value comes from dataplane-interface definitions
+        ret_list = interfaces.get_rlocs(rloc_type=code)             # Value comes from dataplane-interface definitions
         
         if len(ret_list)==0:
             new_tlv = copy.deepcopy(tlv)

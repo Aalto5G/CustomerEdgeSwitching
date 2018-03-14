@@ -16,51 +16,41 @@ import H2HTransaction
 import CETPH2H
 import CETPC2C
 import copy
+import aiohttp
 
 
 LOGLEVEL_PolicyCETP         = logging.INFO
 LOGLEVEL_PolicyManager      = logging.INFO
 
-class FakeInterfaceDefinition(object):
+class DPConfigurations(object):
     """ To be replaced by actual Class defining the CES Network Interfaces """
     def __init__(self, cesid, ces_params=None, name="Interfaces"):
-        self.cesid = cesid
-        self._interfaces    = []
-        self.payload_pref   = {}                    # Pre-populate with preferences.
-        self.register_interfaces(ces_params)
+        self.cesid            = cesid
+        self._rlocs_config    = []
+        self._payloads_config = {}                    # Pre-populate with preferences.
+        self.register_rlocs(ces_params)
         self.register_payloads(ces_params)
 
     def register_payloads(self, ces_params):
         pref_list = ces_params["payload_preference"]
         for typ in pref_list:
-            self.payload_pref[typ] = pref_list[typ]
+            self._payloads_config[typ] = pref_list[typ]
             
-    def register_interfaces(self, ces_params):
-        #r  = pref, order, rloc_type, rloc, iface
-        rs = []
-
-        if self.cesid == "cesa.lte.":
-            r1 = 100, 80, "ipv4", "10.0.3.101",         "ISP"
-            r2 = 100, 60, "ipv4", "10.1.3.101",         "IXP"
-            r3 = 100, 40, "ipv6", "11:22:33:44:55:66:77:01", "ICP"
-            rs = [r1, r2, r3]
-        else:
-            r1 = 100, 80, "ipv4", "10.0.3.103",         "ISP"
-            r2 = 100, 60, "ipv4", "10.1.3.103",         "IXP"
-            r3 = 100, 40, "ipv6", "11:22:33:44:55:66:77:03", "ICP"
-            rs = [r1, r2, r3]
-            
-        for r in rs:
-            self._interfaces.append(r)
-
-                        
-    def get_interfaces(self):
-        self._interfaces
+    def get_payload_preference(self, type):
+        if type in self._payloads_config:
+            return self._payloads_config[type]
         
-    def get_interface_rlocs(self, rloc_type=None, iface=None):
+    def register_rlocs(self, ces_params):
+        rlocs_list = ces_params["rloc_preference"]
+
+        for r in rlocs_list:
+            (pref, ord, typ, val, interface) = r.split(",")                             # preference, order, rloc_type, address_value, interface_alias
+            self._rlocs_config.append( (int(pref), int(ord), typ, val, interface) )
+    
+    def get_rlocs(self, rloc_type=None, iface=None):
         """ Returns the list of interfaces defined for an RLOC type """
         ret_list = []
-        for ifaces in self._interfaces:
+        for ifaces in self._rlocs_config:
             pref, order, r_type, rloc, iface = ifaces
             if r_type == rloc_type:
                 iface_info = (pref, order, rloc, iface)
@@ -68,11 +58,13 @@ class FakeInterfaceDefinition(object):
         
         return ret_list
 
-    def get_payload_preference(self, type):
-        if type in self.payload_pref:
-            return self.payload_pref[type]
-    
-    
+    def get_registered_rlocs(self):
+        self._rlocs_config
+
+    def get_registered_payloads(self):
+        self._payloads_config
+        
+
 
 class PolicyManager(object):
     # Loads policies, and keeps policy elements as CETPTLV objects
@@ -352,4 +344,110 @@ class PolicyCETP(object):
     def __repr__(self):
         return self.show_policy()
     
+
+
+
+
+
+
+LOGLEVEL_RESTPolicyClient = logging.INFO
+
+# Aiohttp-based PolicyAgent in CES to retrieve CETP policies from Policy Management System
+# Leveraging https://stackoverflow.com/questions/37465816/async-with-in-python-3-4
+
+
+class RESTPolicyClient(object):
+    def __init__(self, loop, tcp_conn_limit, verify_ssl=False, name="RESTPolicyClient"):
+        self._loop              = loop
+        self.tcp_conn_limit     = tcp_conn_limit
+        self.verify_ssl         = verify_ssl
+        self.policy_cache       = {}
+        self._timeout           = 2.0
+        self._logger            = logging.getLogger(name)
+        self._logger.setLevel(LOGLEVEL_RESTPolicyClient)
+        self._logger.info("Initiating RESTPolicyClient towards Policy Management System ")
+        self._connect()
+        
+    def _connect(self):
+        try:
+            tcp_conn            = aiohttp.TCPConnector(limit=self.tcp_conn_limit, loop=self._loop, verify_ssl=self.verify_ssl)
+            self.client_session = aiohttp.ClientSession(connector=tcp_conn)
+        except Exception as ex:
+            self._logger.error("Failure initiating the rest policy client")
+            self._logger.error(ex)
+
+    def close(self):
+        self.client_session.close()
+
+    def cache_policy(self, key, policy):
+        self.policy_cache[key] = policy
+
+    @asyncio.coroutine
+    def get(self, url, params=None, timeout=None):
+        if timeout is None:
+            timeout = self._timeout
+        
+        with aiohttp.Timeout(timeout):
+            resp = None                                     # To handles issues related to connectivity with url
+            try:
+                resp = yield from self.client_session.get(url, params=params) 
+                if resp.status == 200:
+                    policy_response = yield from resp.text()
+                    #print(policy_response)
+                    return policy_response
+                else:
+                    return None
+            
+            except Exception as ex:
+                # .close() on exception.
+                if resp!=None:
+                    resp.close()
+                self._logger.error("Exception {} in getting REST response: ".format(ex))
+            finally:
+                if resp!=None:
+                    yield from resp.release()               # .release() - returns connection into free connection pool.
+
+
+    @asyncio.coroutine
+    def delete(self, url, timeout=None):
+        if timeout is None:
+            timeout = self._timeout
+            
+        with aiohttp.Timeout(timeout):
+            resp = yield from self.client_session.delete(url)
+            try:
+                return (yield from resp.text())
+            except Exception as ex:
+                resp.close()
+                raise ex
+            finally:
+                yield from resp.release()
+
+
+def main(policy_client):
+    for i in range(0,1):
+        #asyncio.ensure_future(policy_client.get('http://www.sarolahti.fi'))
+        url = 'http://100.64.254.24/API/host_cetp_user?'
+        params = {'lfqdn':"hosta1.cesa.lte.", 'direction': 'EGRESS'}
+        asyncio.ensure_future(policy_client.get(url, params=params, timeout=2))
+        #asyncio.ensure_future(policy_client.get('http://www.thomas-bayer.com/sqlrest/'))
+        #yield from asyncio.sleep(1)
+
+
+if __name__ == '__main__':
+    loop = asyncio.get_event_loop()
+    tcp_conn_limit = 5
+    verify_ssl=False
+    policy_client = RESTPolicyClient(loop, tcp_conn_limit, verify_ssl=verify_ssl)
+    
+    try:
+        main(policy_client)
+        loop.run_forever()
+    except KeyboardInterrupt:
+        print('Keyboard Interrupt\n')
+    finally:
+        # Aiohttp resource cleanup
+        loop.stop()
+        policy_client.close()
+        loop.close()
 

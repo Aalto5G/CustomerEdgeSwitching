@@ -45,23 +45,23 @@ class CETPManager:
         self.c2c_register           = {}
         self.cesid                  = cesid                        # Local ces-id
         self.ces_params             = ces_params
-        self.cetpstate_mgr          = CETP.CETPStateTable()                                        # Records the established CETP transactions (both H2H & C2C). Required for preventing the re-allocation already in-use SST & DST (in CETP transaction).
-        self.conn_table             = conn_table
-        self.cetp_security          = CETPSecurity.CETPSecurity(loop, self.conn_table, ces_params)
-        self.interfaces             = PolicyManager.FakeInterfaceDefinition(cesid, ces_params = ces_params)
-        self.policy_mgr             = PolicyManager.PolicyManager(self.cesid, policy_file = cetpPolicyFile)     # Gets cetp policies from a local configuration file.
-        #self.policy_mgr             = PolicyAgent.RESTPolicyClient(loop, tcp_conn_limit=100)                    # Fetches cetp policies from the Policy Management System.
         self.host_table             = hosttable
+        self.conn_table             = conn_table
+        self.cetpstate_mgr          = CETP.CETPStateTable()                                        # Records the established CETP transactions (both H2H & C2C). Required for preventing the re-allocation already in-use SST & DST (in CETP transaction).
+        self.cetp_security          = CETPSecurity.CETPSecurity(loop, self.conn_table, ces_params)
+        self.interfaces             = PolicyManager.DPConfigurations(cesid, ces_params = ces_params)
+        self.policy_mgr             = PolicyManager.PolicyManager(self.cesid, policy_file = cetpPolicyFile)     # Gets cetp policies from a local configuration file.
+        #self.policy_mgr             = PolicyManager.RESTPolicyClient(loop, tcp_conn_limit=100)                    # Fetches cetp policies from the Policy Management System.
         self._loop                  = loop
         self.name                   = name
         self._inbound_transports    = {}                        # {'cesid': [transports]} - Temporary record of list of transports connected against a cesid
+        self._load_cetp_params()
         self._logger                = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPManager)
-        self.read_cetp_params()
         self.local_cetp             = CETPH2H.CETPH2HLocal(l_cesid=self.cesid, cetpstate_mgr=self.cetpstate_mgr, policy_mgr=self.policy_mgr, cetp_mgr=self, \
                                                            cetp_security=self.cetp_security, host_table=self.host_table, conn_table=self.conn_table)
 
-    def read_cetp_params(self):
+    def _load_cetp_params(self):
         try:
             self.ces_certificate_path   = self.ces_params['certificate']
             self.ces_privatekey_path    = self.ces_params['private_key']
