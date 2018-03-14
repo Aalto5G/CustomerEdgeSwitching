@@ -14,10 +14,10 @@ import CETPC2C
 import cetpOperations
 import CETP
 import copy
-import ConnectionTable
 import CETPSecurity
 import host
 import dns
+import connection
 import customdns
 from customdns import dnsutils
 
@@ -436,7 +436,7 @@ class H2HTransactionOutbound(H2HTransaction):
             self._unregister_h2h()
         
             if self.is_negotiated():
-                self.conn_table.delete(self.conn)
+                self.conn_table.remove(self.conn)
             
             if hasattr(self, 'unregister_handler'):
                 self.unregister_handler.cancel()
@@ -638,7 +638,7 @@ class H2HTransactionOutbound(H2HTransaction):
             
             negotiated_params = [self.lfqdn, self.rfqdn, self.lid, self.rid, self.lip, self.lpip]
             #self._logger.info("Negotiated params: {}".format(negotiated_params))
-            self.conn = ConnectionTable.H2HConnection(self.cetpstate_mgr, 120.0, self.lid, self.lip, self.lpip, self.rid, self.lfqdn, self.rfqdn, \
+            self.conn = connection.H2HConnection(self.cetpstate_mgr, 120.0, self.lid, self.lip, self.lpip, self.rid, self.lfqdn, self.rfqdn, \
                                                       self.sstag, self.dstag, self.r_cesid, self.conn_table)
             
             if self.lpip != None:
@@ -726,12 +726,11 @@ class H2HTransactionOutbound(H2HTransaction):
                 if self._check_tlv(received_tlv, group="control") and self._check_tlv(received_tlv, code="terminate"):
                     self._logger.warning(" Terminate received for an established H2H Session ({}->{}).".format(self.sstag, self.dstag))
                     self.terminate()
-                    keytype = ConnectionTable.KEY_MAP_CES_TO_CES
-                    key = (self.sstag, self.dstag)
+                    keytype = (connection.KEY_MAP_CES_TO_CES, self.sstag, self.dstag)
                     
-                    if self.conn_table.has(keytype, key):
-                        conn = self.conn_table.get(keytype, key)
-                        self.conn_table.delete(conn)
+                    if self.conn_table.has(key):
+                        conn = self.conn_table.get(key)
+                        self.conn_table.remove(conn)
                     else:
                         self._logger.error("No H2H connection object is found for ({}->{})".format(self.sstag, self.dstag))
                         #print("After terminate", self.conn_table.connection_dict)
@@ -923,7 +922,7 @@ class H2HTransactionInbound(H2HTransaction):
             if self._is_ready():
                 # Create H2H connection, if all the  requirements of remote-host are met
                 if self._create_connection():
-                    #self._logger.info("{} H2H-policy negotiation succeeded -> Create transaction (SST={}, DST={})".format(42*'#', self.sstag, self.dstag))
+                    self._logger.info("{} H2H-policy negotiation succeeded -> Create transaction (SST={}, DST={})".format(42*'#', self.sstag, self.dstag))
                     negotiation_status = True
                     stateful_transansaction     = self._export_to_stateful()            # Create stateful version
                 else:
@@ -968,7 +967,7 @@ class H2HTransactionInbound(H2HTransaction):
             negotiated_params = [self.lfqdn, self.rfqdn, self.lid, self.rid, self.lip, self.lpip]
             #self._logger.info("Negotiated params: {}".format(negotiated_params))
     
-            self.conn = ConnectionTable.H2HConnection(self.cetpstate_mgr, 120.0, self.lid, self.lip, self.lpip, self.rid, self.lfqdn, self.rfqdn, \
+            self.conn = connection.H2HConnection(self.cetpstate_mgr, 120.0, self.lid, self.lip, self.lpip, self.rid, self.lfqdn, self.rfqdn, \
                                                  self.sstag, self.dstag, self.r_cesid, self.conn_table)
             self.conn_table.add(self.conn)
             return True
@@ -1138,7 +1137,8 @@ class H2HTransactionLocal(H2HTransaction):
         rpip            = self._allocate_proxy_address(rip)
         #self._logger.info("Creating Local connection between '{}' and '{}'.format(lfqdn, rfqdn))
         
-        self.conn = ConnectionTable.LocalConnection(120.0, lip=lip, lpip=lpip, rip=rip, rpip=rpip, lfqdn=lfqdn, rfqdn=rfqdn)
+        self._logger.info(" Initiating dataplane H2HLocal connection")
+        self.conn = connection.LocalConnection(120.0, lip=lip, lpip=lpip, rip=rip, rpip=rpip, lfqdn=lfqdn, rfqdn=rfqdn)
         self.conn_table.add(self.conn)
         return lpip
         

@@ -20,7 +20,7 @@ import C2CTransaction
 import H2HTransaction
 import CETPH2H
 import CETPC2C
-import ConnectionTable
+import connection
 
 LOGLEVEL_CETPSecurity       = logging.INFO
 
@@ -209,13 +209,12 @@ class CETPSecurity:
             outcome = self.check_format_compliance(evidence)
             if outcome == False:    return None
             session_tags, misbehavior = outcome
-            keytype = ConnectionTable.KEY_MAP_CES_TO_CES
             inbound_sstag, inbound_dstag = session_tags[0], session_tags[1]
             sstag, dstag = inbound_dstag, inbound_sstag
-            key     = (sstag, dstag)
+            key     = (connection.KEY_MAP_CES_TO_CES, sstag, dstag)
             
-            if self.conn_table.has(keytype, key):
-                conn     = self.conn_table.get(keytype, key)                
+            if self.conn_table.has(key):
+                conn     = self.conn_table.get(key)                
                 l_hostid = conn.remoteFQDN                                      # For inbound evidence, the destination-domain is the local host
                 self.add_evidence_against_local_hosts(l_hostid, misbehavior)
                 self.record_reporting_ces_node(r_cesid, misbehavior)

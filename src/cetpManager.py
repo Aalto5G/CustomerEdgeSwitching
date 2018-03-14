@@ -23,7 +23,7 @@ import CETPC2C
 import CETPTransports
 import PolicyManager
 import CETPSecurity
-import ConnectionTable
+import connection
 import host
 import customdns
 from customdns import dnsutils 
@@ -39,14 +39,14 @@ class CETPManager:
     It also aggregates different CETPTransport endpoints from a remote CES-ID under one C2C-Layer.
     """
     
-    def __init__(self, cetpPolicyFile, cesid, ces_params, hosttable, loop=None, name="CETPManager"):
+    def __init__(self, cetpPolicyFile, cesid, ces_params, hosttable, conn_table, loop=None, name="CETPManager"):
         self._cetp_endpoints        = {}                           # Dictionary of endpoints towards remote CES nodes.
         self._serverEndpoints       = []                           # List of server endpoint offering CETP listening service.
         self.c2c_register           = {}
         self.cesid                  = cesid                        # Local ces-id
         self.ces_params             = ces_params
         self.cetpstate_mgr          = CETP.CETPStateTable()                                        # Records the established CETP transactions (both H2H & C2C). Required for preventing the re-allocation already in-use SST & DST (in CETP transaction).
-        self.conn_table             = ConnectionTable.ConnectionTable()
+        self.conn_table             = conn_table
         self.cetp_security          = CETPSecurity.CETPSecurity(loop, self.conn_table, ces_params)
         self.interfaces             = PolicyManager.FakeInterfaceDefinition(cesid, ces_params = ces_params)
         self.policy_mgr             = PolicyManager.PolicyManager(self.cesid, policy_file = cetpPolicyFile)     # Gets cetp policies from a local configuration file.
@@ -54,7 +54,7 @@ class CETPManager:
         self.host_table             = hosttable
         self._loop                  = loop
         self.name                   = name
-        self.record_inbound_transports = {}                        # {'cesid': [transports]} - Temporary record of list of transports connected against a cesid
+        self._inbound_transports    = {}                        # {'cesid': [transports]} - Temporary record of list of transports connected against a cesid
         self._logger                = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPManager)
         self.read_cetp_params()
@@ -133,6 +133,7 @@ class CETPManager:
 
     def process_dns_message(self, dns_cb, cb_args, dst_id, r_cesid="", naptr_list=[]):
         """ Enforce rate limit on DNS NAPTRs served by CETP Engine """
+        print("CETP Query")
         if not self.dns_threshold_exceeded():
             #print("Threshold not exceeded")
             if len(naptr_list)!=0:
@@ -146,20 +147,19 @@ class CETPManager:
         
     def has_connection(self, src_id, dst_id):
         #return False
+        key = (connection.KEY_MAP_CES_FQDN, src_id, dst_id) 
+        
         if src_id is None:
             return False
         
-        keytype = ConnectionTable.KEY_MAP_CES_FQDN
-        key     = (src_id, dst_id) 
-        if self.conn_table.has(keytype, key):
+        if self.conn_table.has(key):
             return True
         else:
             return False
 
     def get_connection(self, src_id, dst_id):
-        keytype     = ConnectionTable.KEY_MAP_CES_FQDN
-        key         = (src_id, dst_id) 
-        conn        = self.conn_table.get(keytype, key)
+        key     = (connection.KEY_MAP_CES_FQDN, src_id, dst_id) 
+        conn    = self.conn_table.get(key)
         return conn
 
     def process_outbound_cetp(self, dns_cb, cb_args, dst_id, r_cesid, naptr_list):
@@ -168,7 +168,6 @@ class CETPManager:
             dns_q, addr      = cb_args
             src_ip, src_port = addr
             key              = (host.KEY_HOST_IPV4, src_ip)
-            print("here")
 
             if not self.host_table.has(key):
                 self._logger.info("Sender IP '{}' is not a registered host".format(src_ip))
@@ -385,13 +384,13 @@ class CETPManager:
         c2c_layer.register_c2c(cetp_transaction)
         c2c_layer.set_c2c_negotiation()
         c2c_layer.set_connectivity()
-        connected_transports = self.record_inbound_transports[r_cesid]
+        connected_transports = self._inbound_transports[r_cesid]
         
         for t in connected_transports:
             t.set_c2c_details(r_cesid, c2c_layer)
             c2c_layer.register_connected_transport(t)
         
-        del self.record_inbound_transports[r_cesid]
+        del self._inbound_transports[r_cesid]
 
 
     def register_unverifiable_cetp_sender(self, ip_addr):
@@ -401,10 +400,10 @@ class CETPManager:
         """ """
         if not self.has_c2c_layer(r_cesid): 
             self._logger.info(" No CETP-C2C layer exists for sender '{}'".format(r_cesid))
-            if r_cesid not in self.record_inbound_transports:
-                self.record_inbound_transports[r_cesid] = [transport]
+            if r_cesid not in self._inbound_transports:
+                self._inbound_transports[r_cesid] = [transport]
             else:
-                connected_transports = self.record_inbound_transports[r_cesid]
+                connected_transports = self._inbound_transports[r_cesid]
                 connected_transports.append(transport)
         else:
             c2c_layer = self.get_c2c_layer(r_cesid)                 # Gets c2c-layer for remote cesid
@@ -634,7 +633,7 @@ class CETPManager:
         for num in range(0, len(conn_list)):
             conn = conn_list[0]
             conn_list.remove(conn)
-            self.conn_table.delete(conn)
+            self.conn_table.remove(conn)
 
     
     def report_misbehavior_evidence(self, sstag=0, dstag=0, lip="", lpip="", evidence=""):
@@ -650,15 +649,13 @@ class CETPManager:
                 return
 
             if (sstag > 0) and (dstag > 0):
-                keytype = ConnectionTable.KEY_MAP_CES_TO_CES
-                key     = (sstag, dstag)
+                key = (connection.KEY_MAP_CES_TO_CES, sstag, dstag)
             
             elif (len(lip) > 0) and (len(lpip) > 0):
-                keytype = ConnectionTable.KEY_MAP_CETP_PRIVATE_NW
-                key = (lip, lpip)
+                key = (connection.KEY_MAP_CETP_PRIVATE_NW, lip, lpip)
             
-            if self.conn_table.has(keytype, key):
-                conn = self.conn_table.get(keytype, key)
+            if self.conn_table.has(key):
+                conn = self.conn_table.get(key)
                 r_cesid, r_hostid, sstag, dstag = conn.r_cesid, conn.remoteFQDN, conn.sstag, conn.dstag
                 self.cetp_security.record_misbehavior_evidence(r_cesid, r_hostid, evidence)
             
@@ -672,13 +669,13 @@ class CETPManager:
 
     def terminate_host_session_by_fqdns(self, l_hostid="", r_hostid=""):
         """ Terminates CETP session (and connection) between two hosts specified by their FQDNs """
-        keytype = ConnectionTable.KEY_MAP_CES_FQDN
+        keytype = connection.KEY_MAP_CES_FQDN
         key     = (l_hostid, r_hostid)
         self._terminate_host_connections(keytype, key)
         
     def terminate_remote_host_sessions(self, r_hostid=""):
         """ Terminates all CETP session with remote host """
-        keytype = ConnectionTable.KEY_MAP_REMOTE_FQDN
+        keytype = connection.KEY_MAP_REMOTE_FQDN
         key     = r_hostid
         self._terminate_host_connections(keytype, key)
         
@@ -686,21 +683,19 @@ class CETPManager:
         """ Terminates all CETP sessions to/from a local FQDN """
         if len(l_hostid) != 0:
             self._logger.warning("Terminating sessions of local-hostID '{}'".format(l_hostid))
-            keytype = ConnectionTable.KEY_MAP_LOCAL_FQDN
-            key     = l_hostid
-            self._terminate_host_connections(keytype, key)
+            key = (connection.KEY_MAP_LOCAL_FQDN, l_hostid)
+            self._terminate_host_connections(key)
             
         elif len(lip) != 0:
             self._logger.warning("Terminating sessions of local-hostIP '{}'".format(lip))
-            keytype = ConnectionTable.KEY_MAP_LOCAL_HOST
-            key     = lip
-            self._terminate_host_connections(keytype, key)
+            key = (connection.KEY_MAP_LOCAL_HOST, lip)
+            self._terminate_host_connections(key)
         
 
-    def _terminate_host_connections(self, keytype, key):
+    def _terminate_host_connections(self, key):
         """ Deletes a connection object and corresponding CETP State """
-        if self.conn_table.has(keytype, key):
-            conns = self.conn_table.get(keytype, key)
+        if self.conn_table.has(key):
+            conns = self.conn_table.get(key)
             
             if type(conns) == type(list()):
                 for num in range(0, len(conns)):
@@ -720,10 +715,10 @@ class CETPManager:
             if self.cetpstate_mgr.has(keytype, key):
                 h2h_transaction = self.cetpstate_mgr.get(keytype, key)
                 h2h_transaction.terminate_session()
-                self.conn_table.delete(conn)
+                self.conn_table.remove(conn)
 
         if conn.connectiontype=="CONNECTION_LOCAL":
-            self.conn_table.delete(conns)
+            self.conn_table.remove(conns)
 
 
 """ Test functions """

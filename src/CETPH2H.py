@@ -125,6 +125,7 @@ class CETPH2H:
         key      = (host.KEY_HOST_IPV4, ip_addr)
         host_obj = self.host_table.get(key)
         src_id   = host_obj.fqdn
+        self._logger.info("Initiating H2H policy negotiation between {}->{}".format(src_id, dst_id))
 
         h2h = H2HTransaction.H2HTransactionOutbound(loop=self._loop, cb=cb, host_ip=ip_addr, src_id=src_id, dst_id=dst_id, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetp_h2h=self, \
                                                     ces_params=self.ces_params, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, host_table=self.host_table, \

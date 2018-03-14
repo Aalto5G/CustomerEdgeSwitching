@@ -322,7 +322,7 @@ class RealmGateway(object):
         self.ca_certificate  = self.ces_params['ca_certificate']                     # Could be a list of popular/trusted (certificate issuing) CA's certificates
         self._cetp_policies  = self.ces_conf["cetp_policy_file"]
         
-        self._cetp_mgr = cetpManager.CETPManager(self._cetp_policies, self.cesid, self.ces_params, self._hosttable, loop=self._loop)
+        self._cetp_mgr = cetpManager.CETPManager(self._cetp_policies, self.cesid, self.ces_params, self._hosttable, self._connectiontable, loop=self._loop)
         cetp_server_list = self.ces_conf["CETPServers"]["serverNames"]
         for srv in cetp_server_list:
             srv_info = self.ces_conf["CETPServers"][srv]

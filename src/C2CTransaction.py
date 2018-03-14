@@ -16,7 +16,7 @@ import CETPC2C
 import cetpOperations
 import CETP
 import copy
-import ConnectionTable
+import connection
 import CETPSecurity
 import H2HTransaction
 from H2HTransaction import CETPTransaction
@@ -453,7 +453,7 @@ class oC2CTransaction(C2CTransaction):
             self.terminated = terminated
             
             if self.is_negotiated():
-                self.conn_table.delete(self.conn)
+                self.conn_table.remove(self.conn)
             
             if hasattr(self, 'unregister_handler'):
                 self.unregister_handler.cancel()
@@ -664,10 +664,9 @@ class oC2CTransaction(C2CTransaction):
                 self._logger.error("C2C negotiation with CES '{}' didn't provide Payload information.".format(self.r_cesid))
                 return False
             
-            keytype = ConnectionTable.KEY_MAP_RCESID_C2C
-            key = self.r_cesid
-            if not self.conn_table.has(keytype, key):
-                self.conn = ConnectionTable.C2CConnectionTemplate(self.l_cesid, self.r_cesid, self.lrloc, self.rrloc, self.lpayload, self.rpayload)
+            key = (connection.KEY_MAP_RCESID_C2C, self.r_cesid)
+            if not self.conn_table.has(key):
+                self.conn = connection.C2CConnectionTemplate(self.l_cesid, self.r_cesid, self.lrloc, self.rrloc, self.lpayload, self.rpayload)
                 self.conn_table.add(self.conn)                
             
             return True
@@ -1207,10 +1206,9 @@ class iC2CTransaction(C2CTransaction):
                 self._logger.error(" Remote CES '{}' didn't negotiate  Payload information in C2C negotiation.".format(self.r_cesid))
                 return False
             
-            keytype = ConnectionTable.KEY_MAP_RCESID_C2C
-            key = self.r_cesid
-            if not self.conn_table.has(keytype, key):
-                self.conn = ConnectionTable.C2CConnectionTemplate(self.l_cesid, self.r_cesid, self.lrloc, self.rrloc, self.lpayload, self.rpayload)
+            key = (connection.KEY_MAP_RCESID_C2C, self.r_cesid)
+            if not self.conn_table.has(key):
+                self.conn = connection.C2CConnectionTemplate(self.l_cesid, self.r_cesid, self.lrloc, self.rrloc, self.lpayload, self.rpayload)
                 self.conn_table.add(self.conn)
                 
             return True

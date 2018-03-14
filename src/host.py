@@ -92,11 +92,9 @@ class HostEntry(container3.ContainerNode):
         keys.append(((KEY_HOST_IPV4, self.ipv4), True))
         # Add SFQDN key(s)
         for data in self.services[KEY_SERVICE_SFQDN]:
-            print("data['fqdn']: ", data['fqdn'])
             keys.append(((KEY_HOST_SERVICE, data['fqdn']), True))
         # Add Reverse IPv4 key entry as KEY_HOST_SERVICE
         
-        print("ptr_from_address(self.ipv4): ", ptr_from_address(self.ipv4))
         keys.append(((KEY_HOST_SERVICE, ptr_from_address(self.ipv4)), True))
         return keys
 
