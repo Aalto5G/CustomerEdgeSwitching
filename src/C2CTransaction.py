@@ -457,7 +457,10 @@ class oC2CTransaction(C2CTransaction):
             
             if hasattr(self, 'unregister_handler'):
                 self.unregister_handler.cancel()
-        
+    
+    def delete(self):
+        pass
+
     def get_remote_cesid(self):
         return self.r_cesid
     
@@ -676,9 +679,9 @@ class oC2CTransaction(C2CTransaction):
         
     def lookupkeys(self):
         if self.is_negotiated():
-            keys = [(KEY_ESTABLISHED_TAGS, (self.sstag, self.dstag), False), (KEY_CES_IDS, (self.l_cesid, self.r_cesid), False), (KEY_RCESID, self.r_cesid, True)]
+            keys = [((KEY_ESTABLISHED_TAGS, self.sstag, self.dstag), True), ((KEY_CES_IDS, self.l_cesid, self.r_cesid), True), ((KEY_RCESID, self.r_cesid), False)]
         else:
-            keys = [(KEY_INITIATED_TAGS, (self.sstag, 0), False), (KEY_CES_IDS, (self.l_cesid, self.r_cesid), False), (KEY_RCESID, self.r_cesid, True)]
+            keys = [((KEY_INITIATED_TAGS, self.sstag, 0), True), ((KEY_CES_IDS, self.l_cesid, self.r_cesid), True), ((KEY_RCESID, self.r_cesid), False)]
 
         return keys
     

@@ -141,16 +141,16 @@ class CETPH2H:
         inbound_sstag, inbound_dstag = cetp_msg['SST'], cetp_msg['DST']
         sstag, dstag    = inbound_dstag, inbound_sstag
         
-        if self.cetpstate_mgr.has(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag, dstag) ):
+        if self.cetpstate_mgr.has( (H2HTransaction.KEY_ESTABLISHED_TAGS, sstag, dstag) ):
             self._logger.info(" CETP message for a negotiated transaction (SST={} -> DST={})".format(sstag, dstag))
-            o_h2h = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag, dstag) )
+            o_h2h = self.cetpstate_mgr.get( (H2HTransaction.KEY_ESTABLISHED_TAGS, sstag, dstag) )
             
             if o_h2h.get_remote_cesid() == self.r_cesid:
                 o_h2h.post_h2h_negotiation(cetp_msg)
 
-        elif self.cetpstate_mgr.has(H2HTransaction.KEY_INITIATED_TAGS, (sstag, 0) ):
+        elif self.cetpstate_mgr.has( (H2HTransaction.KEY_INITIATED_TAGS, sstag, 0) ):
             self._logger.debug(" Continue resolving H2H-transaction (SST={} -> DST={})".format(sstag, 0))
-            o_h2h = self.cetpstate_mgr.get(H2HTransaction.KEY_INITIATED_TAGS, (sstag, 0) )
+            o_h2h = self.cetpstate_mgr.get( (H2HTransaction.KEY_INITIATED_TAGS, sstag, 0) )
             
             if o_h2h.get_remote_cesid() == self.r_cesid:
                 cetp_resp = o_h2h.continue_cetp_processing(cetp_msg)

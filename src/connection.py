@@ -267,7 +267,7 @@ class LocalConnection(container3.ContainerNode):
         """
 
 
-class C2CConnectionTemplate:
+class C2CConnectionTemplate(container3.ContainerNode):
     def __init__(self, l_cesid, r_cesid, lrlocs, rrlocs, lpayloads, rpayloads, name="C2CConnectionTemplate"):
         """
         Initialize a C2CConnectionTemplate object.
@@ -279,6 +279,7 @@ class C2CConnectionTemplate:
         @param lpayloads:   List of negotiated dataplane payloads of local CES -- Each payload represented as [(str:type, int:preference, int:tunnel_id_out)]
         @param rpayloads:   List of negotiated dataplane payloads of remote CES-- Each payload represented as [(str:type, int:preference, int:tunnel_id_in)]
         """
+        super().__init__(name)
         self.l_cesid, self.r_cesid      = l_cesid, r_cesid
         self.lrlocs, self.rrlocs        = lrlocs, rrlocs
         self.lpayloads, self.rpayloads  = lpayloads, rpayloads
@@ -330,7 +331,7 @@ class C2CConnectionTemplate:
 
 
 
-class H2HConnection:
+class H2HConnection(container3.ContainerNode):
     def __init__(self, cetpstate_mgr, timeout, lid, lip, lpip, rid, lfqdn, rfqdn, sstag, dstag, r_cesid, conn_table, name="H2HConnection"):
         """
         Initialize a H2HConnection object.
@@ -344,6 +345,7 @@ class H2HConnection:
         @param lrloc: The local RLOC of the connection -> [(int:order, int:preference, int:addrtype, str:addrvalue)]
         @param rrloc: The remote RLOC of the connection -> [(int:order, int:preference, int:addrtype, str:addrvalue)]
         """
+        super().__init__(name)
         self.localFQDN           = lfqdn
         self.remoteFQDN          = rfqdn
         self.lid, self.rid       = lid, rid
@@ -392,11 +394,10 @@ class H2HConnection:
 
         #delete_tunnel_connection(self.lip, self.lpip, self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type)
 
-        keytype = H2HTransaction.KEY_ESTABLISHED_TAGS
-        key     = (self.sstag, self.dstag)
+        key = (H2HTransaction.KEY_ESTABLISHED_TAGS, self.sstag, self.dstag)
         
-        if self.cetpstate_mgr.has(keytype, key):
-            cetp_transaction = self.cetpstate_mgr.get(keytype, key)
+        if self.cetpstate_mgr.has(key):
+            cetp_transaction = self.cetpstate_mgr.get(key)
             cetp_transaction.terminate()
 
 

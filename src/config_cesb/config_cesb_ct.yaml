@@ -26,34 +26,16 @@ CESParameters:
     max_dp_ttl: 7200
     max_host_ratelimit: 10
     min_keepalive_timeout: 10
+    rloc_preference:
+        - 100,80,ipv4,10.0.3.103,ISP
+        - 100,60,ipv4,10.1.3.103,IXP
+        - 100,40,ipv6,11:22:33:44:55:66:77:03,ICP
     payload_preference:
         ipsec:  100
         geneve: 80
         gre:    60
         vxlan:  40
 
-DNS:
-    soa: cesb.lte.
-    zonefile: db.cesb.lte.
-    server:
-        loopback:
-            ip: 10.0.3.103
-            port: 53
-    timeouts:
-        naptr:
-            - 0.010
-            - 0.100
-            - 0.200
-        a:
-            - 0.010
-            - 0.100
-            - 0.200
-        aaaa:
-            - 0.010
-            - 0.100
-            - 0.200
-        any:
-            - 0
             
 CETPServers:
     serverNames:

@@ -136,18 +136,18 @@ class CETPTransaction(object):
             sstag = random.randint(1, 2**32)
             if dstag == 0:
                 # For oCES, it checks the connecting transactions
-                if not self.cetpstate_mgr.has(KEY_INITIATED_TAGS, (sstag, 0)):
+                if not self.cetpstate_mgr.has( (KEY_INITIATED_TAGS, sstag, 0)):
                     return sstag
             
             elif dstag:
                 #self._logger.debug("iCES is requesting source session tag")
                 """ iCES checks if upon assigning 'sstag' the resulting (SST, DST) pair will lead to a unique transaction. """
-                if not self.cetpstate_mgr.has(KEY_ESTABLISHED_TAGS, (sstag, dstag)):                   # Checks connected transactions
+                if not self.cetpstate_mgr.has( (KEY_ESTABLISHED_TAGS, sstag, dstag)):                   # Checks connected transactions
                     return sstag
 
     def _check_sessionTags_uniqueness(self, sstag=0, dstag=0):
         """ Checks whether (SST, DST) pair will be locally unique, if the H2H negotiation succeeds    - Since DST is assigned by remote CES. """
-        if dstg !=0 and self.cetpstate_mgr.has(KEY_ESTABLISHED_TAGS, (sstag, dstag)):
+        if dstg !=0 and self.cetpstate_mgr.has((KEY_ESTABLISHED_TAGS, sstag, dstag)):
             self._logger.error(" Failure: Resulting ({},{}) pair will not be locally unique in CES".format(sstag, dstag))
             return False
         return True
@@ -445,6 +445,9 @@ class H2HTransactionOutbound(H2HTransaction):
         """ Execute to unregister H2HTransaction """
         self.terminated = True
         self.cetpstate_mgr.remove(self)
+    
+    def delete(self):
+        pass
         
     def get_remote_cesid(self):
         return self.r_cesid
@@ -704,9 +707,9 @@ class H2HTransactionOutbound(H2HTransaction):
     
     def lookupkeys(self):
         if self.is_negotiated():
-            keys = [(KEY_ESTABLISHED_TAGS, (self.sstag, self.dstag), False), (KEY_HOST_IDS, (self.src_id, self.dst_id), False), (KEY_RCESID, self.r_cesid, True)]
+            keys = [((KEY_ESTABLISHED_TAGS, self.sstag, self.dstag), True), ((KEY_HOST_IDS, self.src_id, self.dst_id), True), ((KEY_RCESID, self.r_cesid), False)]
         else:
-            keys = [(KEY_INITIATED_TAGS, (self.sstag, 0), False), (KEY_HOST_IDS, (self.src_id, self.dst_id), False), (KEY_RCESID, self.r_cesid, True)]
+            keys = [((KEY_INITIATED_TAGS, self.sstag, 0), True), ((KEY_RCESID, self.r_cesid), False)]
 
         return keys
         
@@ -736,7 +739,7 @@ class H2HTransactionOutbound(H2HTransaction):
                         #print("After terminate", self.conn_table.connection_dict)
                         
         except Exception as ex:
-            self._logger.error("Exception '{}'".format(ex))
+            self._logger.error("Exception '{}' in post_h2h_negotiation".format(ex))
 
 
 
@@ -831,7 +834,7 @@ class H2HTransactionInbound(H2HTransaction):
             return True
         
         except Exception as ex:
-            self._logger.error(" Pre-processing the inbound CETP packet failed: '{}'".format(ex))
+            self._logger.error(" Exception '{}' in pre-processing the inbound packet.".format(ex))
             return False
 
 

@@ -348,7 +348,8 @@ class CETPManager:
         elif status == True:
             self._logger.debug(" CES-to-CES policies are negotiated")
             sstag, dstag = cetp_resp['SST'], cetp_resp['DST']
-            cetp_transaction = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag, dstag))
+            key = (H2HTransaction.KEY_ESTABLISHED_TAGS, sstag, dstag)
+            cetp_transaction = self.cetpstate_mgr.get(key)
             r_cesid = cetp_transaction.get_remote_cesid()
             
             if not self.has_c2c_layer(r_cesid): 
@@ -567,8 +568,10 @@ class CETPManager:
         """ Terminates a CETP session identified by its tags """
         try:
             if (sstag >= 0) and (dstag >= 0):
-                if self.cetpstate_mgr.has(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag, dstag)):
-                    cetp_transaction = self.cetpstate_mgr.get(H2HTransaction.KEY_ESTABLISHED_TAGS, (sstag, dstag))
+                key = (H2HTransaction.KEY_ESTABLISHED_TAGS, sstag, dstag)
+                
+                if self.cetpstate_mgr.has(key):
+                    cetp_transaction = self.cetpstate_mgr.get(key)
                     cetp_transaction.set_terminated()       # Terminate CETP state and connection instance                     
                     # Reporting to remote CES is not done yet.
                     
@@ -579,12 +582,11 @@ class CETPManager:
     
     def terminate_rces_h2h_sessions(self, r_cesid):
         """ Terminate all H2H sessions to/from a remote-CESID """
-        keytype         = H2HTransaction.KEY_RCESID
-        key             = r_cesid
+        key = (H2HTransaction.KEY_RCESID, r_cesid)
         established_h2h = False
         
-        if self.cetpstate_mgr.has(keytype, key):
-            cetpstates1 = self.cetpstate_mgr.get(keytype, key)
+        if self.cetpstate_mgr.has(key):
+            cetpstates1 = self.cetpstate_mgr.get(key)
             cetpstates = copy.copy(cetpstates1)
             
             for cetpstate in cetpstates:
@@ -603,11 +605,10 @@ class CETPManager:
             @param tag_list: List of session tags provided by the remote CES.
         """
         try:
-            keytype  = H2HTransaction.KEY_RCESID
-            key      = r_cesid
+            keytype  = (H2HTransaction.KEY_RCESID, r_cesid)
             
-            if self.cetpstate_mgr.has(keytype, key):
-                cetpstates1 = self.cetpstate_mgr.get(keytype, key)
+            if self.cetpstate_mgr.has(key):
+                cetpstates1 = self.cetpstate_mgr.get(key)
                 cetpstates = copy.copy(cetpstates1)
                 
                 if tag_list is None:
@@ -669,15 +670,13 @@ class CETPManager:
 
     def terminate_host_session_by_fqdns(self, l_hostid="", r_hostid=""):
         """ Terminates CETP session (and connection) between two hosts specified by their FQDNs """
-        keytype = connection.KEY_MAP_CES_FQDN
-        key     = (l_hostid, r_hostid)
-        self._terminate_host_connections(keytype, key)
+        key = (connection.KEY_MAP_CES_FQDN, l_hostid, r_hostid)
+        self._terminate_host_connections(key)
         
     def terminate_remote_host_sessions(self, r_hostid=""):
         """ Terminates all CETP session with remote host """
-        keytype = connection.KEY_MAP_REMOTE_FQDN
-        key     = r_hostid
-        self._terminate_host_connections(keytype, key)
+        key = (connection.KEY_MAP_REMOTE_FQDN, r_hostid)
+        self._terminate_host_connections(key)
         
     def terminate_local_host_sessions(self, l_hostid="", lip=""):
         """ Terminates all CETP sessions to/from a local FQDN """
@@ -709,11 +708,10 @@ class CETPManager:
         """ Deletes a connection object provided as input parameter, and corresponding CETP State """
         if conn.connectiontype == "CONNECTION_H2H":
             sstag, dstag = conn.sstag, conn.dstag
-            keytype = H2HTransaction.KEY_ESTABLISHED_TAGS
-            key     = (sstag, dstag)
+            key = (H2HTransaction.KEY_ESTABLISHED_TAGS, sstag, dstag)
             
-            if self.cetpstate_mgr.has(keytype, key):
-                h2h_transaction = self.cetpstate_mgr.get(keytype, key)
+            if self.cetpstate_mgr.has(key):
+                h2h_transaction = self.cetpstate_mgr.get(key)
                 h2h_transaction.terminate_session()
                 self.conn_table.remove(conn)
 
