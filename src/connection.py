@@ -201,70 +201,12 @@ KEY_MAP_LOCAL_HOST          = 3     # Indexes host connections against local hos
 KEY_MAP_CETP_PRIVATE_NW     = 4     # Indexes host connections against (lip, lpip) pair
 KEY_MAP_REMOTE_CESID        = 5     # Indexes host connections against remote CESID 
 
-KEY_MAP_CES_FQDN            = 6     # Indexes host connection against pair of FQDN (of local and remote host) across two CES nodes
-KEY_MAP_LOCAL_FQDNs         = 7     # Indexes host connection against pair of FQDN (of local and remote host) in same CES node
-KEY_MAP_CES_TO_CES          = 8     # Indexes host connection against an (SST, DST) pair
-KEY_MAP_RCESID_C2C          = 9     # Indexes C2C connection against a remote CESID
+KEY_MAP_CES_FQDN            = 6     # Indexes all host connections across two CES nodes, as pair of the (local and remote host) FQDN 
+KEY_MAP_LOCAL_FQDNs         = 7     # Indexes all host connections within same CES node, as pair of the (local and remote host) FQDN  
+KEY_MAP_HOST_FQDNs          = 8     # Indexes all host connections using local and remote FQDNs
+KEY_MAP_CES_TO_CES          = 9     # Indexes host connection against an (SST, DST) pair
+KEY_MAP_RCESID_C2C          = 10    # Indexes C2C connection against a remote CESID
 
-
-class LocalConnection(container3.ContainerNode):
-    def __init__(self, timeout, lid=None, lip=None, lpip=None, rid=None, rip=None, rpip=None, lfqdn=None, rfqdn=None, name="LocalConnection"):
-        """
-        Initialize a LocalConnection object.
-        
-        @param timeout: The expiration time of the connection
-        @param lid: The ID of the local host -> (int:idtype, str:value)
-        @param lip: The IP address of the local host
-        @param lpip: The IP proxy address of the local host
-        @param rid: The ID of the remote host -> (int:idtype, str:value)
-        @param rip: The IP address of the remote host
-        @param rpip: The IP proxy address of the remote host
-        """
-        super().__init__(name)
-        self.timeout          = timeout
-        self.lip, self.lpip   = lip, lpip
-        self.rip, self.rpip   = rip, rpip
-        self.localFQDN        = lfqdn
-        self.remoteFQDN       = rfqdn
-        self.connectiontype   = "CONNECTION_LOCAL"
-        self._logger = logging.getLogger(name)
-        self._logger.setLevel(LOGLEVEL_LocalConnection)
-        self._build_lookupkeys()
-
-
-    def _build_lookupkeys(self):
-        keys = []
-        keys += [ ((KEY_MAP_LOCAL_HOST, self.lip), False),        ((KEY_MAP_CETP_PRIVATE_NW, self.lip, self.lpip), True),  ((KEY_MAP_LOCAL_FQDNs, self.localFQDN, self.remoteFQDN), True)]
-        keys += [ ((KEY_MAP_LOCAL_FQDN, self.localFQDN), False),  ((KEY_MAP_LOCAL_FQDN, self.remoteFQDN), False) ]
-        
-        if self.lip != self.rip:
-            keys += [ ((KEY_MAP_LOCAL_HOST, self.rip), False),     ((KEY_MAP_CETP_PRIVATE_NW, self.rip, self.rpip), True)]
-        
-        self._built_lookupkeys = keys
-        
-    def lookupkeys(self):
-        """ Keys for indexing Local Connection object """
-        return self._built_lookupkeys    
-
-    def add(self):
-        pass
-        #add_local_connection(self.lip, self.lpip, self.rip, self.rpip)
-
-    def delete(self):
-        self._logger.debug("Deleting a {} connection!".format(self.connectiontype))
-        # Release the cached DNS responses, allocated proxy addresses and whatnot.
-        #delete_local_connection(self.lip, self.lpip, self.rip, self.rpip)
-
-        """
-        if self.local_af == AF_INET:
-            CES_CONF.address_pool.get(AP_PROXY4_HOST_ALLOCATION).release(self.lip, self.lpip)
-        elif self.local_af == AF_INET6:
-            CES_CONF.address_pool.get(AP_PROXY6_HOST_ALLOCATION).release(self.lip, self.lpip)
-        #Delete the DNS cached information
-        if CES_CONF.cache_table.has(KEY_CACHEDNS_HOST_LPIP, (self.lip, self.lpip)):
-            cached_entry = CES_CONF.cache_table.get(KEY_CACHEDNS_HOST_LPIP, (self.lip, self.lpip))
-            CES_CONF.cache_table.delete(cached_entry)
-        """
 
 
 class C2CConnectionTemplate(container3.ContainerNode):
@@ -320,13 +262,13 @@ class C2CConnectionTemplate(container3.ContainerNode):
         # Release the cached DNS responses, allocated proxy addresses and whatnot.
         """
         if self.local_af == AF_INET:
-            CES_CONF.address_pool.get(AP_PROXY4_HOST_ALLOCATION).release(self.lip, self.lpip)
+            .address_pool.get(AP_PROXY4_HOST_ALLOCATION).release(self.lip, self.lpip)
         elif self.local_af == AF_INET6:
-            CES_CONF.address_pool.get(AP_PROXY6_HOST_ALLOCATION).release(self.lip, self.lpip)
+            .address_pool.get(AP_PROXY6_HOST_ALLOCATION).release(self.lip, self.lpip)
         #Delete the DNS cached information
         if CES_CONF.cache_table.has(KEY_CACHEDNS_HOST_LPIP, (self.lip, self.lpip)):
             cached_entry = CES_CONF.cache_table.get(KEY_CACHEDNS_HOST_LPIP, (self.lip, self.lpip))
-            CES_CONF.cache_table.delete(cached_entry)
+            .cache_table.delete(cached_entry)
         """
 
 
@@ -372,13 +314,16 @@ class H2HConnection(container3.ContainerNode):
         
     def _build_lookupkeys(self):
         self._built_lookupkeys = []
-        self._built_lookupkeys +=[((KEY_MAP_LOCAL_HOST, self.lip), False),         ((KEY_MAP_CETP_PRIVATE_NW, self.lip, self.lpip), True),     ((KEY_MAP_LOCAL_FQDN, self.localFQDN), False),
-                                  ((KEY_MAP_REMOTE_FQDN, self.remoteFQDN), False), ((KEY_MAP_REMOTE_CESID, self.r_cesid), False)    ]
+        self._built_lookupkeys +=[ ((KEY_MAP_LOCAL_HOST, self.lip), False),         ((KEY_MAP_CETP_PRIVATE_NW, self.lip, self.lpip), True) ]
+        self._built_lookupkeys +=[ ((KEY_MAP_LOCAL_FQDN, self.localFQDN), False),   ((KEY_MAP_REMOTE_FQDN, self.remoteFQDN), False) ]
+        self._built_lookupkeys +=[ ((KEY_MAP_REMOTE_CESID, self.r_cesid), False) ]
         
         if (self.localFQDN is not None) and (self.remoteFQDN is not None):
-            self._built_lookupkeys.append( ((KEY_MAP_CES_FQDN, self.localFQDN, self.remoteFQDN), True) )
+            self._built_lookupkeys += [ ((KEY_MAP_CES_FQDN, self.localFQDN, self.remoteFQDN), True) ]
+            self._built_lookupkeys += [ ((KEY_MAP_HOST_FQDNs, self.localFQDN, self.remoteFQDN), True)]
+            
         if (self.sstag is not None) and (self.dstag is not None):
-            self._built_lookupkeys.append( ((KEY_MAP_CES_TO_CES, self.sstag, self.dstag), True) )
+            self._built_lookupkeys += [ ((KEY_MAP_CES_TO_CES, self.sstag, self.dstag), True) ]
     
     def add(self):
         pass
@@ -403,10 +348,71 @@ class H2HConnection(container3.ContainerNode):
 
         """
         if self.local_af == AF_INET:
-            CES_CONF.address_pool.get(AP_PROXY4_HOST_ALLOCATION).release(self.lip, self.lpip)
+            address_pool.get(AP_PROXY4_HOST_ALLOCATION).release(self.lip, self.lpip)
         elif self.local_af == AF_INET6:
-            CES_CONF.address_pool.get(AP_PROXY6_HOST_ALLOCATION).release(self.lip, self.lpip)
+            address_pool.get(AP_PROXY6_HOST_ALLOCATION).release(self.lip, self.lpip)
         """
+
+
+class LocalConnection(container3.ContainerNode):
+    def __init__(self, timeout, lid=None, lip=None, lpip=None, rid=None, rip=None, rpip=None, lfqdn=None, rfqdn=None, name="LocalConnection"):
+        """
+        Initialize a LocalConnection object.
+        
+        @param timeout: The expiration time of the connection
+        @param lid: The ID of the local host -> (int:idtype, str:value)
+        @param lip: The IP address of the local host
+        @param lpip: The IP proxy address of the local host
+        @param rid: The ID of the remote host -> (int:idtype, str:value)
+        @param rip: The IP address of the remote host
+        @param rpip: The IP proxy address of the remote host
+        """
+        super().__init__(name)
+        self.timeout          = timeout
+        self.lip, self.lpip   = lip, lpip
+        self.rip, self.rpip   = rip, rpip
+        self.localFQDN        = lfqdn
+        self.remoteFQDN       = rfqdn
+        self.connectiontype   = "CONNECTION_LOCAL"
+        self._logger = logging.getLogger(name)
+        self._logger.setLevel(LOGLEVEL_LocalConnection)
+        self._build_lookupkeys()
+
+    def _build_lookupkeys(self):
+        self._built_lookupkeys = []
+        self._built_lookupkeys += [ ((KEY_MAP_LOCAL_HOST, self.lip), False),        ((KEY_MAP_CETP_PRIVATE_NW, self.lip, self.lpip), True) ]
+        self._built_lookupkeys += [ ((KEY_MAP_LOCAL_FQDN, self.localFQDN), False),  ((KEY_MAP_LOCAL_FQDN, self.remoteFQDN), False) ]
+        self._built_lookupkeys += [ ((KEY_MAP_LOCAL_FQDNs, self.localFQDN, self.remoteFQDN), True)]
+        self._built_lookupkeys += [ ((KEY_MAP_HOST_FQDNs, self.localFQDN, self.remoteFQDN), True)]
+        
+        if self.lip != self.rip:
+            self._built_lookupkeys += [ ((KEY_MAP_LOCAL_HOST, self.rip), False),    ((KEY_MAP_CETP_PRIVATE_NW, self.rip, self.rpip), True)]
+        
+    def lookupkeys(self):
+        """ Keys for indexing Local Connection object """
+        return self._built_lookupkeys    
+
+    def add(self):
+        pass
+        #add_local_connection(self.lip, self.lpip, self.rip, self.rpip)
+
+    def delete(self):
+        self._logger.debug("Deleting a {} connection!".format(self.connectiontype))
+        # Release the cached DNS responses, allocated proxy addresses and whatnot.
+        #delete_local_connection(self.lip, self.lpip, self.rip, self.rpip)
+
+        """
+        if self.local_af == AF_INET:
+            .address_pool.get(AP_PROXY4_HOST_ALLOCATION).release(self.lip, self.lpip)
+        elif self.local_af == AF_INET6:
+            .address_pool.get(AP_PROXY6_HOST_ALLOCATION).release(self.lip, self.lpip)
+        #Delete the DNS cached information
+        if .cache_table.has(KEY_CACHEDNS_HOST_LPIP, (self.lip, self.lpip)):
+            cached_entry = .cache_table.get(KEY_CACHEDNS_HOST_LPIP, (self.lip, self.lpip))
+            .cache_table.delete(cached_entry)
+        """
+
+
 
 if __name__ == "__main__":
     table = ConnectionTable()
