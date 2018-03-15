@@ -130,113 +130,76 @@ class CETPManager:
         self.allowed_dns -= 1
         return False
             
-
-    def process_dns_message(self, dns_cb, cb_args, dst_id, r_cesid="", naptr_list=[]):
-        """ Enforce rate limit on DNS NAPTRs served by CETP Engine """
-        if not self.dns_threshold_exceeded():
-            #print("Threshold not exceeded")
-            if len(naptr_list)!=0:
-                self.process_outbound_cetp(dns_cb, cb_args, dst_id, r_cesid, naptr_list)
-            else:
-                self.process_local_cetp(dns_cb, cb_args, dst_id)
-
-    def has_local_connection(self, src_id, dst_id):
-        #return False
-        key = (connection.KEY_MAP_LOCAL_FQDNs, src_id, dst_id) 
-        
-        if src_id is None:
-            return False
-        
-        if self.conn_table.has(key):
-            return True
-        else:
-            return False
-
-    def get_local_connection(self, src_id, dst_id):
-        key     = (connection.KEY_MAP_LOCAL_FQDNs, src_id, dst_id) 
-        conn    = self.conn_table.get(key)
-        return conn
-        
-    def process_local_cetp(self, dns_cb, cb_args, dst_id):
-        try:
-            dns_q, addr      = cb_args
-            src_ip, src_port = addr
-            key              = (host.KEY_HOST_IPV4, src_ip)
-    
-            if not self.host_table.has(key):
-                self._logger.info("Sender IP '{}' is not a registered host".format(src_ip))
-                return
-    
-            host_obj  = self.host_table.get(key)
-            src_id    = host_obj.fqdn
-            self._logger.info("Connection from '{}'->'{}'".format(src_id, dst_id))
-        
-            if self.has_local_connection(src_id, dst_id):
-                conn = self.get_local_connection(src_id, dst_id)
-                lpip = conn.lpip
-                response = dnsutils.make_response_answer_rr(dns_q, dst_id, dns.rdatatype.A, lpip, rdclass=1, ttl=120, recursion_available=True)
-                dns_cb(dns_q, addr, response)
-            else:
-                cb = (dns_cb, cb_args)
-                self.local_cetp.resolve_cetp(dst_id, cb)
-
-        except Exception as ex:
-            self._logger.info("Exception '{}' in process_local_cetp".format(ex))
-            return
-
-
     def has_connection(self, src_id, dst_id):
         #return False
-        key = (connection.KEY_MAP_CES_FQDN, src_id, dst_id) 
-        
-        if src_id is None:
-            return False
-        
+        key = (connection.KEY_MAP_HOST_FQDNs, src_id, dst_id) 
         if self.conn_table.has(key):
             return True
         else:
             return False
 
     def get_connection(self, src_id, dst_id):
-        key     = (connection.KEY_MAP_CES_FQDN, src_id, dst_id) 
-        conn    = self.conn_table.get(key)
+        key   = (connection.KEY_MAP_HOST_FQDNs, src_id, dst_id) 
+        conn  = self.conn_table.get(key)
         return conn
+
+    def process_dns_message(self, dns_cb, cb_args, dst_id, r_cesid="", naptr_list=[]):
+        """ Enforce rate limit on DNS NAPTRs served by CETP Engine """
+        try:
+            if not self.dns_threshold_exceeded():
+                
+                dns_q, addr      = cb_args
+                src_ip, src_port = addr
+                key              = (host.KEY_HOST_IPV4, src_ip)
+        
+                if not self.host_table.has(key):
+                    self._logger.error("Sender IP '{}' is not a registered host".format(src_ip))
+                    return
+    
+                host_obj  = self.host_table.get(key)
+                src_id    = host_obj.fqdn
+                self._logger.info("Connection from '{}'->'{}'".format(src_id, dst_id))
+                
+                if self.has_connection(src_id, dst_id):
+                    conn = self.get_connection(src_id, dst_id)
+                    lpip = conn.lpip
+                    response = dnsutils.make_response_answer_rr(dns_q, dst_id, dns.rdatatype.A, lpip, rdclass=1, ttl=120, recursion_available=True)
+                    dns_cb(dns_q, addr, response)
+                else:
+                    self.process_cetp(dns_cb, cb_args, dst_id, r_cesid, naptr_list)
+
+        except Exception as ex:
+            self._logger.info("Exception '{}' in process_dns_message()".format(ex))
+            return
+
+
+    def process_cetp(self, dns_cb, cb_args, dst_id, r_cesid="", naptr_list=[]):
+        """ Enforce rate limit on DNS NAPTRs served by CETP Engine """
+        if len(naptr_list)!=0:
+            self.process_outbound_cetp(dns_cb, cb_args, dst_id, r_cesid, naptr_list)
+        else:
+            self.process_local_cetp(dns_cb, cb_args, dst_id)
+    
+    def process_local_cetp(self, dns_cb, cb_args, dst_id):
+        cb = (dns_cb, cb_args)
+        self.local_cetp.resolve_cetp(dst_id, cb)
 
     def process_outbound_cetp(self, dns_cb, cb_args, dst_id, r_cesid, naptr_list):
         """ Gets/Creates the CETPH2H instance AND enqueues the NAPTR response for handling the H2H transactions """
         try:
-            dns_q, addr      = cb_args
-            src_ip, src_port = addr
-            key              = (host.KEY_HOST_IPV4, src_ip)
-
-            if not self.host_table.has(key):
-                self._logger.info("Sender IP '{}' is not a registered host".format(src_ip))
-                return
-            
-            host_obj  = self.host_table.get(key)
-            src_id    = host_obj.fqdn
-            self._logger.info("Connection from '{}'->'{}'".format(src_id, dst_id))
-        
-            if self.has_connection(src_id, dst_id):
-                conn = self.get_connection(src_id, dst_id)
-                lpip = conn.lpip
-                response = dnsutils.make_response_answer_rr(dns_q, dst_id, dns.rdatatype.A, lpip, rdclass=1, ttl=120, recursion_available=True)
-                dns_cb(dns_q, addr, response)
-                
+            if self.has_cetp_endpoint(r_cesid):
+                ep = self.get_cetp_endpoint(r_cesid)
+                ep.process_naptrs(dst_id, naptr_list, (dns_cb, cb_args))                            # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
             else:
-                if self.has_cetp_endpoint(r_cesid):
-                    ep = self.get_cetp_endpoint(r_cesid)
-                    ep.process_naptrs(dst_id, naptr_list, (dns_cb, cb_args))                            # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
+                sanitized_naptrs = self._pre_check(naptr_list)
+                if sanitized_naptrs == None:
+                    self._logger.error(" Cannot initiate CETP endpoint towards CES '{}'".format(r_cesid))
+                    return
                 else:
-                    sanitized_naptrs = self._pre_check(naptr_list)
-                    if sanitized_naptrs == None:
-                        self._logger.error(" Cannot initiate CETP endpoint towards CES '{}'".format(r_cesid))
-                        return
-                    else:
-                        self._logger.info(" Initiating a CETP-Endpoint towards CES '{}': ".format(r_cesid))
-                        ep = self.create_cetp_endpoint(r_cesid)
-                        ep.get_cetp_c2c_layer()
-                        ep.process_naptrs(dst_id, sanitized_naptrs, (dns_cb, cb_args))                  # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
+                    self._logger.info(" Initiating a CETP-Endpoint towards CES '{}': ".format(r_cesid))
+                    ep = self.create_cetp_endpoint(r_cesid)
+                    ep.get_cetp_c2c_layer()
+                    ep.process_naptrs(dst_id, sanitized_naptrs, (dns_cb, cb_args))                  # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
     
         except Exception as ex:
             self._logger.info("Exception '{}' in process_outbound_cetp".format(ex))

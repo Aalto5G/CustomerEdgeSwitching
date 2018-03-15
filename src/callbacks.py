@@ -335,7 +335,7 @@ class DNSCallbacks(object):
             resolver.do_continue(query)
             return
 
-        print("Resolving the NAPTR query to: ", fqdn)
+        # Resolving the NAPTR query.
         naptr_rrs = self.resolve_naptr(fqdn)
         
         if naptr_rrs is not None:
