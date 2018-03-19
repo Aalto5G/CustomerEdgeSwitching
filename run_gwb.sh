@@ -6,18 +6,18 @@ if [[ $UID != 0 ]]; then
     exit 1
 fi
 
-echo "Starting Realm Gateway as cesa.lte"
+echo "Starting Realm Gateway as cesb.lte"
 cd src
-./rgw.py  --name cesa.lte                                                    \
-          --dns-soa cesa.lte. 0.168.192.in-addr.arpa. 1.64.100.in-addr.arpa. \
+./rgw.py  --name cesb.lte                                                    \
+          --dns-soa cesb.lte. 0.168.192.in-addr.arpa. 1.64.100.in-addr.arpa. \
           --dns-server-local 127.0.0.1 53                                    \
-          --dns-server-lan   10.0.3.101 53                                   \
+          --dns-server-lan   10.0.3.103 53                                   \
           --dns-resolver     8.8.8.8 53                                      \
           --ddns-server      127.0.0.2 53                                    \
           --dns-timeout      0.010 0.100 0.200                               \
           --pool-serviceip   100.64.1.130/32                                 \
           --pool-cpoolip     100.64.1.133/32 100.64.1.134/32 100.64.1.135/32 \
-          --pool-cespoolip   192.168.124.100/31                              \
+          --pool-cespoolip   192.168.124.100/31                              \          
           --ipt-cpool-queue  1                                               \
           --ipt-cpool-chain  CIRCULAR_POOL                                   \
           --ipt-host-chain   CUSTOMER_POLICY                                 \
@@ -31,7 +31,7 @@ cd src
           --ipt-markdnat                                                     \
           --ipt-flush                                                        \
           --network-api-url  http://127.0.0.1:8081/                          \
-          --repository-subscriber-folder ../config.d/cesa.lte.subscriber.d/  \
-          --repository-policy-folder     ../config.d/cesa.lte.policy.d/      \
-          --cetp-config  		     config_cesa/config_cesa_ct.yaml     \
+          --repository-subscriber-folder ../config.d/cesb.lte.subscriber.d/  \
+          --repository-policy-folder     ../config.d/cesb.lte.policy.d/      \
+          --cetp-config  		     config_cesb/config_cesb_ct.yaml     \
           --repository-api-url  http://127.0.0.1:8082/
