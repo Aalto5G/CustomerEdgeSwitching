@@ -14,6 +14,7 @@ Run as:
           --dns-timeout      0.010 0.100 0.200                               \
           --pool-serviceip   100.64.1.130/32                                 \
           --pool-cpoolip     100.64.1.133/32 100.64.1.134/32 100.64.1.135/32 \
+          --pool-cespoolip   192.168.124.100/31                              \
           --ipt-cpool-queue  1                                               \
           --ipt-cpool-chain  CIRCULAR_POOL                                   \
           --ipt-host-chain   CUSTOMER_POLICY                                 \
@@ -117,6 +118,9 @@ def parse_arguments():
     parser.add_argument('--pool-cpoolip',nargs='*',
                         metavar=('IPADDR'),
                         help='IP address of public Circular Pool')
+    parser.add_argument('--pool-cespoolip',nargs='*',
+                        metavar=('IPADDR'),
+                        help='Proxy IP address(es) for CES-to-CES communication')
 
     # Iptables parameters
     parser.add_argument('--ipt-cpool-queue', nargs='*', type=int,
@@ -246,6 +250,7 @@ class RealmGateway(object):
         ## Service IP Pool
         ap = AddressPoolShared('servicepool', name='Service Pool')
         self._pooltable.add(ap)
+        
         for ipaddr in self._config.getdefault('pool_serviceip', ()):
             self._logger.info('Adding resource(s) to pool {} @ <{}>'.format(ipaddr, ap))
             ap.add_to_pool(ipaddr)
@@ -253,6 +258,7 @@ class RealmGateway(object):
         ## Circular IP Pool
         ap = AddressPoolShared('circularpool', name='Circular Pool')
         self._pooltable.add(ap)
+        
         for ipaddr in self._config.getdefault('pool_cpoolip', ()):
             self._logger.info('Adding resource(s) to pool {} @ <{}>'.format(ipaddr, ap))
             ap.add_to_pool(ipaddr)
@@ -261,10 +267,13 @@ class RealmGateway(object):
         ## CES Proxy IP Pool
         ap = AddressPoolUser('proxypool', name='CES Proxy Pool')
         self._pooltable.add(ap)
-        for ipaddr in self._config.getdefault('pool_cespoolip', ()):
-            self._logger.info('Adding resource(s) to pool {} @ <{}>'.format(ipaddr, ap))
-            ap.add_to_pool(ipaddr)
-
+        
+        address_pools = self._config.getdefault('pool_cespoolip', ())
+        if address_pools is not None:
+            for ipaddr in address_pools:
+                self._logger.info('Adding resource(s) to pool {} @ <{}>'.format(ipaddr, ap))
+                ap.add_to_pool(ipaddr)
+            
     @asyncio.coroutine
     def _init_hosttable(self):
         # Create container of Hosts
@@ -322,7 +331,7 @@ class RealmGateway(object):
         self.ca_certificate  = self.ces_params['ca_certificate']                     # Could be a list of popular/trusted (certificate issuing) CA's certificates
         self._cetp_policies  = self.ces_conf["cetp_policy_file"]
         
-        self._cetp_mgr = cetpManager.CETPManager(self._cetp_policies, self.cesid, self.ces_params, self._hosttable, self._connectiontable, loop=self._loop)
+        self._cetp_mgr = cetpManager.CETPManager(self._cetp_policies, self.cesid, self.ces_params, self._hosttable, self._connectiontable, self._pooltable, loop=self._loop)
         cetp_server_list = self.ces_conf["CETPServers"]["serverNames"]
         for srv in cetp_server_list:
             srv_info = self.ces_conf["CETPServers"][srv]
@@ -414,6 +423,13 @@ class RealmGateway(object):
             ipaddr = subs_data['ID']['ipv4'][0]
             fqdn = subs_data['ID']['fqdn'][0]
             self._logger.debug('Registering subscriber {} / {}@{}'.format(subs_id, fqdn, ipaddr))
+            
+            # Hammad addition - to register CES proxy pool against each served host 
+            key  = 'proxypool'
+            if self._pooltable.has(key):
+                ap = self._pooltable.get(key)
+                ap.create_pool(fqdn)
+                
             yield from self.dnscb.ddns_register_user(fqdn, 1, ipaddr)
         self._logger.info('Completed initializacion of subscriber data in {:.3f} sec'.format(self._loop.time()-tzero))
 

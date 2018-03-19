@@ -302,3 +302,42 @@ class _AddressPoolUnit_list(object):
 # Define AddressPoolUnit in use
 _AddressPoolUnit = _AddressPoolUnit_list #Extracts a controlled element
 #_AddressPoolUnit = _AddressPoolUnit_set #Extracts a random element
+
+
+
+if __name__=="__main__":
+    p = PoolContainer()
+
+    ## CES Proxy IP Pool
+    ap = AddressPoolUser('proxypool', name='CES Proxy Pool')
+    p.add(ap)
+    
+    print('Adding resource(s) to pool')
+    ipaddr = "100.64.1.130/31"
+    ap.add_to_pool(ipaddr)
+    print("Print pool", ap._addrpool)
+    
+    # Creating pool for user
+    userid = "hosta1.cesa."
+    ap.create_pool(userid)
+    print("ap.get_stats(userid): ", ap.get_stats(userid))
+    
+    print("Allocated address: ", ap.allocate(userid))
+    print("ap.get_stats(userid): ", ap.get_stats(userid))
+
+    print("Allocated address: ", ap.allocate(userid))
+    print("ap.get_stats(userid): ", ap.get_stats(userid))
+
+    print("Allocated address: ", ap.allocate(userid))
+    print("ap.get_stats(userid): ", ap.get_stats(userid))
+    
+    """
+    # Create specific Address Pools
+    ## Service IP Pool
+    ap = AddressPoolShared('servicepool', name='Service Pool')
+    self._pooltable.add(ap)
+    for ipaddr in self._config.getdefault('pool_serviceip', ()):
+        self._logger.info('Adding resource(s) to pool {} @ <{}>'.format(ipaddr, ap))
+        ap.add_to_pool(ipaddr)
+    """
+    

@@ -8,10 +8,13 @@ import time
 import copy
 import random
 import json
-import CETP
+
 import C2CTransaction
 import H2HTransaction
 import CETPSecurity
+import helpers_n_wrappers
+from helpers_n_wrappers import network_helper3
+
 
 def send_ces_cesid(**kwargs):
     tlv, code, ces_params, query = kwargs["tlv"], kwargs["code"], kwargs["ces_params"], kwargs["query"] 
@@ -789,11 +792,11 @@ def verify_rloc(**kwargs):
         r_pref, r_order, r_rloc, r_iface = rrloc
 
         if code=="ipv4":
-            if not CETP.is_IPv4(r_rloc):
+            if not network_helper3.is_ipv4(r_rloc):
                 print(" Address provided is not IPv4")
                 return False
         elif code=="ipv6":
-            if not CETP.is_IPv6(r_rloc):
+            if not network_helper3.is_ipv6(r_rloc):
                 print(" Address provided is not IPv6")
                 return False
         elif code=="eth":

@@ -39,7 +39,7 @@ class CETPManager:
     It also aggregates different CETPTransport endpoints from a remote CES-ID under one C2C-Layer.
     """
     
-    def __init__(self, cetpPolicyFile, cesid, ces_params, hosttable, conn_table, loop=None, name="CETPManager"):
+    def __init__(self, cetpPolicyFile, cesid, ces_params, hosttable, conn_table, pool_table, loop=None, name="CETPManager"):
         self._cetp_endpoints        = {}                           # Dictionary of endpoints towards remote CES nodes.
         self._serverEndpoints       = []                           # List of server endpoint offering CETP listening service.
         self.c2c_register           = {}
@@ -47,6 +47,7 @@ class CETPManager:
         self.ces_params             = ces_params
         self.host_table             = hosttable
         self.conn_table             = conn_table
+        self.pool_table             = pool_table
         self.cetpstate_mgr          = CETP.CETPStateTable()                                        # Records the established CETP transactions (both H2H & C2C). Required for preventing the re-allocation already in-use SST & DST (in CETP transaction).
         self.cetp_security          = CETPSecurity.CETPSecurity(loop, self.conn_table, ces_params)
         self.interfaces             = PolicyManager.DPConfigurations(cesid, ces_params = ces_params)
@@ -59,7 +60,7 @@ class CETPManager:
         self._logger                = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPManager)
         self.local_cetp             = CETPH2H.CETPH2HLocal(l_cesid=self.cesid, cetpstate_mgr=self.cetpstate_mgr, policy_mgr=self.policy_mgr, cetp_mgr=self, \
-                                                           cetp_security=self.cetp_security, host_table=self.host_table, conn_table=self.conn_table)
+                                                           cetp_security=self.cetp_security, host_table=self.host_table, conn_table=self.conn_table, pool_table=self.pool_table)
 
     def _load_cetp_params(self):
         try:
@@ -77,7 +78,7 @@ class CETPManager:
         """ Creates the CETP-H2H layer towards remote CES-ID """
         cetp_ep = CETPH2H.CETPH2H(l_cesid = self.cesid, r_cesid = r_cesid, cetpstate_mgr= self.cetpstate_mgr, policy_mgr=self.policy_mgr, policy_client=None, \
                                   loop=self._loop, cetp_mgr=self, ces_params=self.ces_params, cetp_security=self.cetp_security, host_table=self.host_table, \
-                                  interfaces=self.interfaces, c2c_layer=c2c_layer, c2c_negotiated=c2c_negotiated, conn_table=self.conn_table)
+                                  interfaces=self.interfaces, c2c_layer=c2c_layer, c2c_negotiated=c2c_negotiated, conn_table=self.conn_table, pool_table=self.pool_table)
         self.add_cetp_endpoint(r_cesid, cetp_ep)
         return cetp_ep
 
@@ -166,6 +167,7 @@ class CETPManager:
                     response = dnsutils.make_response_answer_rr(dns_q, dst_id, dns.rdatatype.A, lpip, rdclass=1, ttl=120, recursion_available=True)
                     dns_cb(dns_q, addr, response)
                 else:
+                    print("rrrrrrrrr")
                     self.process_cetp(dns_cb, cb_args, dst_id, r_cesid, naptr_list)
 
         except Exception as ex:
@@ -178,6 +180,7 @@ class CETPManager:
         if len(naptr_list)!=0:
             self.process_outbound_cetp(dns_cb, cb_args, dst_id, r_cesid, naptr_list)
         else:
+            print("nnnnnn")
             self.process_local_cetp(dns_cb, cb_args, dst_id)
     
     def process_local_cetp(self, dns_cb, cb_args, dst_id):

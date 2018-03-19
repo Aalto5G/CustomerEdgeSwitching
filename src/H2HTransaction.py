@@ -7,6 +7,7 @@ import random
 import time
 import traceback
 import json
+import dns
 
 import cetpManager
 import CETPH2H
@@ -16,10 +17,12 @@ import CETP
 import copy
 import CETPSecurity
 import host
-import dns
 import connection
 import customdns
 from customdns import dnsutils
+
+import helpers_n_wrappers
+from helpers_n_wrappers import network_helper3
 
 LOGLEVEL_H2HTransaction         = logging.INFO
 LOGLEVEL_H2HTransactionOutbound = logging.INFO
@@ -262,24 +265,33 @@ class H2HTransaction(CETPTransaction):
         res = self.host_table.has(key)
         return res
 
-    def is_IPv4(self, ip4_addr):
-        return CETP.is_IPv6(ip4_addr)
+    def is_ipv4(self, ip4_addr):
+        return network_helper3.is_ipv4(ip4_addr)
     
-    def is_IPv6(self, ip6_addr):
-        return CETP.is_IPv6(ip6_addr)
+    def is_ipv6(self, ip6_addr):
+        return network_helper3.is_ipv6(ip6_addr)
 
-    def _allocate_proxy_address(self, lip):
+    def _allocate_proxy_address(self, fqdn):
         """Allocates a proxy IP address to represent remote host in local CES."""
-        if self.is_IPv4(lip):      ap = "AP_PROXY4_HOST_ALLOCATION"
-        elif self.is_IPv6(lip):   ap = "AP_PROXY6_HOST_ALLOCATION"
-        proxy_ip = self.cetpstate_mgr.allocate_proxy_address(lip)
-        return proxy_ip
+        key      = (host.KEY_HOST_SERVICE, fqdn)
+        host_obj = self.host_table.get(key)
+        host_id  = host_obj.fqdn
+        print("In _allocate_proxy_address() extracted: ", host_id)
+        
+        key = "proxypool"
+        if self.pool_table.has(key):
+            ap  = self.pool_table.get(key)
+            pip = ap.allocate(host_id)
+            return pip
+        
+        #if self.is_ipv4(lip):     ap = "IPV4"
+        #elif self.is_ipv6(lip):   ap = "IPv6"
 
 
 
 class H2HTransactionOutbound(H2HTransaction):
     def __init__(self, loop=None, sstag=0, dstag=0, cb=None, host_ip="", src_id="", dst_id="", l_cesid="", r_cesid="", policy_mgr= None, host_table=None, cetp_security=None, \
-                 cetpstate_mgr=None, cetp_h2h=None, ces_params=None, interfaces=None, conn_table=None, direction="outbound", name="H2HTransactionOutbound", rtt_time=[]):
+                 cetpstate_mgr=None, cetp_h2h=None, ces_params=None, interfaces=None, conn_table=None, pool_table=None, direction="outbound", name="H2HTransactionOutbound", rtt_time=[]):
         self.sstag, self.dstag  = sstag, dstag
         self.cb                 = cb
         self.host_ip            = host_ip                   # IP of the sender host
@@ -294,6 +306,7 @@ class H2HTransactionOutbound(H2HTransaction):
         self.ces_params         = ces_params
         self.direction          = direction
         self.host_table         = host_table
+        self.pool_table         = pool_table
         self.interfaces         = interfaces
         self.conn_table         = conn_table
         self.cetp_security      = cetp_security
@@ -634,10 +647,13 @@ class H2HTransactionOutbound(H2HTransaction):
     def _create_connection(self):
         """ Extract the negotiated parameters to create a connection state """
         try:
+            self.lid, self.rid              = None, None
             self.lfqdn, self.rfqdn          = self.src_id, self.dst_id                  #self._create_connection_get_fqdns()
             self.lip                        = self.host_ip
-            self.lpip                       = self._allocate_proxy_address(self.lip)    # Use function defined by Jesus
-            self.lid, self.rid              = None, None
+            self.lpip                       = self._allocate_proxy_address(self.src_id)
+            
+            if self.lpip is None:
+                return False
             
             negotiated_params = [self.lfqdn, self.rfqdn, self.lid, self.rid, self.lip, self.lpip]
             #self._logger.info("Negotiated params: {}".format(negotiated_params))
@@ -729,7 +745,7 @@ class H2HTransactionOutbound(H2HTransaction):
                 if self._check_tlv(received_tlv, group="control") and self._check_tlv(received_tlv, code="terminate"):
                     self._logger.warning(" Terminate received for an established H2H Session ({}->{}).".format(self.sstag, self.dstag))
                     self.terminate()
-                    keytype = (connection.KEY_MAP_CES_TO_CES, self.sstag, self.dstag)
+                    key = (connection.KEY_MAP_CES_TO_CES, self.sstag, self.dstag)
                     
                     if self.conn_table.has(key):
                         conn = self.conn_table.get(key)
@@ -745,7 +761,7 @@ class H2HTransactionOutbound(H2HTransaction):
 
 class H2HTransactionInbound(H2HTransaction):
     def __init__(self, sstag=None, dstag=None, l_cesid="", r_cesid="", policy_mgr= None, cetpstate_mgr= None, interfaces=None, conn_table=None, \
-                 cetp_h2h=None, cetp_security=None, ces_params=None, host_table=None, name="H2HTransactionInbound"):
+                 cetp_h2h=None, cetp_security=None, ces_params=None, host_table=None, pool_table=None, name="H2HTransactionInbound"):
         self.sstag              = sstag
         self.dstag              = dstag
         self.l_cesid            = l_cesid
@@ -759,6 +775,7 @@ class H2HTransactionInbound(H2HTransaction):
         self.cetp_security      = cetp_security
         self.ces_params         = ces_params
         self.host_table         = host_table
+        self.pool_table         = pool_table
         self.name               = name
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HTransactionInbound)
@@ -963,9 +980,12 @@ class H2HTransactionInbound(H2HTransaction):
             self.sstag                      = self.generate_session_tags(self.dstag)
             self.lfqdn, self.rfqdn          = self.src_id, self.dst_id
             host_obj                        = self.host_table.get((host.KEY_HOST_SERVICE, self.dst_id))
-            self.lip                        = host_obj.ipv4
-            self.lpip                       = self._allocate_proxy_address(self.lip)          # Use Jesus defined functions
             self.lid, self.rid              = None, None
+            self.lip                        = host_obj.ipv4
+            self.lpip                       = self._allocate_proxy_address(self.dst_id)
+            
+            if self.lpip is None:
+                return False
             
             negotiated_params = [self.lfqdn, self.rfqdn, self.lid, self.rid, self.lip, self.lpip]
             #self._logger.info("Negotiated params: {}".format(negotiated_params))
@@ -998,7 +1018,7 @@ class H2HTransactionInbound(H2HTransaction):
 
 class H2HTransactionLocal(H2HTransaction):
     def __init__(self, loop=None, host_ip="", cb=None, src_id="", dst_id="", dst_ip="", policy_mgr= None, host_table=None, cetpstate_mgr=None, cetp_h2h=None, \
-                 interfaces=None, conn_table=None, cetp_security=None, name="H2HTransactionLocal"):
+                 interfaces=None, conn_table=None, pool_table=None, cetp_security=None, name="H2HTransactionLocal"):
         self._loop              = loop
         self.cb                 = cb
         self.host_ip            = host_ip                   # IP of the sender host
@@ -1012,6 +1032,7 @@ class H2HTransactionLocal(H2HTransaction):
         self.interfaces         = interfaces
         self.conn_table         = conn_table
         self.cetp_security      = cetp_security
+        self.pool_table         = pool_table
         self.l_cesid            = ""
         self.r_cesid            = ""                        # For compatbility with H2HTransaction sake 
         self.name               = name
@@ -1071,11 +1092,9 @@ class H2HTransactionLocal(H2HTransaction):
             return False
         
         # If a host is reaching its ownself or own services, we shall return its own IP address in DNS callback.
-        """
-        if self.src_id in self.dst_id:
+        if self.dst_id.endswith(self.src_id):
             self._execute_dns_callback(r_addr=self.host_ip)
             return True
-        """
          
         ##self._logger.info("Local-host policy: {}".format(self.opolicy))
         ##self._logger.info("Remote-host policy: {}".format(self.ipolicy))
@@ -1126,24 +1145,38 @@ class H2HTransactionLocal(H2HTransaction):
         else:
             #self._logger.info(" Local CETP Policy matched! Allocate proxy address. {} -> {}".format(self.src_id, self.dst_id))
             lpip = self._create_local_connection()
-            self._execute_dns_callback(r_addr = lpip)
-            return True
+            
+            if lpip is not False:
+                self._execute_dns_callback(r_addr = lpip)           # Returning CES proxy address for DNS response
+                return True
+            else:
+                self._execute_dns_callback()
+                return False
         
         
     def _create_local_connection(self):
-        lip             = self.host_ip
-        host_obj        = self.host_table.get((host.KEY_HOST_SERVICE, self.dst_id))
-        rip             = host_obj.ipv4
-        lpip            = self._allocate_proxy_address(lip)       # Use address pool reserved for CETP communication
-        lfqdn, rfqdn    = self.src_id, self.dst_id
-        lid, rid        = None, None
-        rpip            = self._allocate_proxy_address(rip)
-        #self._logger.info("Creating Local connection between '{}' and '{}'.format(lfqdn, rfqdn))
+        try:
+            lip             = self.host_ip
+            host_obj        = self.host_table.get((host.KEY_HOST_SERVICE, self.dst_id))
+            rip             = host_obj.ipv4
+            lfqdn, rfqdn    = self.src_id, self.dst_id
+            lid, rid        = None, None
+            lpip            = self._allocate_proxy_address(self.src_id)
+            rpip            = self._allocate_proxy_address(self.dst_id)
+            #self._logger.info("Creating Local connection between '{}' and '{}'.format(lfqdn, rfqdn))
+            
+            if (lpip is None) or (rpip is None):
+                self._logger.error("Error assigning proxy addresses: lpip={}, rpip={}".format(lpip, rpip))
+                return False
+            else:
+                self._logger.info(" Creating dataplane H2HLocal connection")
+                self.conn = connection.LocalConnection(120.0, lip=lip, lpip=lpip, rip=rip, rpip=rpip, lfqdn=lfqdn, rfqdn=rfqdn)
+                self.conn_table.add(self.conn)
+                return lpip
         
-        self._logger.info(" Initiating dataplane H2HLocal connection")
-        self.conn = connection.LocalConnection(120.0, lip=lip, lpip=lpip, rip=rip, rpip=rpip, lfqdn=lfqdn, rfqdn=rfqdn)
-        self.conn_table.add(self.conn)
-        return lpip
+        except Exception as ex:
+            self._logger.error(" Exception '{}' in _create_local_connection()".format(ex))
+            return False
         
     def _execute_dns_callback(self, r_addr=None):
         """ Executes DNS callback towards host """

@@ -101,7 +101,6 @@ class DNSCallbacks(object):
 
         host_obj = HostEntry(name=fqdn, fqdn=fqdn, ipv4=ipaddr, services=user_data)
         self.hosttable.add(host_obj)
-        print("Registering host_obj: ", host_obj)
 
         # Create network resources
         hostname = ipaddr

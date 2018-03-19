@@ -22,7 +22,7 @@ LOGLEVEL_CETPH2HLocal        = logging.INFO
 
 class CETPH2H:
     def __init__(self, loop=None, l_cesid="", r_cesid="", cetpstate_mgr= None, policy_client=None, policy_mgr=None, cetp_mgr=None, ces_params=None, cetp_security=None, \
-                 host_table= None, c2c_negotiated=False, interfaces=None, c2c_layer=None, conn_table=None, name="CETPH2H"):
+                 host_table=None, pool_table=None, c2c_negotiated=False, interfaces=None, c2c_layer=None, conn_table=None, name="CETPH2H"):
         self._loop                      = loop
         self.l_cesid                    = l_cesid
         self.r_cesid                    = r_cesid
@@ -33,6 +33,7 @@ class CETPH2H:
         self.cetp_mgr                   = cetp_mgr
         self.cetp_security              = cetp_security
         self.host_table                 = host_table
+        self.pool_table                 = pool_table
         self.c2c                        = c2c_layer
         self.interfaces                 = interfaces
         self.conn_table                 = conn_table
@@ -129,7 +130,7 @@ class CETPH2H:
 
         h2h = H2HTransaction.H2HTransactionOutbound(loop=self._loop, cb=cb, host_ip=ip_addr, src_id=src_id, dst_id=dst_id, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetp_h2h=self, \
                                                     ces_params=self.ces_params, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, host_table=self.host_table, \
-                                                    conn_table=self.conn_table, interfaces=self.interfaces, cetp_security=self.cetp_security, rtt_time=self.rtt_measurement)
+                                                    conn_table=self.conn_table, interfaces=self.interfaces, cetp_security=self.cetp_security, pool_table=self.pool_table, rtt_time=self.rtt_measurement)
         cetp_message = yield from h2h.start_cetp_processing()
         if cetp_message != None:
             #self._logger.info(" H2H transaction started.")
@@ -161,7 +162,7 @@ class CETPH2H:
             #self._logger.info(" No prior H2H-transaction found -> Initiating Inbound H2HTransaction (SST={} -> DST={})".format(inbound_sstag, inbound_dstag))
             ih2h = H2HTransaction.H2HTransactionInbound(sstag=sstag, dstag=dstag, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy_mgr=self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, \
                                                          interfaces=self.interfaces, conn_table=self.conn_table, cetp_h2h=self, cetp_security=self.cetp_security, \
-                                                         ces_params=self.ces_params, host_table=self.host_table)
+                                                         ces_params=self.ces_params, host_table=self.host_table, pool_table=self.pool_table)
 
             asyncio.ensure_future(self.process_inbound_transaction(ih2h, cetp_msg))
             
@@ -240,7 +241,7 @@ class CETPH2H:
 
 class CETPH2HLocal:
     def __init__(self, loop=None, l_cesid="", cetpstate_mgr= None, policy_mgr=None, cetp_mgr=None, ces_params=None, cetp_security=None, host_table= None, \
-                 conn_table=None, name="CETPH2H"):
+                 conn_table=None, pool_table=None, name="CETPH2H"):
         self._loop                      = loop
         self.l_cesid                    = l_cesid
         self.cetpstate_mgr              = cetpstate_mgr
@@ -251,6 +252,7 @@ class CETPH2HLocal:
         self.host_table                 = host_table
         self.conn_table                 = conn_table
         self._closure_signal            = False
+        self.pool_table                 = pool_table
         self.pending_tasks              = []
         self.count                      = 0
         self._logger                    = logging.getLogger(name)
@@ -281,7 +283,8 @@ class CETPH2HLocal:
         src_id   = host_obj.fqdn
         
         h2h = H2HTransaction.H2HTransactionLocal(loop=self._loop, cb=cb, host_ip=ip_addr, src_id=src_id, dst_id=dst_id, policy_mgr=self.policy_mgr, cetp_h2h=self, \
-                                                 cetpstate_mgr=self.cetpstate_mgr, cetp_security= self.cetp_security, host_table=self.host_table, conn_table=self.conn_table)
+                                                 cetpstate_mgr=self.cetpstate_mgr, cetp_security= self.cetp_security, host_table=self.host_table, pool_table=self.pool_table, \
+                                                 conn_table=self.conn_table)
         result = yield from h2h.start_cetp_processing()     # Returns True or False
         self.count +=1
         #if result == True:

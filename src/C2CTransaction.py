@@ -10,6 +10,7 @@ import time
 import traceback
 import json
 import ssl
+
 import cetpManager
 import CETPH2H
 import CETPC2C
@@ -20,6 +21,11 @@ import connection
 import CETPSecurity
 import H2HTransaction
 from H2HTransaction import CETPTransaction
+
+import helpers_n_wrappers
+from helpers_n_wrappers import network_helper3
+
+
 
 LOGLEVELCETP              = logging.DEBUG
 LOGLEVEL_C2CTransaction   = logging.INFO
@@ -194,10 +200,10 @@ class C2CTransaction(CETPTransaction):
                 pref, order, addr, alias = p["value"]
                 addrtype = p["code"]
                 if addrtype == "ipv4":
-                    if CETP.is_IPv4(addr):
+                    if network_helper3.is_ipv4(addr):
                         retlist.append((order, pref, addrtype, addr, alias))
                 elif addrtype == "ipv6":
-                    if CETP.is_IPv6(addr):
+                    if network_helper3.is_ipv6(addr):
                         retlist.append((order, pref, addrtype, addr, alias))
 
             return retlist

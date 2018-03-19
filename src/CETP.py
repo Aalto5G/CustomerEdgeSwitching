@@ -22,21 +22,6 @@ LOGLEVELCETP           = logging.DEBUG
 LOGLEVELCETPSTATETABLE = logging.INFO
 
 
-def is_IPv4(ip4_addr):
-    try:
-        socket.inet_pton(socket.AF_INET, ip4_addr)
-        return True
-    except socket.error:
-        return False
-
-def is_IPv6(ip6_addr):
-    try:
-        socket.inet_pton(socket.AF_INET6, ip6_addr)
-        return True
-    except socket.error:
-        return False
-
-
 class CETPTLV(object):
     def __init__(self):
         self.ope    = None
@@ -70,7 +55,6 @@ class CETPTLV(object):
 
 
 
-
 class CETPStateTable(container3.Container):
     def __init__(self, name="CETPStateTable"):
         """
@@ -92,16 +76,8 @@ class CETPStateTable(container3.Container):
         obj.set_negotiated(status=True)
         self.add(obj)
         
-    def allocate_proxy_address(self, lip):
-        """ Emulates proxy-IP assigning function """
-        ms_ip = "10.0.3."
-        ls_ip_num = random.randint(0, 255)
-        ls_ip = str(ls_ip_num)
-        proxy_ip = ms_ip + ls_ip        
-        return proxy_ip
-    
     def __str__(self):
-        return "Total number of stored objects = {}".format(len(self.getall()))
+        return "Total length of CETPStateTable = {}".format(len(self.getall()))
 
 
 
