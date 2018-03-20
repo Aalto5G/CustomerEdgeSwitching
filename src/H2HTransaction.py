@@ -273,19 +273,24 @@ class H2HTransaction(CETPTransaction):
 
     def _allocate_proxy_address(self, fqdn):
         """Allocates a proxy IP address to represent remote host in local CES."""
-        key      = (host.KEY_HOST_SERVICE, fqdn)
-        host_obj = self.host_table.get(key)
-        host_id  = host_obj.fqdn
-        print("In _allocate_proxy_address() extracted: ", host_id)
-        
-        key = "proxypool"
-        if self.pool_table.has(key):
-            ap  = self.pool_table.get(key)
-            pip = ap.allocate(host_id)
-            return pip
-        
-        #if self.is_ipv4(lip):     ap = "IPV4"
-        #elif self.is_ipv6(lip):   ap = "IPv6"
+        try:
+            key      = (host.KEY_HOST_SERVICE, fqdn)
+            host_obj = self.host_table.get(key)
+            host_id  = host_obj.fqdn
+            print("In _allocate_proxy_address() extracted: ", host_id)
+            
+            key = "proxypool"
+            if self.pool_table.has(key):
+                self.ap = self.pool_table.get(key)
+                pip     = self.ap.allocate(host_id)
+                return pip
+            
+            #if self.is_ipv4(lip):     ap = "IPV4"
+            #elif self.is_ipv6(lip):   ap = "IPv6"
+            
+        except Exception as ex:
+            self._logger.error(ex)
+            return
 
 
 
@@ -657,7 +662,7 @@ class H2HTransactionOutbound(H2HTransaction):
             
             negotiated_params = [self.lfqdn, self.rfqdn, self.lid, self.rid, self.lip, self.lpip]
             #self._logger.info("Negotiated params: {}".format(negotiated_params))
-            self.conn = connection.H2HConnection(self.cetpstate_mgr, 120.0, self.lid, self.lip, self.lpip, self.rid, self.lfqdn, self.rfqdn, \
+            self.conn = connection.H2HConnection(self.cetpstate_mgr, self.ap, self.host_table, 120.0, self.lid, self.lip, self.lpip, self.rid, self.lfqdn, self.rfqdn, \
                                                       self.sstag, self.dstag, self.r_cesid, self.conn_table)
             
             if self.lpip != None:
@@ -748,6 +753,7 @@ class H2HTransactionOutbound(H2HTransaction):
                     key = (connection.KEY_MAP_CES_TO_CES, self.sstag, self.dstag)
                     
                     if self.conn_table.has(key):
+                        print("Before deleting connection")
                         conn = self.conn_table.get(key)
                         self.conn_table.remove(conn)
                     else:
@@ -978,7 +984,7 @@ class H2HTransactionInbound(H2HTransaction):
     def _create_connection(self):
         try:
             self.sstag                      = self.generate_session_tags(self.dstag)
-            self.lfqdn, self.rfqdn          = self.src_id, self.dst_id
+            self.lfqdn, self.rfqdn          = self.dst_id, self.src_id
             host_obj                        = self.host_table.get((host.KEY_HOST_SERVICE, self.dst_id))
             self.lid, self.rid              = None, None
             self.lip                        = host_obj.ipv4
@@ -988,9 +994,9 @@ class H2HTransactionInbound(H2HTransaction):
                 return False
             
             negotiated_params = [self.lfqdn, self.rfqdn, self.lid, self.rid, self.lip, self.lpip]
-            #self._logger.info("Negotiated params: {}".format(negotiated_params))
+            self._logger.info("Negotiated params: {}".format(negotiated_params))
     
-            self.conn = connection.H2HConnection(self.cetpstate_mgr, 120.0, self.lid, self.lip, self.lpip, self.rid, self.lfqdn, self.rfqdn, \
+            self.conn = connection.H2HConnection(self.cetpstate_mgr, self.ap, self.host_table, 120.0, self.lid, self.lip, self.lpip, self.rid, self.lfqdn, self.rfqdn, \
                                                  self.sstag, self.dstag, self.r_cesid, self.conn_table)
             self.conn_table.add(self.conn)
             return True

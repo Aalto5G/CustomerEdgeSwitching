@@ -445,8 +445,7 @@ class CETPManager:
             self._logger.error("Exception in_pre_check() '{}'".format(ex))
             return None
 
-
-
+        
     """ Functions/Methods supported by CETPManager API, i.e. to drop, terminate or allow connections """
     
     def disable_local_domain(self, local_domain=""):
@@ -707,8 +706,14 @@ class CETPManager:
                 for num in range(0, len(conns)):
                     conn = conns[0]
                     self.terminate_host_connection(conn)
+                    
+            elif type(conns) == type(set()):
+                for num in range(0, len(conns)):
+                    conn = list(conns)[0]
+                    self.terminate_host_connection(conn)
             else:
-                self.terminate_host_connection(conns)
+                conn = conns
+                self.terminate_host_connection(conn)
                 
         
     def terminate_host_connection(self, conn):

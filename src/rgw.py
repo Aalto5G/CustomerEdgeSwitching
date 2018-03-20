@@ -236,6 +236,9 @@ class RealmGateway(object):
         policyfile   = self._config.getdefault('repository_policy_file', None)
         policyfolder = self._config.getdefault('repository_policy_folder', None)
         api_url      = self._config.getdefault('repository_api_url', None)
+        
+        print(configfile, configfolder, policyfile, policyfolder, api_url)
+        
         self._datarepository = DataRepository(configfile = configfile, configfolder = configfolder,
                                               policyfile = policyfile, policyfolder = policyfolder,
                                               api_url = api_url)
@@ -460,6 +463,7 @@ class RealmGateway(object):
     @asyncio.coroutine
     def shutdown(self):
         self._logger.warning('RealmGateway_v2 is shutting down...')
+        
         # Close registered sockets in callback module
         for obj in self.dnscb.get_object(None):
             obj.connection_lost(None)
@@ -473,8 +477,8 @@ class RealmGateway(object):
         self._cetp_mgr.close_server_endpoints()
         # Closing the connected CETPEndpoints with remote CES nodes
         self._cetp_mgr.close_all_cetp_endpoints()
-        yield from asyncio.sleep(0.2)
-
+        yield from asyncio.sleep(0.1)
+        
         for task_obj, task_name in RUNNING_TASKS:
             with suppress(asyncio.CancelledError):
                 self._logger.info('Cancelling {} task'.format(task_name))

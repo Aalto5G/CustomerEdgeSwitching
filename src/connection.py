@@ -2,6 +2,9 @@ import logging
 import time
 import pprint
 
+import H2HTransaction
+import host
+
 from helpers_n_wrappers import container3
 from helpers_n_wrappers import utils3
 
@@ -266,15 +269,15 @@ class C2CConnectionTemplate(container3.ContainerNode):
         elif self.local_af == AF_INET6:
             .address_pool.get(AP_PROXY6_HOST_ALLOCATION).release(self.lip, self.lpip)
         #Delete the DNS cached information
-        if CES_CONF.cache_table.has(KEY_CACHEDNS_HOST_LPIP, (self.lip, self.lpip)):
-            cached_entry = CES_CONF.cache_table.get(KEY_CACHEDNS_HOST_LPIP, (self.lip, self.lpip))
+        if .cache_table.has(KEY_CACHEDNS_HOST_LPIP, (self.lip, self.lpip)):
+            cached_entry = .cache_table.get(KEY_CACHEDNS_HOST_LPIP, (self.lip, self.lpip))
             .cache_table.delete(cached_entry)
         """
 
 
 
 class H2HConnection(container3.ContainerNode):
-    def __init__(self, cetpstate_mgr, timeout, lid, lip, lpip, rid, lfqdn, rfqdn, sstag, dstag, r_cesid, conn_table, name="H2HConnection"):
+    def __init__(self, cetpstate_mgr, adress_pool, host_table, timeout, lid, lip, lpip, rid, lfqdn, rfqdn, sstag, dstag, r_cesid, conn_table, name="H2HConnection"):
         """
         Initialize a H2HConnection object.
         
@@ -294,8 +297,10 @@ class H2HConnection(container3.ContainerNode):
         self.lip, self.lpip      = lip, lpip
         self.sstag, self.dstag   = sstag, dstag
         self.r_cesid             = r_cesid
-        self.conn_table          = conn_table        
+        self.conn_table          = conn_table
+        self.host_table          = host_table
         self.cetpstate_mgr       = cetpstate_mgr
+        self.adress_pool         = adress_pool
         self.timeout             = timeout
         self.connectiontype      = "CONNECTION_H2H"
         self._logger             = logging.getLogger(name)
@@ -335,23 +340,25 @@ class H2HConnection(container3.ContainerNode):
         
     def delete(self):
         self._logger.debug("Deleting a {} connection!".format(self.connectiontype))
-        # Release the cached DNS responses, allocated proxy addresses and whatnot.
-
         #delete_tunnel_connection(self.lip, self.lpip, self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type)
-
+        
+        # Terminating the H2HTransaction
         key = (H2HTransaction.KEY_ESTABLISHED_TAGS, self.sstag, self.dstag)
         
         if self.cetpstate_mgr.has(key):
             cetp_transaction = self.cetpstate_mgr.get(key)
             cetp_transaction.terminate()
+        
+        # Releasing the CES proxy address
+        key      = (host.KEY_HOST_SERVICE, self.localFQDN)
+        host_obj = self.host_table.get(key)
+        host_id  = host_obj.fqdn
+        
+        if self.adress_pool.in_allocated(host_id, self.lpip):
+            self.adress_pool.release(host_id, self.lpip)
 
-
-        """
-        if self.local_af == AF_INET:
-            address_pool.get(AP_PROXY4_HOST_ALLOCATION).release(self.lip, self.lpip)
-        elif self.local_af == AF_INET6:
-            address_pool.get(AP_PROXY6_HOST_ALLOCATION).release(self.lip, self.lpip)
-        """
+        # Add the logic for deleting the cached DNS response, if any.
+        
 
 
 class LocalConnection(container3.ContainerNode):
@@ -398,15 +405,25 @@ class LocalConnection(container3.ContainerNode):
 
     def delete(self):
         self._logger.debug("Deleting a {} connection!".format(self.connectiontype))
-        # Release the cached DNS responses, allocated proxy addresses and whatnot.
         #delete_local_connection(self.lip, self.lpip, self.rip, self.rpip)
 
+        # Releasing the CES proxy address        
+        key     = (host.KEY_HOST_SERVICE, self.localFQDN)
+        host_obj = self.host_table.get(key)
+        host_id  = host_obj.fqdn
+        
+        if self.adress_pool.in_allocated(host_id, self.lpip):
+            self.adress_pool.release(host_id, self.lpip)
+
+        key     = (host.KEY_HOST_SERVICE, self.remoteFQDN)
+        host_obj = self.host_table.get(key)
+        host_id  = host_obj.fqdn
+        
+        if self.adress_pool.in_allocated(host_id, self.rpip):
+            self.adress_pool.release(host_id, self.rpip)
+
+        # Release the cached DNS responses, if any.
         """
-        if self.local_af == AF_INET:
-            .address_pool.get(AP_PROXY4_HOST_ALLOCATION).release(self.lip, self.lpip)
-        elif self.local_af == AF_INET6:
-            .address_pool.get(AP_PROXY6_HOST_ALLOCATION).release(self.lip, self.lpip)
-        #Delete the DNS cached information
         if .cache_table.has(KEY_CACHEDNS_HOST_LPIP, (self.lip, self.lpip)):
             cached_entry = .cache_table.get(KEY_CACHEDNS_HOST_LPIP, (self.lip, self.lpip))
             .cache_table.delete(cached_entry)
