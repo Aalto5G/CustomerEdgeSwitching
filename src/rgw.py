@@ -290,6 +290,7 @@ class RealmGateway(object):
     @asyncio.coroutine
     def _init_network(self):
         self._logger.warning('Initializing Network')
+        self._read_cetp_params()
         self._network = Network(ipt_cpool_queue  = self._config.ipt_cpool_queue,
                                 ipt_cpool_chain  = self._config.ipt_cpool_chain,
                                 ipt_host_chain   = self._config.ipt_host_chain ,
@@ -301,8 +302,21 @@ class RealmGateway(object):
                                 api_url          = self._config.network_api_url,
                                 datarepository   = self._datarepository,
                                 synproxy         = self._config.synproxy,
-                                pooltable        = self._pooltable)
+                                pooltable        = self._pooltable,
+                                cetp_service     = self.cetp_service)
 
+    def _read_cetp_params(self):
+        self.cetp_config   = self._config.getdefault('cetp_config', None)
+        self.cetp_service = []
+        
+        if self.cetp_config is not None:
+            self.ces_conf = yaml.load( open(self.cetp_config) )
+            cetp_servers  = self.ces_conf["CETPServers"]["serverNames"]
+            for s in cetp_servers:
+                srv = self.ces_conf["CETPServers"][s]
+                ip_addr, port, proto = srv["ip"], srv["port"], srv["transport"]
+                self.cetp_service.append( (ip_addr, port, proto) )
+                    
     @asyncio.coroutine
     def _init_pbra(self):
         # Create container of Reputation objects
@@ -325,22 +339,16 @@ class RealmGateway(object):
     
     @asyncio.coroutine
     def _init_cetp(self):
-        cetp_fileName = self._config.cetp_config
-        f = open(cetp_fileName)
-        self.ces_conf = yaml.load(f)
-        self.ces_params      = self.ces_conf['CESParameters']
-        self.ces_name        = self.ces_params['name']
-        self.cesid           = self.ces_params['cesid']
-        self.ca_certificate  = self.ces_params['ca_certificate']                     # Could be a list of popular/trusted (certificate issuing) CA's certificates
-        self._cetp_policies  = self.ces_conf["cetp_policy_file"]
-        
-        self._cetp_mgr = cetpManager.CETPManager(self._cetp_policies, self.cesid, self.ces_params, self._hosttable, self._connectiontable, self._pooltable, loop=self._loop)
-        cetp_server_list = self.ces_conf["CETPServers"]["serverNames"]
-        for srv in cetp_server_list:
-            srv_info = self.ces_conf["CETPServers"][srv]
-            srv_addr, srv_port, srv_proto = srv_info["ip"], srv_info["port"], srv_info["transport"]
-            yield from self._cetp_mgr.initiate_cetp_service(srv_addr, srv_port, srv_proto)
-        
+        if self.cetp_config is not None:
+            self.ces_params      = self.ces_conf['CESParameters']
+            self.cesid           = self.ces_params['cesid']
+            self._cetp_policies  = self.ces_conf["cetp_policy_file"]
+            self._cetp_mgr       = cetpManager.CETPManager(self._cetp_policies, self.cesid, self.ces_params, self._hosttable, self._connectiontable, \
+                                                     self._pooltable, self._loop)
+            for s in self.cetp_service:
+                (ip_addr, port, proto) = s
+                yield from self._cetp_mgr.initiate_cetp_service(ip_addr, port, proto)
+
 
     @asyncio.coroutine
     def _init_dns(self):

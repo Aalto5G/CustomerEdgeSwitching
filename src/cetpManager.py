@@ -66,7 +66,7 @@ class CETPManager:
         try:
             self.ces_certificate_path   = self.ces_params['certificate']
             self.ces_privatekey_path    = self.ces_params['private_key']
-            self.ca_certificate_path    = self.ces_params['ca_certificate']                                       # Path of X.509 certificate of trusted CA, for validating the remote node's certificate.
+            self.ca_certificate_path    = self.ces_params['ca_certificate']                         # Path of X.509 certificate of trusted CA, for validating the remote node's certificate.  -- # Could be a list of popular/trusted (certificate issuing) CA's certificates
             self.max_naptrs_per_msg     = self.ces_params["max_naptrs_per_dns"]
             self.max_dns_cetp_responses = self.ces_params["max_naptrs_per_sec"]
             self.allowed_dns            = copy.copy(self.max_dns_cetp_responses)
@@ -167,7 +167,6 @@ class CETPManager:
                     response = dnsutils.make_response_answer_rr(dns_q, dst_id, dns.rdatatype.A, lpip, rdclass=1, ttl=120, recursion_available=True)
                     dns_cb(dns_q, addr, response)
                 else:
-                    print("rrrrrrrrr")
                     self.process_cetp(dns_cb, cb_args, dst_id, r_cesid, naptr_list)
 
         except Exception as ex:
@@ -180,7 +179,6 @@ class CETPManager:
         if len(naptr_list)!=0:
             self.process_outbound_cetp(dns_cb, cb_args, dst_id, r_cesid, naptr_list)
         else:
-            print("nnnnnn")
             self.process_local_cetp(dns_cb, cb_args, dst_id)
     
     def process_local_cetp(self, dns_cb, cb_args, dst_id):

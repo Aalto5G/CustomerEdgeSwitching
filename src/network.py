@@ -698,6 +698,13 @@ class Network(object):
         self._logger.info('Create SYNPROXY connection')
         # Create connection to SYNPROXY
         asyncio.ensure_future(self._synproxy_connect())
+        
+    def is_synproxy_connected(self):
+        """ Return boolean True if synproxy dataplane is reachable and connected """
+        if self.synproxy_sock is None:
+            return False
+        else:
+            return True
 
     @asyncio.coroutine
     def _synproxy_connect(self):
@@ -733,9 +740,16 @@ class Network(object):
         ap_cpool = self.pooltable.get('circularpool')
         ap_spool = self.pooltable.get('servicepool')
         ap_pool  = ap_cpool.get_pool() + ap_spool.get_pool()
+        
+        for srv in self.cetp_service:
+            ip_addr, port, proto = srv
+            yield from self.synproxy_add_connection(ip_addr, port, 0, 1460, 1, 7)
+        
+        """
         for ipaddr in ap_pool:
             yield from self.synproxy_add_connection(ipaddr, 0, 0, 1460, 1, 7)
-
+        """
+        
     @asyncio.coroutine
     def synproxy_add_connection(self, ipaddr, port, proto, tcpmss, tcpsack, tcpwscale):
         _t = self.loop.time()
