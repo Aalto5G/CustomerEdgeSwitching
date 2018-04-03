@@ -12,10 +12,8 @@ import json
 import ssl
 import copy
 import traceback
-import cetpManager
+
 import C2CTransaction
-import H2HTransaction
-import CETPH2H
 import CETPTransports
 
 LOGLEVEL_CETPC2CLayer          = logging.INFO
@@ -29,13 +27,13 @@ class CETPC2CLayer:
     Performs resource cleanup upon 'Ctrl+C' or on CES-to-CES connectivity loss.
     Provides an API to forward messages to/from H2H Layer, once CES-to-CES is negotiated.
     """
-    def __init__(self, loop, cetp_h2h=None, l_cesid=None, r_cesid=None, cetpstate_mgr=None, policy_mgr=None, policy_client=None, ces_params=None, \
-                 cetp_security=None, cetp_mgr=None, conn_table=None, interfaces=None, name="CETPC2CLayer"):
+    def __init__(self, loop, cetp_h2h=None, l_cesid=None, r_cesid=None, cetpstate_table=None, policy_mgr=None, policy_client=None, ces_params=None, cetp_security=None, \
+                 cetp_mgr=None, conn_table=None, interfaces=None, payloadID_table=None, name="CETPC2CLayer"):
         self._loop                      = loop
         self.cetp_h2h                   = cetp_h2h                          # H2H layer towards remote-cesid 
         self.l_cesid                    = l_cesid
         self.r_cesid                    = r_cesid
-        self.cetpstate_mgr              = cetpstate_mgr
+        self.cetpstate_table            = cetpstate_table
         self.policy_client              = policy_client
         self.policy_mgr                 = policy_mgr
         self.ces_params                 = ces_params
@@ -43,6 +41,7 @@ class CETPC2CLayer:
         self.cetp_mgr                   = cetp_mgr
         self.interfaces                 = interfaces
         self.conn_table                 = conn_table
+        self.payloadID_table            = payloadID_table
         self.processed_rlocs            = []                                # Records (ip, port, protocol) values of RLOCs, to which an outbound connection is either initiated or connected.
         self.initiated_transports       = []                                # Records the transport instances initiated (but not connected) to a remote CES.
         self.connected_transports       = []                                # Records transport instances connected to/from a remote CES.
@@ -192,9 +191,10 @@ class CETPC2CLayer:
     def initiate_c2c_transaction(self, transport):
         """ Initiates/Continues CES-to-CES negotiation """
         remote_addr, proto = transport.get_remotepeer(), transport.proto
-        c2c_transaction  = C2CTransaction.oC2CTransaction(self._loop, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetpstate_mgr=self.cetpstate_mgr, remote_addr=remote_addr, \
+        c2c_transaction  = C2CTransaction.oC2CTransaction(self._loop, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetpstate_table=self.cetpstate_table, remote_addr=remote_addr, \
                                                           policy_mgr=self.policy_mgr, proto=proto, ces_params=self.ces_params, cetp_security=self.cetp_security, \
-                                                          interfaces=self.interfaces, c2c_layer=self, conn_table=self.conn_table, cetp_mgr=self.cetp_mgr)
+                                                          interfaces=self.interfaces, c2c_layer=self, conn_table=self.conn_table, cetp_mgr=self.cetp_mgr, \
+                                                          payloadID_table=self.payloadID_table)
         
         self.register_c2c(c2c_transaction)
         cetp_resp = yield from c2c_transaction.initiate_c2c_negotiation()

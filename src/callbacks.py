@@ -378,30 +378,30 @@ class DNSCallbacks(object):
         """ Simulating availability of NAPTR records from DNS """
         self.naptr_records = {}
         #self.naptr_records['dest-id']                       = ("destHost/service-id,         dest-cesid,    dest-ip, dest-port, proto")
-        self.naptr_records['hosta1.cesa.lte.']              = [('hosta1.cesa.lte.',          'cesa.lte.', '10.0.3.101', '48001', 'tls')]
-        self.naptr_records['hosta2.cesa.lte.']              = [('hosta2.cesa.lte.',          'cesa.lte.', '10.0.3.101', '48002', 'tls')]
-        self.naptr_records['srv1.hosta1.cesa.lte.']         = [('srv1.hosta1.cesa.lte.',     'cesa.lte.', '10.0.3.101', '48001', 'tls')]
-        self.naptr_records['srv2.hosta1.cesa.lte.']         = [('srv2.hosta1.cesa.lte.',     'cesa.lte.', '10.0.3.101', '48002', 'tls')]
-        self.naptr_records['hostb1.cesb.lte.']              = [('hostb1.cesb.lte.',          'cesb.lte.', '10.0.3.103', '49001', 'tls')]
-        self.naptr_records['hostb2.cesb.lte.']              = [('hostb2.cesb.lte.',          'cesb.lte.', '10.0.3.103', '49002', 'tls')]
-        self.naptr_records['srv1.hostb1.cesb.lte.']         = [('srv1.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49001', 'tls')]
-        self.naptr_records['srv2.hostb1.cesb.lte.']         = [('srv2.hostb1.cesb.lte.',     'cesb.lte.', '10.0.3.103', '49002', 'tls')]
-        self.naptr_records['srv12.hostb1.cesb.lte.']        = [('srv12.hostb1.cesb.lte.',    'cesb.lte.', '10.0.3.103', '49002', 'tls')]
+        self.naptr_records['hosta1.cesa.lte.']              = [('hosta1.cesa.lte.',          'cesa.lte.', '10.1.3.101', '48001', 'tls')]
+        self.naptr_records['hosta2.cesa.lte.']              = [('hosta2.cesa.lte.',          'cesa.lte.', '10.1.3.101', '48002', 'tls')]
+        self.naptr_records['srv1.hosta1.cesa.lte.']         = [('srv1.hosta1.cesa.lte.',     'cesa.lte.', '10.1.3.101', '48001', 'tls')]
+        self.naptr_records['srv2.hosta1.cesa.lte.']         = [('srv2.hosta1.cesa.lte.',     'cesa.lte.', '10.1.3.101', '48002', 'tls')]
+        self.naptr_records['hostb1.cesb.lte.']              = [('hostb1.cesb.lte.',          'cesb.lte.', '10.1.3.103', '49001', 'tls')]
+        self.naptr_records['hostb2.cesb.lte.']              = [('hostb2.cesb.lte.',          'cesb.lte.', '10.1.3.103', '49002', 'tls')]
+        self.naptr_records['srv1.hostb1.cesb.lte.']         = [('srv1.hostb1.cesb.lte.',     'cesb.lte.', '10.1.3.103', '49001', 'tls')]
+        self.naptr_records['srv2.hostb1.cesb.lte.']         = [('srv2.hostb1.cesb.lte.',     'cesb.lte.', '10.1.3.103', '49002', 'tls')]
+        self.naptr_records['srv12.hostb1.cesb.lte.']        = [('srv12.hostb1.cesb.lte.',    'cesb.lte.', '10.1.3.103', '49002', 'tls')]
         self.naptr_records['hostc1.cesc.lte.']              = [('hostc1.cesc.lte.',          'cesc.lte.', '10.0.3.104', '49001', 'tls')]
         self.naptr_records['hostd1.cesd.lte.']              = [('hostd1.cesd.lte.',          'cesd.lte.', '10.0.3.105', '49001', 'tls')]
         self.naptr_records['hoste1.cese.lte.']              = [('hoste1.cese.lte.',          'cese.lte.', '10.0.3.106', '49001', 'tls')]
         self.naptr_records['hostf1.cesf.lte.']              = [('hostf1.cesf.lte.',          'cesf.lte.', '10.0.3.107', '49001', 'tls')]
-        #self.naptr_records['srv2.hostb1.cesb.lte.']         = ('srv2.hostb1.cesb.lte.',     'cesc.lte.', '10.0.3.103', '49001', 'tls')]
-        self.naptr_records['raimo.cesb.lte.']               = [('raimo.cesb.lte.',           'cesb.lte.', '10.0.3.103', '49001', 'tls')]
-        self.naptr_records['raimo2.cesb.lte.']              = [('raimo2.cesb.lte.',          'cesb.lte.', '10.0.3.103', '49002', 'tls')]
-        self.naptr_records['www.google.com.']               = [('www.google.com.',           'cesd.lte.', '10.0.3.103', '49001', 'tls')]
-        self.naptr_records['www.aalto.fi.']                 = [('www.aalto.fi.',             'cese.lte.', '10.0.3.101', '48001', 'tls')]
-        self.naptr_records['test.']                         = [('test.',                     'cesa.lte.', '10.0.3.101', '48001', 'tls')]
+        #self.naptr_records['srv2.hostb1.cesb.lte.']         = ('srv2.hostb1.cesb.lte.',     'cesc.lte.', '10.1.3.103', '49001', 'tls')]
+        self.naptr_records['raimo.cesb.lte.']               = [('raimo.cesb.lte.',           'cesb.lte.', '10.1.3.103', '49001', 'tls')]
+        self.naptr_records['raimo2.cesb.lte.']              = [('raimo2.cesb.lte.',          'cesb.lte.', '10.1.3.103', '49002', 'tls')]
+        self.naptr_records['www.google.com.']               = [('www.google.com.',           'cesd.lte.', '10.1.3.103', '49001', 'tls')]
+        self.naptr_records['www.aalto.fi.']                 = [('www.aalto.fi.',             'cese.lte.', '10.1.3.101', '48001', 'tls')]
+        self.naptr_records['test.']                         = [('test.',                     'cesa.lte.', '10.1.3.101', '48001', 'tls')]
         
         # Just for the sake of testing
-        #self.naptr_records['hostc1.cesb.lte.']              = ('hostb1.cesb.lte.',          'cesc.lte.', '10.0.3.103', '49001', 'tls')
-        #self.naptr_records['hostd1.cesb.lte.']              = ('hostb1.cesb.lte.',          'cesd.lte.', '10.0.3.103', '49001', 'tls')
-        #self.naptr_records['hoste1.cesb.lte.']              = ('hostb1.cesb.lte.',          'cese.lte.', '10.0.3.103', '49001', 'tls')
+        #self.naptr_records['hostc1.cesb.lte.']              = ('hostb1.cesb.lte.',          'cesc.lte.', '10.1.3.103', '49001', 'tls')
+        #self.naptr_records['hostd1.cesb.lte.']              = ('hostb1.cesb.lte.',          'cesd.lte.', '10.1.3.103', '49001', 'tls')
+        #self.naptr_records['hoste1.cesb.lte.']              = ('hostb1.cesb.lte.',          'cese.lte.', '10.1.3.103', '49001', 'tls')
         
     # -----------------------------
 

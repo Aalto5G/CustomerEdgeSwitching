@@ -9,9 +9,8 @@ import copy
 import random
 import json
 
-import C2CTransaction
-import H2HTransaction
 import CETPSecurity
+
 import helpers_n_wrappers
 from helpers_n_wrappers import network_helper3
 
@@ -694,18 +693,31 @@ def send_rloc(**kwargs):
 
 
 def send_payload(**kwargs):
-    tlv, code, query, policy, interfaces = kwargs["tlv"], kwargs["code"], kwargs["query"], kwargs["policy"], kwargs["interfaces"]
+    tlv, code, query, policy, interfaces, r_cesid = kwargs["tlv"], kwargs["code"], kwargs["query"], kwargs["policy"], kwargs["interfaces"], kwargs["r_cesid"]
     if query==True:
         if 'value' in tlv:
             tlv["value"] = ""
     else:
-        ret_value = interfaces.get_payload_preference(code)
-        if ret_value is not None:
-            tun_id_in = random.randint(0, 2**24)
-            tlv["value"] = (ret_value, tun_id_in)
+        import CETP
+        from CETP import PayloadIDs
+        payloadID_table = kwargs["payloadID_table"]
+        key = (r_cesid, code)
+        if payloadID_table.has(key):
+            p            = payloadID_table.get(key)
+            pref         = p.get_preference()
+            tun_id_in    = p.get_tunnelID()
+            tlv["value"] = (pref, tun_id_in)
+        else:
+            pref = interfaces.get_payload_preference(code)
+            if pref is not None:
+                tun_id_in = random.randint(0, 2**24)
+                p = PayloadIDs(r_cesid, code, tun_id_in, pref)
+                payloadID_table.add(p)
+                tlv["value"] = (pref, tun_id_in)
         
         if 'value' not in tlv:
             tlv["value"] = ""
+    
     return [tlv]
 
 def response_rloc(**kwargs):
@@ -738,7 +750,7 @@ def response_rloc(**kwargs):
 
 def response_payload(**kwargs):
     try:
-        tlv, policy, interfaces = kwargs["tlv"], kwargs["policy"], kwargs["interfaces"]
+        tlv, policy, interfaces, payloadID_table, r_cesid = kwargs["tlv"], kwargs["policy"], kwargs["interfaces"], kwargs["payloadID_table"], kwargs["r_cesid"]
         new_tlv = copy.deepcopy(tlv)
         ret_tlv = policy.get_available_policy(new_tlv)
         new_tlv["ope"] = "info"
@@ -751,11 +763,24 @@ def response_payload(**kwargs):
         
         if cmp == "notAvailable":
             new_tlv["cmp"] = "notAvailable"
+            return [new_tlv]
         else:
-            ret_value    = interfaces.get_payload_preference(code)
-            if ret_value is not None:
-                tun_id_in = random.randint(0, 2**24)
-                new_tlv["value"] = (ret_value, tun_id_in)
+            import CETP
+            from CETP import PayloadIDs
+            
+            key = (r_cesid, code)
+            if payloadID_table.has(key):
+                p                = payloadID_table.get(key)
+                pref             = p.get_preference()
+                tun_id_in        = p.get_tunnelID()
+                new_tlv["value"] = (pref, tun_id_in)
+            else:
+                pref = interfaces.get_payload_preference(code)
+                if pref is not None:
+                    tun_id_in = random.randint(0, 2**24)
+                    p = PayloadIDs(r_cesid, code, tun_id_in, pref)
+                    payloadID_table.add(p)
+                    new_tlv["value"] = (pref, tun_id_in)
 
             if 'value' not in new_tlv:
                 new_tlv["value"] = ""
@@ -810,8 +835,10 @@ def verify_rloc(**kwargs):
 def verify_payload(**kwargs):
     try:
         tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+        payloadID_table = kwargs["payloadID_table"]
         r_payload = code
-
+        # Enforce that if length is greater than 2**24, you retunr False and drop the connection.
+        
         if 'cmp' in tlv:
             if tlv["cmp"] == "notAvailable":
                 return False

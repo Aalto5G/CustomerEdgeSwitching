@@ -30,7 +30,7 @@ Run as:
           --network-api-url  http://127.0.0.1:8081/                          \
           ---subscriber-folder ../config.d/gwa.demo.subscriber.d/  \
           --repository-policy-folder     ../config.d/gwa.demo.policy.d/      \
-          --cetp-config config_cesa/config_cesa_ct.yaml                      \
+          --cetp-config config_cesa/config_cesa.yaml                      \
           --repository-api-url  http://127.0.0.1:8082/                       \
           --mode rgw
 '''
@@ -45,7 +45,9 @@ import logging.config
 import os
 import time
 import yaml
+
 import cetpManager
+import CETP
 
 from contextlib import suppress
 from callbacks import DNSCallbacks, PacketCallbacks
@@ -340,11 +342,12 @@ class RealmGateway(object):
     @asyncio.coroutine
     def _init_cetp(self):
         if self.cetp_config is not None:
+            self.cetpstate_table = CETP.CETPStateTable()
             self.ces_params      = self.ces_conf['CESParameters']
             self.cesid           = self.ces_params['cesid']
             self._cetp_policies  = self.ces_conf["cetp_policy_file"]
             self._cetp_mgr       = cetpManager.CETPManager(self._cetp_policies, self.cesid, self.ces_params, self._hosttable, self._connectiontable, \
-                                                     self._pooltable, self._loop)
+                                                           self._pooltable, self._network, self.cetpstate_table, self._loop)
             for s in self.cetp_service:
                 (ip_addr, port, proto) = s
                 yield from self._cetp_mgr.initiate_cetp_service(ip_addr, port, proto)

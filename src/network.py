@@ -735,7 +735,7 @@ class Network(object):
         # Flush all connections from SYNPROXY
         yield from self._synproxy_sendrecv('flush', '0.0.0.0', 0, 0, 0, 0, 0)
         # Set default connection
-        yield from self._synproxy_sendrecv('mod', '0.0.0.0', 0, 0, 536, 0, 1)
+        yield from self._synproxy_sendrecv('mod', '0.0.0.0', 0, 0, 536, 0, 1)                       # Hammad Comment: This could be commented for stricter synproxy appöication (scaling to individual ports)
         # Initialize IP address of the CircularPool and ServicePool pool with default TCP options
         ap_cpool = self.pooltable.get('circularpool')
         ap_spool = self.pooltable.get('servicepool')
@@ -745,10 +745,10 @@ class Network(object):
             ip_addr, port, proto = srv
             yield from self.synproxy_add_connection(ip_addr, port, 0, 1460, 1, 7)
         
-        """
+        #"""
         for ipaddr in ap_pool:
             yield from self.synproxy_add_connection(ipaddr, 0, 0, 1460, 1, 7)
-        """
+        #"""
         
     @asyncio.coroutine
     def synproxy_add_connection(self, ipaddr, port, proto, tcpmss, tcpsack, tcpwscale):

@@ -12,7 +12,6 @@ import dns
 import cetpManager
 import CETPH2H
 import CETPC2C
-import cetpOperations
 import CETP
 import copy
 import CETPSecurity
@@ -139,18 +138,18 @@ class CETPTransaction(object):
             sstag = random.randint(1, 2**32)
             if dstag == 0:
                 # For oCES, it checks the connecting transactions
-                if not self.cetpstate_mgr.has( (KEY_INITIATED_TAGS, sstag, 0)):
+                if not self.cetpstate_table.has( (KEY_INITIATED_TAGS, sstag, 0)):
                     return sstag
             
             elif dstag:
                 #self._logger.debug("iCES is requesting source session tag")
                 """ iCES checks if upon assigning 'sstag' the resulting (SST, DST) pair will lead to a unique transaction. """
-                if not self.cetpstate_mgr.has( (KEY_ESTABLISHED_TAGS, sstag, dstag)):                   # Checks connected transactions
+                if not self.cetpstate_table.has( (KEY_ESTABLISHED_TAGS, sstag, dstag)):                   # Checks connected transactions
                     return sstag
 
     def _check_sessionTags_uniqueness(self, sstag=0, dstag=0):
         """ Checks whether (SST, DST) pair will be locally unique, if the H2H negotiation succeeds    - Since DST is assigned by remote CES. """
-        if dstg !=0 and self.cetpstate_mgr.has((KEY_ESTABLISHED_TAGS, sstag, dstag)):
+        if dstg !=0 and self.cetpstate_table.has((KEY_ESTABLISHED_TAGS, sstag, dstag)):
             self._logger.error(" Failure: Resulting ({},{}) pair will not be locally unique in CES".format(sstag, dstag))
             return False
         return True
@@ -277,7 +276,6 @@ class H2HTransaction(CETPTransaction):
             key      = (host.KEY_HOST_SERVICE, fqdn)
             host_obj = self.host_table.get(key)
             host_id  = host_obj.fqdn
-            print("In _allocate_proxy_address() extracted: ", host_id)
             
             key = "proxypool"
             if self.pool_table.has(key):
@@ -296,7 +294,8 @@ class H2HTransaction(CETPTransaction):
 
 class H2HTransactionOutbound(H2HTransaction):
     def __init__(self, loop=None, sstag=0, dstag=0, cb=None, host_ip="", src_id="", dst_id="", l_cesid="", r_cesid="", policy_mgr= None, host_table=None, cetp_security=None, \
-                 cetpstate_mgr=None, cetp_h2h=None, ces_params=None, interfaces=None, conn_table=None, pool_table=None, direction="outbound", name="H2HTransactionOutbound", rtt_time=[]):
+                 cetpstate_table=None, cetp_h2h=None, ces_params=None, interfaces=None, conn_table=None, pool_table=None, network = None, \
+                 direction="outbound", name="H2HTransactionOutbound", rtt_time=[]):
         self.sstag, self.dstag  = sstag, dstag
         self.cb                 = cb
         self.host_ip            = host_ip                   # IP of the sender host
@@ -305,7 +304,7 @@ class H2HTransactionOutbound(H2HTransaction):
         self.l_cesid            = l_cesid
         self.r_cesid            = r_cesid
         self.policy_mgr         = policy_mgr
-        self.cetpstate_mgr      = cetpstate_mgr
+        self.cetpstate_table    = cetpstate_table
         self._loop              = loop
         self.cetp_h2h           = cetp_h2h
         self.ces_params         = ces_params
@@ -315,6 +314,7 @@ class H2HTransactionOutbound(H2HTransaction):
         self.interfaces         = interfaces
         self.conn_table         = conn_table
         self.cetp_security      = cetp_security
+        self.network            = network
         self.rtt                = 0
         self.terminated         = False
         self.name               = name
@@ -433,7 +433,7 @@ class H2HTransactionOutbound(H2HTransaction):
         #self.pprint(cetp_msg, m="Outbound H2H CETP")
         self.last_packet_sent = cetp_msg
         self.cetp_negotiation_history.append(cetp_msg)
-        self.cetpstate_mgr.add(self)
+        self.cetpstate_table.add(self)
         #self.cetp_h2h.update_H2H_transaction_count()
         self._schedule_completion_check()
         ##self._logger.info("start_cetp_processing delay: {}".format(now-start_time))
@@ -462,7 +462,7 @@ class H2HTransactionOutbound(H2HTransaction):
     def terminate(self):
         """ Execute to unregister H2HTransaction """
         self.terminated = True
-        self.cetpstate_mgr.remove(self)
+        self.cetpstate_table.remove(self)
     
     def delete(self):
         pass
@@ -644,7 +644,7 @@ class H2HTransactionOutbound(H2HTransaction):
     
     def _process_negotiation_success(self):
         """ Executes DNS callback, AND session-tags management for an established transaction. """
-        self.cetpstate_mgr.reregister(self)
+        self.cetpstate_table.reregister(self)
         self.unregister_handler.cancel()
         #self.cetp_h2h.update_H2H_transaction_count(initiated=False)                            # To reduce number of ongoing transactions.
         return True
@@ -662,7 +662,7 @@ class H2HTransactionOutbound(H2HTransaction):
             
             negotiated_params = [self.lfqdn, self.rfqdn, self.lid, self.rid, self.lip, self.lpip]
             #self._logger.info("Negotiated params: {}".format(negotiated_params))
-            self.conn = connection.H2HConnection(self.cetpstate_mgr, self.ap, self.host_table, 120.0, self.lid, self.lip, self.lpip, self.rid, self.lfqdn, self.rfqdn, \
+            self.conn = connection.H2HConnection(self.network, self.cetpstate_table, self.ap, self.host_table, 120.0, self.lid, self.lip, self.lpip, self.rid, self.lfqdn, self.rfqdn, \
                                                       self.sstag, self.dstag, self.r_cesid, self.conn_table)
             
             if self.lpip != None:
@@ -675,6 +675,8 @@ class H2HTransactionOutbound(H2HTransaction):
             self._logger.error("Exception in connection creation: '{}'".format(ex))
             return False
     
+
+
     
     def _execute_dns_callback(self, r_addr=None):
         """ Executes DNS callback towards host """
@@ -766,19 +768,20 @@ class H2HTransactionOutbound(H2HTransaction):
 
 
 class H2HTransactionInbound(H2HTransaction):
-    def __init__(self, sstag=None, dstag=None, l_cesid="", r_cesid="", policy_mgr= None, cetpstate_mgr= None, interfaces=None, conn_table=None, \
-                 cetp_h2h=None, cetp_security=None, ces_params=None, host_table=None, pool_table=None, name="H2HTransactionInbound"):
+    def __init__(self, sstag=None, dstag=None, l_cesid="", r_cesid="", policy_mgr= None, cetpstate_table= None, interfaces=None, conn_table=None, cetp_h2h=None, \
+                 cetp_security=None, ces_params=None, host_table=None, pool_table=None, network=None, name="H2HTransactionInbound"):
         self.sstag              = sstag
         self.dstag              = dstag
         self.l_cesid            = l_cesid
         self.r_cesid            = r_cesid
         self.policy_mgr         = policy_mgr                # This could be policy client in future use.
-        self.cetpstate_mgr      = cetpstate_mgr
+        self.cetpstate_table    = cetpstate_table
         self.interfaces         = interfaces
         self.direction          = "inbound"
         self.conn_table         = conn_table
         self.cetp_h2h           = cetp_h2h
         self.cetp_security      = cetp_security
+        self.network            = network
         self.ces_params         = ces_params
         self.host_table         = host_table
         self.pool_table         = pool_table
@@ -996,7 +999,7 @@ class H2HTransactionInbound(H2HTransaction):
             negotiated_params = [self.lfqdn, self.rfqdn, self.lid, self.rid, self.lip, self.lpip]
             self._logger.info("Negotiated params: {}".format(negotiated_params))
     
-            self.conn = connection.H2HConnection(self.cetpstate_mgr, self.ap, self.host_table, 120.0, self.lid, self.lip, self.lpip, self.rid, self.lfqdn, self.rfqdn, \
+            self.conn = connection.H2HConnection(self.network, self.cetpstate_table, self.ap, self.host_table, 120.0, self.lid, self.lip, self.lpip, self.rid, self.lfqdn, self.rfqdn, \
                                                  self.sstag, self.dstag, self.r_cesid, self.conn_table)
             self.conn_table.add(self.conn)
             return True
@@ -1008,23 +1011,23 @@ class H2HTransactionInbound(H2HTransaction):
 
     def _export_to_stateful(self):
         """ Creates connection and complete H2Htransaction to stateful """
-        new_transaction = H2HTransactionOutbound(sstag=self.sstag, dstag=self.dstag, policy_mgr= self.policy_mgr, cetpstate_mgr=self.cetpstate_mgr, conn_table=self.conn_table, \
+        new_transaction = H2HTransactionOutbound(sstag=self.sstag, dstag=self.dstag, policy_mgr= self.policy_mgr, cetpstate_table=self.cetpstate_table, conn_table=self.conn_table, \
                                                  l_cesid=self.l_cesid, r_cesid=self.r_cesid, direction="inbound", src_id=self.src_id, dst_id=self.dst_id, cetp_h2h=self.cetp_h2h, \
-                                                 cetp_security=self.cetp_security)
+                                                 cetp_security=self.cetp_security, network=self.network)
         
         new_transaction.opolicy                 = self.ipolicy
         new_transaction.policy                  = self.policy
         new_transaction.last_received_packet    = self.packet
         new_transaction.h2h_negotiation_status  = True
         new_transaction.conn                    = self.conn
-        self.cetpstate_mgr.add(new_transaction)
+        self.cetpstate_table.add(new_transaction)
         return new_transaction
     
 
 
 class H2HTransactionLocal(H2HTransaction):
-    def __init__(self, loop=None, host_ip="", cb=None, src_id="", dst_id="", dst_ip="", policy_mgr= None, host_table=None, cetpstate_mgr=None, cetp_h2h=None, \
-                 interfaces=None, conn_table=None, pool_table=None, cetp_security=None, name="H2HTransactionLocal"):
+    def __init__(self, loop=None, host_ip="", cb=None, src_id="", dst_id="", dst_ip="", policy_mgr= None, host_table=None, cetpstate_table=None, cetp_h2h=None, \
+                 interfaces=None, conn_table=None, pool_table=None, cetp_security=None, network=None, name="H2HTransactionLocal"):
         self._loop              = loop
         self.cb                 = cb
         self.host_ip            = host_ip                   # IP of the sender host
@@ -1032,13 +1035,14 @@ class H2HTransactionLocal(H2HTransaction):
         self.dst_id             = dst_id
         self.dst_ip             = dst_ip
         self.policy_mgr         = policy_mgr
-        self.cetpstate_mgr      = cetpstate_mgr
+        self.cetpstate_table    = cetpstate_table
         self.cetp_h2h           = cetp_h2h
         self.host_table         = host_table
         self.interfaces         = interfaces
         self.conn_table         = conn_table
         self.cetp_security      = cetp_security
         self.pool_table         = pool_table
+        self.network            = network
         self.l_cesid            = ""
         self.r_cesid            = ""                        # For compatbility with H2HTransaction sake 
         self.name               = name

@@ -10,13 +10,10 @@ import time
 import traceback
 import json
 import ssl
+import copy
 
 import cetpManager
-import CETPH2H
-import CETPC2C
-import cetpOperations
 import CETP
-import copy
 import connection
 import CETPSecurity
 import H2HTransaction
@@ -69,7 +66,7 @@ class C2CTransaction(CETPTransaction):
             if group in ["ces", "rloc", "payload"]:
                 func = CETP.SEND_TLV_GROUP[group][code]
                 tlv = func(tlv=tlv, code=code, ces_params=self.ces_params, cesid=self.l_cesid, r_cesid=self.r_cesid, r_addr=self.remote_addr, \
-                           cetp_security=self.cetp_security, policy = self.ces_policy, interfaces=self.interfaces, query=False)
+                           cetp_security=self.cetp_security, policy = self.ces_policy, interfaces=self.interfaces, payloadID_table=self.payloadID_table, query=False)
             return tlv
         except Exception as ex:
             self._logger.error("Exception '{}' in _create_offer_tlv() for tlv : '{}'".format(ex, tlv))
@@ -85,7 +82,7 @@ class C2CTransaction(CETPTransaction):
             if group in ["ces", "rloc", "payload"]:
                 func = CETP.SEND_TLV_GROUP[group][code]
                 tlv = func(tlv=tlv, code=code, ces_params=self.ces_params, cesid=self.l_cesid, r_cesid=self.r_cesid, r_addr=self.remote_addr, \
-                           cetp_security=self.cetp_security, policy = self.ces_policy, interfaces=self.interfaces, query=False)
+                           cetp_security=self.cetp_security, policy = self.ces_policy, interfaces=self.interfaces, payloadID_table=self.payloadID_table, query=False)
                 
             return tlv
         
@@ -130,7 +127,7 @@ class C2CTransaction(CETPTransaction):
             if group in ["ces", "rloc", "payload"]:
                 func = CETP.RESPONSE_TLV_GROUP[group][code]
                 tlv  = func(tlv=tlv, code=code, ces_params=self.ces_params, l_cesid=self.l_cesid, r_cesid=self.r_cesid, r_addr=self.remote_addr, post_c2c=post_c2c, \
-                            cetp_security=self.cetp_security, policy = self.ces_policy, transaction=self, interfaces=self.interfaces, packet=self.packet)
+                            cetp_security=self.cetp_security, policy = self.ces_policy, transaction=self, interfaces=self.interfaces, payloadID_table=self.payloadID_table, packet=self.packet)
             return tlv
         except Exception as ex:
             self._logger.error("Exception in _create_response_tlv() '{}'".format(ex))
@@ -142,7 +139,8 @@ class C2CTransaction(CETPTransaction):
             if group in ["ces", "rloc", "payload"]:
                 func   = CETP.VERIFY_TLV_GROUP[group][code]
                 result = func(tlv=tlv, code=code, ces_params=self.ces_params, l_cesid=self.l_cesid, r_cesid=self.r_cesid, r_addr=self.remote_addr, packet=self.packet, \
-                              cetp_security=self.cetp_security, policy = self.ces_policy, transaction=self, interfaces=self.interfaces, session_established=self.c2c_negotiation_status)
+                              cetp_security=self.cetp_security, policy = self.ces_policy, transaction=self, interfaces=self.interfaces, \
+                              payloadID_table=self.payloadID_table, session_established=self.c2c_negotiation_status)
                 return result
         except Exception as ex:
             self._logger.error("Exception in _verify_tlv() '{}'".format(ex))
@@ -319,14 +317,15 @@ class oC2CTransaction(C2CTransaction):
     Negotiates outbound CES policies with the remote CES.
     Also contains methods to facilitate signalling in the post-c2c negotiation phase between CES nodes.
     """
-    def __init__(self, loop, l_cesid="", r_cesid="", c_sstag=0, c_dstag=0, cetpstate_mgr=None, policy_client=None, policy_mgr=None, proto="tls", ces_params=None, \
-                 cetp_security=None, remote_addr=None, interfaces=None, c2c_layer=None, conn_table=None, cetp_mgr=None, direction="outbound", name="oC2CTransaction"):
+    def __init__(self, loop, l_cesid="", r_cesid="", c_sstag=0, c_dstag=0, cetpstate_table=None, policy_client=None, policy_mgr=None, proto="tls", ces_params=None, \
+                 cetp_security=None, remote_addr=None, interfaces=None, c2c_layer=None, conn_table=None, cetp_mgr=None, payloadID_table=None, \
+                 direction="outbound", name="oC2CTransaction"):
         self._loop                  = loop
         self.l_cesid                = l_cesid
         self.r_cesid                = r_cesid
         self.sstag                  = c_sstag
         self.dstag                  = c_dstag
-        self.cetpstate_mgr          = cetpstate_mgr
+        self.cetpstate_table        = cetpstate_table
         self.policy_client          = policy_client
         self.policy_mgr             = policy_mgr                            # Used in absence of the PolicyAgent to PolicyManagementSystem interaction.
         self.direction              = direction
@@ -337,6 +336,7 @@ class oC2CTransaction(C2CTransaction):
         self.c2c_layer              = c2c_layer
         self.interfaces             = interfaces
         self.conn_table             = conn_table
+        self.payloadID_table        = payloadID_table
         self.rtt                    = 0
         self.packet_count           = 0
         self.last_packet_received   = None
@@ -407,7 +407,7 @@ class oC2CTransaction(C2CTransaction):
         """ Unregisters the incomplete negotiation upon timeout """
         if not self.is_negotiated():
             self._logger.error("C2C negotiation towards '{}' did not complete in '{}' sec.".format(self.r_cesid, self.completion_t0))
-            self.cetpstate_mgr.remove(self)
+            self.cetpstate_table.remove(self)
     
     def is_negotiated(self):
         return self.c2c_negotiation_status
@@ -443,7 +443,7 @@ class oC2CTransaction(C2CTransaction):
             
             cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
             self.pprint(cetp_message, m="Outbound packet")
-            self.cetpstate_mgr.add(self)
+            self.cetpstate_table.add(self)
             self._schedule_completion_check()                   # Callback to unregister the incomplete C2C transaction
             self.last_packet_sent = cetp_message
             self._start_time = time.time()
@@ -455,7 +455,7 @@ class oC2CTransaction(C2CTransaction):
     
     def set_terminated(self, terminated=True):
         if not self.terminated:
-            self.cetpstate_mgr.remove(self)
+            self.cetpstate_table.remove(self)
             self.terminated = terminated
             
             if self.is_negotiated():
@@ -648,12 +648,12 @@ class oC2CTransaction(C2CTransaction):
 
     def _process_negotiation_failure(self):
         """ Steps to execute on failure of negotiation """
-        self.cetpstate_mgr.remove(self)                # Since transaction didn't completed at oCES yet.
+        self.cetpstate_table.remove(self)                # Since transaction didn't completed at oCES yet.
         self.unregister_handler.cancel()
         
     def _process_negotiation_success(self):
         """ State management of established C2C transaction, and triggering the negotiated functions """
-        self.cetpstate_mgr.reregister(self)
+        self.cetpstate_table.reregister(self)
         self.unregister_handler.cancel()
         self.trigger_negotiated_functionality()
         return True
@@ -995,13 +995,12 @@ Another possible post-c2c work:
 LOGLEVEL_iC2CTransaction        = logging.INFO
 
 class iC2CTransaction(C2CTransaction):
-    def __init__(self, loop, sstag=0, dstag=0, l_cesid="", r_cesid="", l_addr=(), r_addr=(), policy_mgr= None, policy_client=None, cetpstate_mgr= None, ces_params=None, \
-                 cetp_security=None, interfaces=None, conn_table=None, proto="tcp", cetp_mgr=None, name="iC2CTransaction"):
+    def __init__(self, loop, sstag=0, dstag=0, l_cesid="", r_cesid="", l_addr=(), r_addr=(), policy_mgr= None, policy_client=None, cetpstate_table= None, ces_params=None, \
+                 cetp_security=None, interfaces=None, conn_table=None, proto="tcp", cetp_mgr=None, payloadID_table=None, name="iC2CTransaction"):
         self._loop                      = loop
         self.local_addr                 = l_addr
         self.remote_addr                = r_addr
         self.policy_mgr                 = policy_mgr                # This could be policy client in future use.
-        self.cetpstate_mgr              = cetpstate_mgr
         self.l_cesid                    = l_cesid
         self.r_cesid                    = r_cesid
         self.proto                      = proto
@@ -1013,6 +1012,8 @@ class iC2CTransaction(C2CTransaction):
         self.interfaces                 = interfaces
         self.name                       = name
         self.conn_table                 = conn_table
+        self.cetpstate_table            = cetpstate_table
+        self.payloadID_table            = payloadID_table
         self.c2c_negotiation_status     = False
         self.cetp_mgr                   = cetp_mgr
         self.r_ces_requirements         = []
@@ -1228,7 +1229,7 @@ class iC2CTransaction(C2CTransaction):
 
     def _export_to_stateful(self):
         new_transaction = oC2CTransaction(self._loop, l_cesid=self.l_cesid, r_cesid=self.r_cesid, c_sstag=self.sstag, c_dstag=self.dstag, policy_mgr= self.policy_mgr, \
-                                          cetpstate_mgr=self.cetpstate_mgr, ces_params=self.ces_params, proto=self.proto, direction="inbound", \
+                                          cetpstate_table=self.cetpstate_table, ces_params=self.ces_params, proto=self.proto, direction="inbound", \
                                           cetp_security=self.cetp_security, conn_table=self.conn_table, cetp_mgr=self.cetp_mgr)
         
         new_transaction.ces_policy              = self.ces_policy
@@ -1238,6 +1239,6 @@ class iC2CTransaction(C2CTransaction):
         new_transaction.load_parameters()
         new_transaction.negotiated_params       = self.negotiated_params
         new_transaction.conn                    = self.conn
-        self.cetpstate_mgr.add(new_transaction)
+        self.cetpstate_table.add(new_transaction)
         new_transaction.trigger_negotiated_functionality()
         return new_transaction

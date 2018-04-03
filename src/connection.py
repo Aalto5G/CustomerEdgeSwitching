@@ -7,6 +7,7 @@ import host
 
 from helpers_n_wrappers import container3
 from helpers_n_wrappers import utils3
+import asyncio
 
 KEY_RGW = 0
 
@@ -244,7 +245,7 @@ class C2CConnectionTemplate(container3.ContainerNode):
         # Extracts the RLOC and payload values
         self.lrloc      = lrloc[3]
         self.rrloc      = rrloc[3]
-        self.lpayload   = (lpayload[0], rpayload[2])
+        self.lpayload   = (lpayload[0], lpayload[2])
         self.rpayload   = (rpayload[0], rpayload[2])
 
     def get_rlocs(self):
@@ -277,7 +278,7 @@ class C2CConnectionTemplate(container3.ContainerNode):
 
 
 class H2HConnection(container3.ContainerNode):
-    def __init__(self, cetpstate_mgr, adress_pool, host_table, timeout, lid, lip, lpip, rid, lfqdn, rfqdn, sstag, dstag, r_cesid, conn_table, name="H2HConnection"):
+    def __init__(self, network, cetpstate_table, adress_pool, host_table, timeout, lid, lip, lpip, rid, lfqdn, rfqdn, sstag, dstag, r_cesid, conn_table, name="H2HConnection"):
         """
         Initialize a H2HConnection object.
         
@@ -299,14 +300,17 @@ class H2HConnection(container3.ContainerNode):
         self.r_cesid             = r_cesid
         self.conn_table          = conn_table
         self.host_table          = host_table
-        self.cetpstate_mgr       = cetpstate_mgr
+        self.cetpstate_table     = cetpstate_table
         self.adress_pool         = adress_pool
         self.timeout             = timeout
+        self.network             = network 
         self.connectiontype      = "CONNECTION_H2H"
         self._logger             = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HConnection)
         self._logger.debug("Connection tags: {} -> {}".format(sstag, dstag))
         self._build_lookupkeys()
+        self._get_c2c_connection_params()
+        asyncio.ensure_future(self.add())
 
     def _get_c2c_connection_params(self):
         key         = (KEY_MAP_RCESID_C2C, self.r_cesid)
@@ -314,8 +318,8 @@ class H2HConnection(container3.ContainerNode):
         self.lrloc, self.rrloc          = c2c_conn.get_rlocs()
         self.lpayload, self.rpayload    = c2c_conn.get_payloads()
         self.tunnel_type                = self.lpayload[0]
-        self.tunnel_id_in               = self.lpayload[2]
-        self.tunnel_id_out              = self.rpayload[2]
+        self.tunnel_id_in               = self.lpayload[1]
+        self.tunnel_id_out              = self.rpayload[1]
         
     def _build_lookupkeys(self):
         self._built_lookupkeys = []
@@ -330,10 +334,14 @@ class H2HConnection(container3.ContainerNode):
         if (self.sstag is not None) and (self.dstag is not None):
             self._built_lookupkeys += [ ((KEY_MAP_CES_TO_CES, self.sstag, self.dstag), True) ]
     
+    @asyncio.coroutine
     def add(self):
-        pass
+        print("Adding connection RLOCs")
+        print("self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type")
+        print(self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type)
+        print("Adding openflow connection")
+        yield from self.network.add_tunnel_connection(self.lip, self.lpip, self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type)
         #add_tunnel_connection(src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, diffserv=False)
-        #add_tunnel_connection(self.lip, self.lpip, self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type)
         
     def lookupkeys(self):
         return self._built_lookupkeys
@@ -345,8 +353,8 @@ class H2HConnection(container3.ContainerNode):
         # Terminating the H2HTransaction
         key = (H2HTransaction.KEY_ESTABLISHED_TAGS, self.sstag, self.dstag)
         
-        if self.cetpstate_mgr.has(key):
-            cetp_transaction = self.cetpstate_mgr.get(key)
+        if self.cetpstate_table.has(key):
+            cetp_transaction = self.cetpstate_table.get(key)
             cetp_transaction.terminate()
         
         # Releasing the CES proxy address

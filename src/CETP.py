@@ -10,17 +10,18 @@ import time
 import traceback
 import json
 import ssl
+import copy
+
 import cetpManager
 import CETPC2C
 import CETPH2H
 import cetpOperations
-import copy
 
 from helpers_n_wrappers import container3
 
 LOGLEVELCETP           = logging.DEBUG
 LOGLEVELCETPSTATETABLE = logging.INFO
-
+LOGLEVELPAYLOADIDTABLE = logging.INFO
 
 class CETPTLV(object):
     def __init__(self):
@@ -80,6 +81,47 @@ class CETPStateTable(container3.Container):
         return "Total length of CETPStateTable = {}".format(len(self.getall()))
 
 
+class PayloadIDTable(container3.Container):
+    def __init__(self, name="PayloadIDTable"):
+        """
+        Initialize the PayloadIDTable object. 
+        """
+        super().__init__(name)
+        self._logger = logging.getLogger("name")
+        self._logger.setLevel(LOGLEVELPAYLOADIDTABLE)
+            
+    def __str__(self):
+        return "Total length of PayloadIDTable = {}".format(len(self.getall()))
+
+
+class PayloadIDs(container3.ContainerNode):
+    def __init__(self, r_cesid, payload_type, tunnel_id, preference, name="PayloadIDs"):
+        """
+        Initialize the Payload IDs object. 
+        """
+        super().__init__(name)
+        self.r_cesid        = r_cesid
+        self.payload_type   = payload_type
+        self.tunnel_id      = tunnel_id
+        self.preference     = preference
+        self._logger        = logging.getLogger("name")
+        self._logger.setLevel(LOGLEVELPAYLOADIDTABLE)
+        self._build_lookupkeys()
+
+    def _build_lookupkeys(self):
+        keys = []
+        keys += [((self.r_cesid, self.payload_type), True)]
+        keys += [((self.r_cesid, self.payload_type, self.tunnel_id), True)]
+        self._built_lookupkeys = keys
+
+    def lookupkeys(self):
+        return self._built_lookupkeys
+
+    def get_tunnelID(self):
+        return self.tunnel_id
+
+    def get_preference(self):
+        return self.preference
 
 
 PPRINT_GROUP = { "id":"id ", "ces":"ces ", "control":"ctrl", "rloc":"rloc", "payload":"payl"}
