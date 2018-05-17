@@ -1153,7 +1153,7 @@ class H2HTransactionLocal(H2HTransaction):
             #self.dns_state.delete(stateobj)
             return False
         else:
-            #self._logger.info(" Local CETP Policy matched! Allocate proxy address. {} -> {}".format(self.src_id, self.dst_id))
+            self._logger.info(" Local CETP Policy matched! Allocate proxy address. {} -> {}".format(self.src_id, self.dst_id))
             lpip = self._create_local_connection()
             
             if lpip is not False:
@@ -1180,7 +1180,8 @@ class H2HTransactionLocal(H2HTransaction):
                 return False
             else:
                 self._logger.info(" Creating dataplane H2HLocal connection")
-                self.conn = connection.LocalConnection(120.0, lip=lip, lpip=lpip, rip=rip, rpip=rpip, lfqdn=lfqdn, rfqdn=rfqdn)
+                timeout = 120.0
+                self.conn = connection.LocalConnection(self.network, timeout, lip=lip, lpip=lpip, rip=rip, rpip=rpip, lfqdn=lfqdn, rfqdn=rfqdn)
                 self.conn_table.add(self.conn)
                 return lpip
         

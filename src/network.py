@@ -6,6 +6,8 @@ import socket, struct
 import os, subprocess
 import random, string
 import urllib.parse
+import struct
+import socket
 
 from helpers_n_wrappers import container3
 from helpers_n_wrappers import utils3
@@ -89,7 +91,7 @@ class Network(object):
         # Create OpenvSwitch
         self.ovs_create()
         # Create SYNPROXY instance
-        self.synproxy_create()
+        #self.synproxy_create()
 
     def ips_init(self):
         data_d = self.datarepository.get_policy_ces('IPSET', {})
@@ -452,12 +454,13 @@ class Network(object):
         self.rest_api.close()
 
     def ovs_create(self):
+        self.ovs_bridge_name = "br-ces0"
         self._logger.info('Create OpenvSwitch for CES data tunnelling')
         ## Create OVS bridge, set datapath-id (16 hex digits) and configure controller
-        to_exec = ['ovs-vsctl --if-exists del-br br-ces0',
-                   'ovs-vsctl add-br br-ces0',
-                   'ovs-vsctl set bridge br-ces0 other-config:datapath-id={:016x}'.format(OVS_DATAPATH_ID),
-                   'ovs-vsctl set-controller br-ces0 tcp:127.0.0.1:6653']
+        to_exec = ['ovs-vsctl --if-exists del-br {}'.format(self.ovs_bridge_name),
+                   'ovs-vsctl add-br {}'.format(self.ovs_bridge_name),
+                   'ovs-vsctl set bridge {} other-config:datapath-id={:016x}'.format(self.ovs_bridge_name, OVS_DATAPATH_ID),
+                   'ovs-vsctl set-controller {} tcp:127.0.0.1:6653'.format(self.ovs_bridge_name)]
         for _ in to_exec:
             self._do_subprocess_call(_, raise_exc = False, silent = False)
 
@@ -561,6 +564,46 @@ class Network(object):
         #yield from self.add_tunnel_connection('192.168.0.100', '172.16.0.4', '100.64.1.130', '100.64.2.130', 7, 70, 'geneve')
         #yield from self.delete_tunnel_connection('192.168.0.100', '172.16.0.2', '100.64.1.130', '100.64.2.130', 5, 50, 'gre')
 
+    def ip2int(self, ip4addr):
+        """
+        Convert an IPv4 address to integer.        
+        @param addr: The IPv4 address in string format.
+        @return: The integer value of the IPv4 address.  
+        """
+        return struct.unpack("!I", socket.inet_aton(ip4addr))[0]
+    
+    def int2ip(self, ip4int):
+        """
+        Convert an integer to IPv4 address.        
+        @param addr: The integer value of the IPv4 address.  
+        @return: The IPv4 address in string format.
+        """
+        return socket.inet_ntoa(struct.pack("!I", ip4int))
+    
+    def ip62int(self, ip6addr):
+        """
+        Convert an IPv6 address to integer.
+        @param addr: The IPv6 address in string format.
+        @return: The integer value of the IPv4 address.  
+        """
+        try:
+            _str = socket.inet_pton(socket.AF_INET6, ip6addr)
+        except socket.error:
+            raise ValueError
+        a, b = struct.unpack('!2Q', _str)
+        return (a << 64) | b    
+    
+    def int2ip6(self, ip6int):
+        """
+        Convert an integer to IPv6 address.        
+        @param addr: The integer value of the IPv6 address.  
+        @return: The IPv6 address in string format.
+        """ 
+        a = ip6int >> 64
+        b = ip6int & ((1 << 64) - 1)
+        return socket.inet_ntop(socket.AF_INET6, struct.pack('!2Q', a, b))
+    
+
     @asyncio.coroutine
     def add_local_connection(self, src, psrc, dst, pdst):
         self._logger.info('Create CES local connection {}:{} <=> {}:{}'.format(src, psrc, dst, pdst))
@@ -610,7 +653,7 @@ class Network(object):
         yield from self.rest_api.do_post(url_delete, json.dumps(data))
 
     @asyncio.coroutine
-    def add_tunnel_connection(self, src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, diffserv=False):
+    def add_tunnel_connection(self, src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, sstag=0, dstag=0, diffserv=False):
         self._logger.info('Create CES tunnel connection {}:{} / {}:{}  tun_in={} tun_out={} [{} diffserv={}]'.format(src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, diffserv))
 
         # Build URL for add operations
@@ -629,6 +672,13 @@ class Network(object):
         # For security, zero IPv4 src and dst fields / TEID <=> tun_id
         zero_mac  = '00:00:00:00:00:00'
         zero_ipv4 = '0.0.0.0'
+        src_ip    = zero_ipv4
+        dst_ip    = zero_ipv4
+                
+        if sstag != 0 and dstag != 0:
+            src_ip = self.int2ip(sstag)
+            dst_ip = self.int2ip(dstag)
+
 
         # Create outgoing unidirectional connection
         data = {'dpid': OVS_DATAPATH_ID, 'table_id':1, 'priority':10,
@@ -636,8 +686,8 @@ class Network(object):
                          'ipv4_src':src, 'ipv4_dst':psrc},
                 'actions':[{'type':'SET_FIELD', 'field':'eth_src', 'value':zero_mac},
                            {'type':'SET_FIELD', 'field':'eth_dst', 'value':zero_mac},
-                           {'type':'SET_FIELD', 'field':'ipv4_src', 'value':zero_ipv4},
-                           {'type':'SET_FIELD', 'field':'ipv4_dst', 'value':zero_ipv4},
+                           {'type':'SET_FIELD', 'field':'ipv4_src', 'value':src_ip},
+                           {'type':'SET_FIELD', 'field':'ipv4_dst', 'value':dst_ip},
                            {'type':'SET_FIELD', 'field':'tun_ipv4_src', 'value':tun_src},
                            {'type':'SET_FIELD', 'field':'tun_ipv4_dst', 'value':tun_dst},
                            {'type':'SET_FIELD', 'field':'tunnel_id', 'value':tun_id_out},
@@ -647,9 +697,21 @@ class Network(object):
             data['actions'].insert(-1, {'type':'SET_FIELD', 'field':'ip_dscp', 'value':OVS_DIFFSERV_MARK})
         yield from self.rest_api.do_post(url_add, json.dumps(data))
 
-        # Create outgoing unidirectional connection
+        'ovs-ofctl add-flow -OOpenFlow13 br-ces0 "table=2,priority=10,in_port=tunnel_port,ip,tun_src=tun_dst,tun_dst=tun_src,tun_id=tun_id_in actions=mod_dl_src:OVS_PORT_TUN_L3_MAC,mod_dl_dst:OVS_PORT_TUN_L3_MAC,mod_nw_src:psrc,mod_nw_dst:src,output:OVS_PORT_TUN_L3"'
+        
+        """
+        self._logger.info("Inserting the tunnel_connection via ofctl")
+        ofctl_conn = 'ovs-ofctl add-flow -OOpenFlow13 {} "table={},priority={},in_port={},ip,tun_src={},tun_dst={},tun_id={} actions=mod_dl_src:{},mod_dl_dst:{},mod_nw_src:{},mod_nw_dst:{},output:{}"'
+        ofctl_conn = ofctl_conn.format(self.ovs_bridge_name, 2, 10, tunnel_port, tun_dst, tun_src, tun_id_in, OVS_PORT_TUN_L3_MAC, OVS_PORT_TUN_L3_MAC, psrc, src, OVS_PORT_TUN_L3)
+        print(ofctl_conn)
+        self._do_subprocess_call(ofctl_conn, raise_exc = False, silent = False)        
+        """
+        
+        #"""
+        # Create incoming unidirectional connection
         data = {'dpid': OVS_DATAPATH_ID, 'table_id':2, 'priority':10,
                 'match':{'in_port':tunnel_port, 'eth_type':2048,
+                         'ipv4_src': dst_ip,    'ipv4_dst': src_ip,
                          'tun_ipv4_src':tun_dst, 'tun_ipv4_dst':tun_src, 'tunnel_id':tun_id_in},
                 'actions':[{'type':'SET_FIELD', 'field':'eth_src', 'value':OVS_PORT_TUN_L3_MAC},
                            {'type':'SET_FIELD', 'field':'eth_dst', 'value':OVS_PORT_TUN_L3_MAC},
@@ -657,12 +719,14 @@ class Network(object):
                            {'type':'SET_FIELD', 'field':'ipv4_dst', 'value':src},
                            {'type':'OUTPUT', 'port':OVS_PORT_TUN_L3}]}
         if diffserv:
-            # Add matching of IP.dscp field for DiffServ treatment
+            # Add matching of IP.dscp field for DiffServ treatment   - # if ofctl-connection runs, then also modify template string to include the following
             data['match']['ip_dscp'] = OVS_DIFFSERV_MARK
         yield from self.rest_api.do_post(url_add, json.dumps(data))
+        #"""
+
 
     @asyncio.coroutine
-    def delete_tunnel_connection(self, src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, diffserv=False):
+    def delete_tunnel_connection(self, src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, sstag=0, dstag=0, diffserv=False):
         self._logger.info('Delete CES tunnel connection {}:{} / {}:{}  tun_in={} tun_out={} [{} diffserv={}]'.format(src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, diffserv))
 
         # Build URL for delete operations
@@ -678,6 +742,16 @@ class Network(object):
         else:
             raise Exception('Unsupported tunneling type! {}'.format(tun_type))
 
+
+        zero_mac  = '00:00:00:00:00:00'
+        zero_ipv4 = '0.0.0.0'
+        src_ip    = zero_ipv4
+        dst_ip    = zero_ipv4
+                
+        if sstag != 0 and dstag != 0:
+            src_ip = self.int2ip(sstag)
+            dst_ip = self.int2ip(dstag)
+
         # Delete outgoing unidirectional connection
         data = {'dpid': OVS_DATAPATH_ID, 'table_id':1, 'priority':10,
                 'match':{'in_port':OVS_PORT_TUN_L3, 'eth_type':2048,
@@ -687,6 +761,7 @@ class Network(object):
         # Delete incoming unidirectional connection
         data = {'dpid': OVS_DATAPATH_ID, 'table_id':2, 'priority':10,
                 'match':{'in_port':tunnel_port, 'eth_type':2048,
+                         'ipv4_src': dst_ip,    'ipv4_dst': src_ip,
                          'tun_ipv4_src':tun_dst, 'tun_ipv4_dst':tun_src, 'tunnel_id':tun_id_in}}
         if diffserv:
             # Add matching of IP.dscp field for DiffServ treatment

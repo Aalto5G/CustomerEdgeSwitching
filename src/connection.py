@@ -310,7 +310,7 @@ class H2HConnection(container3.ContainerNode):
         self._logger.debug("Connection tags: {} -> {}".format(sstag, dstag))
         self._build_lookupkeys()
         self._get_c2c_connection_params()
-        asyncio.ensure_future(self.add())
+        self.add()
 
     def _get_c2c_connection_params(self):
         key         = (KEY_MAP_RCESID_C2C, self.r_cesid)
@@ -334,21 +334,18 @@ class H2HConnection(container3.ContainerNode):
         if (self.sstag is not None) and (self.dstag is not None):
             self._built_lookupkeys += [ ((KEY_MAP_CES_TO_CES, self.sstag, self.dstag), True) ]
     
-    @asyncio.coroutine
     def add(self):
-        print("Adding connection RLOCs")
+        print("Negotiated C2C parameters")
         print("self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type")
         print(self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type)
-        print("Adding openflow connection")
-        yield from self.network.add_tunnel_connection(self.lip, self.lpip, self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type)
-        #add_tunnel_connection(src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, diffserv=False)
+        asyncio.ensure_future( self.network.add_tunnel_connection(self.lip, self.lpip, self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type, self.sstag, self.dstag) )
         
     def lookupkeys(self):
         return self._built_lookupkeys
         
     def delete(self):
         self._logger.debug("Deleting a {} connection!".format(self.connectiontype))
-        #delete_tunnel_connection(self.lip, self.lpip, self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type)
+        asyncio.ensure_future( self.network.delete_tunnel_connection(self.lip, self.lpip, self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type, self.sstag, self.dstag) )
         
         # Terminating the H2HTransaction
         key = (H2HTransaction.KEY_ESTABLISHED_TAGS, self.sstag, self.dstag)
@@ -370,7 +367,7 @@ class H2HConnection(container3.ContainerNode):
 
 
 class LocalConnection(container3.ContainerNode):
-    def __init__(self, timeout, lid=None, lip=None, lpip=None, rid=None, rip=None, rpip=None, lfqdn=None, rfqdn=None, name="LocalConnection"):
+    def __init__(self, network, timeout, lid=None, lip=None, lpip=None, rid=None, rip=None, rpip=None, lfqdn=None, rfqdn=None, name="LocalConnection"):
         """
         Initialize a LocalConnection object.
         
@@ -388,10 +385,12 @@ class LocalConnection(container3.ContainerNode):
         self.rip, self.rpip   = rip, rpip
         self.localFQDN        = lfqdn
         self.remoteFQDN       = rfqdn
+        self.network          = network
         self.connectiontype   = "CONNECTION_LOCAL"
         self._logger = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_LocalConnection)
         self._build_lookupkeys()
+        self.add()
 
     def _build_lookupkeys(self):
         self._built_lookupkeys = []
@@ -406,14 +405,15 @@ class LocalConnection(container3.ContainerNode):
     def lookupkeys(self):
         """ Keys for indexing Local Connection object """
         return self._built_lookupkeys    
-
+    
     def add(self):
-        pass
         #add_local_connection(self.lip, self.lpip, self.rip, self.rpip)
+        asyncio.ensure_future( self.network.add_local_connection(self.lip, self.lpip, self.rip, self.rpip) )
 
     def delete(self):
         self._logger.debug("Deleting a {} connection!".format(self.connectiontype))
         #delete_local_connection(self.lip, self.lpip, self.rip, self.rpip)
+        asyncio.ensure_future( self.network.delete_local_connection(self.lip, self.lpip, self.rip, self.rpip) )
 
         # Releasing the CES proxy address        
         key     = (host.KEY_HOST_SERVICE, self.localFQDN)
