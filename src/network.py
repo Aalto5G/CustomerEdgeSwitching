@@ -6,8 +6,7 @@ import socket, struct
 import os, subprocess
 import random, string
 import urllib.parse
-import struct
-import socket
+import Utils
 
 from helpers_n_wrappers import container3
 from helpers_n_wrappers import utils3
@@ -85,7 +84,7 @@ class Network(object):
         # Initialize ipsets
         self.ips_init()
         # Initialize iptables
-        self.ipt_init()
+        #self.ipt_init()
         # Create HTTP REST Client
         self.rest_api_init()
         # Create OpenvSwitch
@@ -485,6 +484,7 @@ class Network(object):
         _t = asyncio.ensure_future(self.wait_up())
         RUNNING_TASKS.append((_t, 'network.wait_up'))
 
+    
     @asyncio.coroutine
     def ovs_init_flowtable(self):
         self._logger.info('Bootstrapping OpenvSwitch flow table')
@@ -564,45 +564,49 @@ class Network(object):
         #yield from self.add_tunnel_connection('192.168.0.100', '172.16.0.4', '100.64.1.130', '100.64.2.130', 7, 70, 'geneve')
         #yield from self.delete_tunnel_connection('192.168.0.100', '172.16.0.2', '100.64.1.130', '100.64.2.130', 5, 50, 'gre')
 
-    def ip2int(self, ip4addr):
-        """
-        Convert an IPv4 address to integer.        
-        @param addr: The IPv4 address in string format.
-        @return: The integer value of the IPv4 address.  
-        """
-        return struct.unpack("!I", socket.inet_aton(ip4addr))[0]
+
+    @asyncio.coroutine
+    def get_dp_flow_stats(self):
+        api_url_stats   = "stats/flow/{}".format(OVS_DATAPATH_ID)
+        url_add         = urllib.parse.urljoin(self.api_url, api_url_stats)
+        d               = yield from self.rest_api.do_get(url_add)
+        dp_stats        = json.loads(d)
+        stats           = dp_stats[str(OVS_DATAPATH_ID)]
+        
+        #"""
+        count = 0
+        for stat in stats:
+            if stat["cookie"] != 0:
+                count += 1
+            
+        self._logger.info("{} H2H connections found in DP.".format(count))
+        #"""
+        return stats
+            
     
-    def int2ip(self, ip4int):
-        """
-        Convert an integer to IPv4 address.        
-        @param addr: The integer value of the IPv4 address.  
-        @return: The IPv4 address in string format.
-        """
-        return socket.inet_ntoa(struct.pack("!I", ip4int))
-    
-    def ip62int(self, ip6addr):
-        """
-        Convert an IPv6 address to integer.
-        @param addr: The IPv6 address in string format.
-        @return: The integer value of the IPv4 address.  
-        """
-        try:
-            _str = socket.inet_pton(socket.AF_INET6, ip6addr)
-        except socket.error:
-            raise ValueError
-        a, b = struct.unpack('!2Q', _str)
-        return (a << 64) | b    
-    
-    def int2ip6(self, ip6int):
-        """
-        Convert an integer to IPv6 address.        
-        @param addr: The integer value of the IPv6 address.  
-        @return: The IPv6 address in string format.
-        """ 
-        a = ip6int >> 64
-        b = ip6int & ((1 << 64) - 1)
-        return socket.inet_ntop(socket.AF_INET6, struct.pack('!2Q', a, b))
-    
+    def _synchronize_conns(self, conn_table, cp_conns, dp_stats):
+        """ Synchronizing the CP and DP """
+        dp_cookies = []        
+        to_remove  = []
+        self._logger.info("{} H2H connections found in CES-CP.".format(len(cp_conns)))
+
+        # Generate a list of all DP connection cookies        
+        for d in dp_stats:
+            cookie = d["cookie"]
+            if cookie in dp_cookies:
+                continue
+            
+            dp_cookies.append(cookie)
+        
+        # Match CP cookies with the list of DP connection cookies
+        for c in cp_conns:
+            if c.conn_cookie not in dp_cookies:
+                to_remove.append(c)
+        
+        # Remove non matching CP H2H-connections 
+        for t in range(0, len(to_remove)):
+            conn_table.remove(to_remove[0], callback=True)
+                    
 
     @asyncio.coroutine
     def add_local_connection(self, src, psrc, dst, pdst):
@@ -653,7 +657,7 @@ class Network(object):
         yield from self.rest_api.do_post(url_delete, json.dumps(data))
 
     @asyncio.coroutine
-    def add_tunnel_connection(self, src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, sstag=0, dstag=0, diffserv=False):
+    def add_tunnel_connection(self, src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, cookie=0, sstag=0, dstag=0, hard_timeout=None, idle_timeout=None, diffserv=False):
         self._logger.info('Create CES tunnel connection {}:{} / {}:{}  tun_in={} tun_out={} [{} diffserv={}]'.format(src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, diffserv))
 
         # Build URL for add operations
@@ -676,12 +680,11 @@ class Network(object):
         dst_ip    = zero_ipv4
                 
         if sstag != 0 and dstag != 0:
-            src_ip = self.int2ip(sstag)
-            dst_ip = self.int2ip(dstag)
-
-
+            src_ip = Utils.int2ip(sstag)
+            dst_ip = Utils.int2ip(dstag)
+        
         # Create outgoing unidirectional connection
-        data = {'dpid': OVS_DATAPATH_ID, 'table_id':1, 'priority':10,
+        data = {'dpid': OVS_DATAPATH_ID, 'table_id':1, 'priority':10, 'cookie':cookie,
                 'match':{'in_port':OVS_PORT_TUN_L3, 'eth_type':2048,
                          'ipv4_src':src, 'ipv4_dst':psrc},
                 'actions':[{'type':'SET_FIELD', 'field':'eth_src', 'value':zero_mac},
@@ -692,6 +695,13 @@ class Network(object):
                            {'type':'SET_FIELD', 'field':'tun_ipv4_dst', 'value':tun_dst},
                            {'type':'SET_FIELD', 'field':'tunnel_id', 'value':tun_id_out},
                            {'type':'OUTPUT', 'port':tunnel_port}]}
+        
+        if hard_timeout is not None:
+            data['hard_timeout'] = hard_timeout
+
+        if idle_timeout is not None:
+            data['idle_timeout'] = idle_timeout
+        
         if diffserv:
             # Add second to last action for setting IP.dscp field for DiffServ treatment
             data['actions'].insert(-1, {'type':'SET_FIELD', 'field':'ip_dscp', 'value':OVS_DIFFSERV_MARK})
@@ -709,7 +719,7 @@ class Network(object):
         
         #"""
         # Create incoming unidirectional connection
-        data = {'dpid': OVS_DATAPATH_ID, 'table_id':2, 'priority':10,
+        data = {'dpid': OVS_DATAPATH_ID, 'table_id':2, 'priority':10, 'cookie':cookie, 'hard_timeout':hard_timeout,
                 'match':{'in_port':tunnel_port, 'eth_type':2048,
                          'ipv4_src': dst_ip,    'ipv4_dst': src_ip,
                          'tun_ipv4_src':tun_dst, 'tun_ipv4_dst':tun_src, 'tunnel_id':tun_id_in},
@@ -718,6 +728,13 @@ class Network(object):
                            {'type':'SET_FIELD', 'field':'ipv4_src', 'value':psrc},
                            {'type':'SET_FIELD', 'field':'ipv4_dst', 'value':src},
                            {'type':'OUTPUT', 'port':OVS_PORT_TUN_L3}]}
+        
+        if hard_timeout is not None:
+            data['hard_timeout'] = hard_timeout
+
+        if idle_timeout is not None:
+            data['idle_timeout'] = idle_timeout
+            
         if diffserv:
             # Add matching of IP.dscp field for DiffServ treatment   - # if ofctl-connection runs, then also modify template string to include the following
             data['match']['ip_dscp'] = OVS_DIFFSERV_MARK
@@ -749,8 +766,8 @@ class Network(object):
         dst_ip    = zero_ipv4
                 
         if sstag != 0 and dstag != 0:
-            src_ip = self.int2ip(sstag)
-            dst_ip = self.int2ip(dstag)
+            src_ip = Utils.int2ip(sstag)
+            dst_ip = Utils.int2ip(dstag)
 
         # Delete outgoing unidirectional connection
         data = {'dpid': OVS_DATAPATH_ID, 'table_id':1, 'priority':10,

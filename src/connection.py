@@ -10,6 +10,7 @@ from helpers_n_wrappers import utils3
 import asyncio
 
 KEY_RGW = 0
+H2H_cookie = 0
 
 class ConnectionTable(container3.Container):
     def __init__(self, name='ConnectionTable'):
@@ -198,18 +199,19 @@ LOGLEVEL_H2HConnection          = logging.INFO
 LOGLEVEL_LocalConnection        = logging.DEBUG
 
 # Keys for indexing connections
-KEY_MAP_LOCAL_FQDN          = 1     # Indexes host connections against FQDN of local host
-KEY_MAP_REMOTE_FQDN         = 2     # Indexes host connections against FQDN of remote host in another CES node
+KEY_MAP_CETP_CONN           = 1
+KEY_MAP_LOCAL_FQDN          = 2     # Indexes host connections against FQDN of local host
+KEY_MAP_REMOTE_FQDN         = 3     # Indexes host connections against FQDN of remote host in another CES node
 
-KEY_MAP_LOCAL_HOST          = 3     # Indexes host connections against local host's IP
-KEY_MAP_CETP_PRIVATE_NW     = 4     # Indexes host connections against (lip, lpip) pair
-KEY_MAP_REMOTE_CESID        = 5     # Indexes host connections against remote CESID 
+KEY_MAP_LOCAL_HOST          = 4     # Indexes host connections against local host's IP
+KEY_MAP_CETP_PRIVATE_NW     = 5     # Indexes host connections against (lip, lpip) pair
+KEY_MAP_REMOTE_CESID        = 6     # Indexes host connections against remote CESID 
 
-KEY_MAP_CES_FQDN            = 6     # Indexes all host connections across two CES nodes, as pair of the (local and remote host) FQDN 
-KEY_MAP_LOCAL_FQDNs         = 7     # Indexes all host connections within same CES node, as pair of the (local and remote host) FQDN  
-KEY_MAP_HOST_FQDNs          = 8     # Indexes all host connections using local and remote FQDNs
-KEY_MAP_CES_TO_CES          = 9     # Indexes host connection against an (SST, DST) pair
-KEY_MAP_RCESID_C2C          = 10    # Indexes C2C connection against a remote CESID
+KEY_MAP_CES_FQDN            = 7     # Indexes all host connections across two CES nodes, as pair of the (local and remote host) FQDN 
+KEY_MAP_LOCAL_FQDNs         = 8     # Indexes all host connections within same CES node, as pair of the (local and remote host) FQDN  
+KEY_MAP_HOST_FQDNs          = 9     # Indexes all host connections using local and remote FQDNs
+KEY_MAP_CES_TO_CES          = 10     # Indexes host connection against an (SST, DST) pair
+KEY_MAP_RCESID_C2C          = 11    # Indexes C2C connection against a remote CESID
 
 
 
@@ -305,7 +307,7 @@ class H2HConnection(container3.ContainerNode):
         self.timeout             = timeout
         self.network             = network 
         self.connectiontype      = "CONNECTION_H2H"
-        self._logger             = logging.getLogger(name)
+        self._logger             = logging.getLogger(name+str(lfqdn)+"->"+str(rfqdn))
         self._logger.setLevel(LOGLEVEL_H2HConnection)
         self._logger.debug("Connection tags: {} -> {}".format(sstag, dstag))
         self._build_lookupkeys()
@@ -323,6 +325,7 @@ class H2HConnection(container3.ContainerNode):
         
     def _build_lookupkeys(self):
         self._built_lookupkeys = []
+        self._built_lookupkeys +=[ (KEY_MAP_CETP_CONN, False)] 
         self._built_lookupkeys +=[ ((KEY_MAP_LOCAL_HOST, self.lip), False),         ((KEY_MAP_CETP_PRIVATE_NW, self.lip, self.lpip), True) ]
         self._built_lookupkeys +=[ ((KEY_MAP_LOCAL_FQDN, self.localFQDN), False),   ((KEY_MAP_REMOTE_FQDN, self.remoteFQDN), False) ]
         self._built_lookupkeys +=[ ((KEY_MAP_REMOTE_CESID, self.r_cesid), False) ]
@@ -335,10 +338,15 @@ class H2HConnection(container3.ContainerNode):
             self._built_lookupkeys += [ ((KEY_MAP_CES_TO_CES, self.sstag, self.dstag), True) ]
     
     def add(self):
-        print("Negotiated C2C parameters")
-        print("self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type")
-        print(self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type)
-        asyncio.ensure_future( self.network.add_tunnel_connection(self.lip, self.lpip, self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type, self.sstag, self.dstag) )
+        global H2H_cookie
+        H2H_cookie += 1
+        
+        if H2H_cookie == 0xFFFFFFFFFFFFFFF0:
+            H2H_cookie = 1
+            
+        self.conn_cookie = H2H_cookie
+        #self._logger.info("lrloc: {}, rrloc:{}, tunnel_id_in:{}, tunnel_id_out:{}, tunnel_type:{}".format(self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type))
+        asyncio.ensure_future( self.network.add_tunnel_connection(self.lip, self.lpip, self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type, self.conn_cookie, self.sstag, self.dstag) )
         
     def lookupkeys(self):
         return self._built_lookupkeys
@@ -363,7 +371,6 @@ class H2HConnection(container3.ContainerNode):
             self.adress_pool.release(host_id, self.lpip)
 
         # Add the logic for deleting the cached DNS response, if any.
-        
 
 
 class LocalConnection(container3.ContainerNode):
@@ -387,13 +394,14 @@ class LocalConnection(container3.ContainerNode):
         self.remoteFQDN       = rfqdn
         self.network          = network
         self.connectiontype   = "CONNECTION_LOCAL"
-        self._logger = logging.getLogger(name)
+        self._logger = logging.getLogger(name+str(lfqdn)+"->"+str(rfqdn))
         self._logger.setLevel(LOGLEVEL_LocalConnection)
         self._build_lookupkeys()
         self.add()
 
     def _build_lookupkeys(self):
         self._built_lookupkeys = []
+        self._built_lookupkeys += [ (KEY_MAP_CETP_CONN, False) ]
         self._built_lookupkeys += [ ((KEY_MAP_LOCAL_HOST, self.lip), False),        ((KEY_MAP_CETP_PRIVATE_NW, self.lip, self.lpip), True) ]
         self._built_lookupkeys += [ ((KEY_MAP_LOCAL_FQDN, self.localFQDN), False),  ((KEY_MAP_LOCAL_FQDN, self.remoteFQDN), False) ]
         self._built_lookupkeys += [ ((KEY_MAP_LOCAL_FQDNs, self.localFQDN, self.remoteFQDN), True)]
