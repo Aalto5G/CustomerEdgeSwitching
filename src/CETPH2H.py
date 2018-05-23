@@ -57,13 +57,13 @@ class CETPH2H:
     def _isConnected(self):
         return self.c2c_connectivity
     
-    def process_naptrs(self, dst_id, naptr_rrs, cb):
+    def process_naptrs(self, src_id, dst_id, naptr_rrs, cb):
         """ This method enqueues the naptr responses triggered by private hosts. """
         self.c2c.process_naptrs(naptr_rrs)
         if self._isConnected():
-            self.trigger_h2h_negotiation(dst_id, naptr_rrs, cb)
+            self.trigger_h2h_negotiation(src_id, dst_id, naptr_rrs, cb)
         else:
-            queue_msg = (dst_id, naptr_rrs, cb)
+            queue_msg = (src_id, dst_id, naptr_rrs, cb)
             self.h2h_q.put_nowait(queue_msg)               # Possible exception: If the queue is full, [It will simply drop the message (without waiting for space to be available in the queue]
         
     @asyncio.coroutine
@@ -81,11 +81,14 @@ class CETPH2H:
                     self._logger.error(" Exception '{}' in reading H2H-queue towards '{}'".format(ex, self.r_cesid))
                 break
             
-            dst_id, naptr_rr, cb = queued_data
-            self.trigger_h2h_negotiation(dst_id, naptr_rr, cb, from_queue=True)
+            src_id, dst_id, naptr_rr, cb = queued_data
+            self.trigger_h2h_negotiation(src_id, dst_id, naptr_rr, cb, from_queue=True)
     
-    def trigger_h2h_negotiation(self, dst_id, naptr_rr, cb, from_queue=False):
+    def trigger_h2h_negotiation(self, src_id, dst_id, naptr_rr, cb, from_queue=False):
         try:
+            #if self.has_cetp_state(src_id, dst_id):
+            #    return                                    # Absorb DNS query, since CETP negotiation process is currently converging
+
             #if self.ongoing_h2h_transactions < self.max_session_limit:              # Number of simultaneous H2H-transactions are below the upper limit  
             asyncio.ensure_future( self.h2h_transaction_start(cb, dst_id) )       # "try, except" within task can consume a task-related exception
             if from_queue:  self.h2h_q.task_done()
@@ -115,7 +118,11 @@ class CETPH2H:
         self.c2c_connectivity = connected
         if connected:       self.start_h2h_consumption()
         else:               self.suspend_h2h_consumption()
-            
+    
+    def has_cetp_state(self, src_id, dst_id):
+        key = (H2HTransaction.KEY_HOST_IDS, src_id, dst_id)
+        return self.cetpstate_table.has(key)
+
     @asyncio.coroutine
     def h2h_transaction_start(self, cb, dst_id):
         (cb_func, cb_args) = cb
@@ -141,7 +148,7 @@ class CETPH2H:
         #self._logger.debug("self.count: {}".format(self.count))
         inbound_sstag, inbound_dstag = cetp_msg['SST'], cetp_msg['DST']
         sstag, dstag    = inbound_dstag, inbound_sstag
-        
+            
         if self.cetpstate_table.has( (H2HTransaction.KEY_ESTABLISHED_TAGS, sstag, dstag) ):
             self._logger.info(" CETP message for a negotiated transaction (SST={} -> DST={})".format(sstag, dstag))
             o_h2h = self.cetpstate_table.get( (H2HTransaction.KEY_ESTABLISHED_TAGS, sstag, dstag) )
@@ -199,7 +206,6 @@ class CETPH2H:
         self.resource_cleanup()
         self._close_pending_tasks()
         self.cetp_mgr.remove_cetp_endpoint(self.r_cesid)        # Remove the endpoint after cleanup.
-        print("Count", self.count)
         del(self)
         #self.show_measuremnt_results()
     

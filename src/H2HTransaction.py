@@ -18,9 +18,10 @@ import CETPSecurity
 import host
 import connection
 import customdns
-from customdns import dnsutils
-
 import helpers_n_wrappers
+
+from customdns import dnsutils
+from helpers_n_wrappers import utils3
 from helpers_n_wrappers import network_helper3
 
 LOGLEVEL_H2HTransaction         = logging.INFO
@@ -357,6 +358,14 @@ class H2HTransactionOutbound(H2HTransaction):
     def _initialize(self):
         """ Loads policies, generates session tags, and initiates event handlers """
         try:
+            key = (KEY_HOST_IDS, self.src_id, self.dst_id)
+            if self.cetpstate_table.has(key):
+                return False
+            
+            self.load_parameters()
+            self.sstag = self.generate_session_tags()
+            self.cetpstate_table.add(self)
+            
             if not self.is_local_host_allowed(self.src_id):
                 self._logger.error(" Connection from sender '{}' is not allowed to '{}' behind CES '{}'".format(self.src_id, self.dst_id, self.r_cesid))
                 return False
@@ -371,8 +380,6 @@ class H2HTransactionOutbound(H2HTransaction):
                 self._logger.error("Failure to load policies for host-ID '{}'".format(self.src_id))
                 return False
             
-            self.load_parameters()
-            self.sstag = self.generate_session_tags()
             return True
         
         except Exception as ex:
@@ -404,44 +411,44 @@ class H2HTransactionOutbound(H2HTransaction):
     @asyncio.coroutine
     def start_cetp_processing(self):
         """ Returns CETP message containing Policy Offers & Request towards remote-host """
-        #try:
-        initialized = yield from self._initialize()
-        
-        if not initialized:
-            self._logger.error(" Failure in initiating the Host-to-Host session.")
-            return None
-        
-        #self._logger.debug(" Starting H2H session towards '{}' (SST= {} -> DST={})".format(self.dst_id, self.sstag, self.dstag))
-        #self._logger.info("outbound policy: {}".format(self.opolicy))
-        tlvs_to_send = []
-        tlvs_to_send.append(self.append_dstep_info())
- 
-        # Check if sender supports the same id_type as of the destination-id, otherwise maybe not even initiate a transaction? or initiate with a default ID-type?
-        # And regardless of id_type being used, FQDN of host shall be made part of the messages exchanged?
-        
-        # Offered TLVs
-        for otlv in self.opolicy.get_offer():
-            ret_tlv = self._create_offer_tlv(otlv)
-            tlvs_to_send += ret_tlv
+        try:
+            initialized = yield from self._initialize()
             
-        # Required TLVs
-        for rtlv in self.opolicy.get_required():
-            ret_tlv = self._create_request_tlv(rtlv)
-            tlvs_to_send += ret_tlv
+            if not initialized:
+                self._logger.error(" Failure in initiating the Host-to-Host session.")
+                self._execute_dns_callback()
+                return None
+            
+            #self._logger.debug(" Starting H2H session towards '{}' (SST= {} -> DST={})".format(self.dst_id, self.sstag, self.dstag))
+            self._logger.info("outbound policy: \n {} {} {}".format(15*'-', self.opolicy, 15*'-'))
+            tlvs_to_send = []
+            tlvs_to_send.append(self.append_dstep_info())
+     
+            # Check if sender supports the same id_type as of the destination-id, otherwise maybe not even initiate a transaction? or initiate with a default ID-type?
+            # And regardless of id_type being used, FQDN of host shall be made part of the messages exchanged?
+            
+            # Offered TLVs
+            for otlv in self.opolicy.get_offer():
+                ret_tlv = self._create_offer_tlv(otlv)
+                tlvs_to_send += ret_tlv
+                
+            # Required TLVs
+            for rtlv in self.opolicy.get_required():
+                ret_tlv = self._create_request_tlv(rtlv)
+                tlvs_to_send += ret_tlv
+            
+            cetp_msg = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
+            self.pprint(cetp_msg, m="Outbound H2H CETP")
+            self.last_packet_sent = cetp_msg
+            self.cetp_negotiation_history.append(cetp_msg)
+            #self.cetp_h2h.update_H2H_transaction_count()
+            self._schedule_completion_check()
+            return cetp_msg
         
-        cetp_msg = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
-        #self.pprint(cetp_msg, m="Outbound H2H CETP")
-        self.last_packet_sent = cetp_msg
-        self.cetp_negotiation_history.append(cetp_msg)
-        self.cetpstate_table.add(self)
-        #self.cetp_h2h.update_H2H_transaction_count()
-        self._schedule_completion_check()
-        ##self._logger.info("start_cetp_processing delay: {}".format(now-start_time))
-        return cetp_msg
-        
-        #except Exception as ex:
-        #    #self._logger.error("Exception in start_cetp_processing(): {}".format(msg))
-        #    return None
+        except:
+            utils3.trace()
+            self._unregister_h2h()
+            return None
     
     def append_dstep_info(self):
         dstep_tlv = {}
@@ -461,8 +468,11 @@ class H2HTransactionOutbound(H2HTransaction):
 
     def terminate(self):
         """ Execute to unregister H2HTransaction """
-        self.terminated = True
-        self.cetpstate_table.remove(self)
+        try:
+            self.terminated = True
+            self.cetpstate_table.remove(self)
+        except Exception as ex:
+            pass
     
     def delete(self):
         pass
@@ -501,138 +511,139 @@ class H2HTransactionOutbound(H2HTransaction):
 
 
     def continue_cetp_processing(self, cetp_msg):
-        #try:
-        ##self._logger.info("Continue establishing H2H session towards '{}' ({} -> {})".format(self.dst_id, self.sstag, 0))
-        ##self._logger.info("Host policy: {}".format(self.opolicy))
-        #self.pprint(cetp_msg, m="Inbound Response")
-
-        error                       = False
-        tlvs_to_send, error_tlvs    = [], []
-        self.rtt += 1
-        
-        if self.rtt > NEGOTIATION_RTT_THRESHOLD:                                        # Prevents infinite-exchange of CETP policies.
-            self._unregister_h2h()
-            return
-        
-        if not self._pre_process(cetp_msg):
-            self._logger.error(" Inbound packet SST={} -> DST={} failed in pre_processing.".format(self.sstag, self.dstag))
-            return
-        
-        """
-        Processing logic:
-            If pre-processing determined that inbound packet is (or contains) a request message, oCES sends response & issue local CES policy queries.
-            If message contains no query, it is treated as a response message.     If all TLVs could be verified, the message is accepted. Otherwise, oCES sends terminate-TLV, if iCES has already completed (SST, DST) state.
-        """
-        
-        # Processing inbound packet
-        for received_tlv in self.received_tlvs:
+        try:
+            self._logger.info("Continue establishing H2H session towards '{}' ({} -> {})".format(self.dst_id, self.sstag, 0))
+            self._logger.info("Host policy: \n {} {} {}".format(15*'-', self.opolicy, 15*'-'))
+            self.pprint(cetp_msg, m="Inbound Response")
+    
+            error                       = False
+            tlvs_to_send, error_tlvs    = [], []
+            self.rtt += 1
             
-            if self.query_message:
-                if self._check_tlv(received_tlv, ope="query"):
-                    if self.opolicy.has_available(received_tlv):
-                        ret_tlv = self._create_response_tlv(received_tlv)
-                        if ret_tlv != None:
-                            tlvs_to_send += ret_tlv
-                            continue
-                                                    
-                        if self._check_tlv(received_tlv, cmp="optional"):
-                            #self._logger.info(" An optional requirement {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
-                            ret_tlv = self._get_unavailable_response(received_tlv)
-                            tlvs_to_send.append(ret_tlv)
-                        else:
-                            self._logger.error(" A required TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
-                            #error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
-                            error = True
-                            break
+            if self.rtt > NEGOTIATION_RTT_THRESHOLD:                                        # Prevents infinite-exchange of CETP policies.
+                self._unregister_h2h()
+                return
             
-            #A CETP response message is processed for: Policy Matching and TLV Verification. The message can have: 1) Less than required TLVs; 2) TLVs with wrong value; 3) a notAvailable TLV; OR 4) a terminate TLV.
-            elif self._check_tlv(received_tlv, ope="info"):
-                if (received_tlv['group'] == 'control') and (received_tlv['code']=='terminate'):
-                    #self._logger.info(" Terminate-TLV received with value: {}".format(received_tlv['value']) )
-                    error = True
-                    break
-
-                elif self.opolicy.has_required(received_tlv):
-                    if self._verify_tlv(received_tlv):
-                        self.opolicy_tmp.del_required(received_tlv)
-                    else:
-                        # Absorbs failure in case of 'optional' required policy TLV
-                        if not self.opolicy.is_mandatory_required(received_tlv):
+            if not self._pre_process(cetp_msg):
+                self._logger.error(" Inbound packet SST={} -> DST={} failed in pre_processing.".format(self.sstag, self.dstag))
+                return
+            
+            """
+            Processing logic:
+                If pre-processing determined that inbound packet is (or contains) a request message, oCES sends response & issue local CES policy queries.
+                If message contains no query, it is treated as a response message.     If all TLVs could be verified, the message is accepted. Otherwise, oCES sends terminate-TLV, if iCES has already completed (SST, DST) state.
+            """
+            
+            # Processing inbound packet
+            for received_tlv in self.received_tlvs:
+                
+                if self.query_message:
+                    if self._check_tlv(received_tlv, ope="query"):
+                        if self.opolicy.has_available(received_tlv):
+                            ret_tlv = self._create_response_tlv(received_tlv)
+                            if ret_tlv != None:
+                                tlvs_to_send += ret_tlv
+                                continue
+                                                        
+                            if self._check_tlv(received_tlv, cmp="optional"):
+                                self._logger.info(" An optional requirement {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
+                                ret_tlv = self._get_unavailable_response(received_tlv)
+                                tlvs_to_send.append(ret_tlv)
+                            else:
+                                self._logger.error(" A required TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
+                                #error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
+                                error = True
+                                break
+                
+                #A CETP response message is processed for: Policy Matching and TLV Verification. The message can have: 1) Less than required TLVs; 2) TLVs with wrong value; 3) a notAvailable TLV; OR 4) a terminate TLV.
+                elif self._check_tlv(received_tlv, ope="info"):
+                    if (received_tlv['group'] == 'control') and (received_tlv['code']=='terminate'):
+                        self._logger.info(" Terminate-TLV received with value: {}".format(received_tlv['value']) )
+                        error = True
+                        break
+    
+                    elif self.opolicy.has_required(received_tlv):
+                        if self._verify_tlv(received_tlv):
                             self.opolicy_tmp.del_required(received_tlv)
                         else:
-                            #self._logger.info(" TLV {}.{} failed verification".format(received_tlv['group'], received_tlv['code']))
-                            error_tlvs = [self._get_terminate_tlv(err_tlv = received_tlv)]
-                            error=True
-                            break
-                else:
-                    #self._logger.warning("Unrequested TLV '{}.{}' is received".format(received_tlv["group"], received_tlv["code"]))
-                    pass
+                            # Absorbs failure in case of 'optional' required policy TLV
+                            if not self.opolicy.is_mandatory_required(received_tlv):
+                                self.opolicy_tmp.del_required(received_tlv)
+                            else:
+                                self._logger.info(" TLV {}.{} failed verification".format(received_tlv['group'], received_tlv['code']))
+                                error_tlvs = [self._get_terminate_tlv(err_tlv = received_tlv)]
+                                error=True
+                                break
+                    else:
+                        #self._logger.warning("Unrequested TLV '{}.{}' is received".format(received_tlv["group"], received_tlv["code"]))
+                        pass
                 
-        
-        # Evaluation of Policy Matching
-        if error:
-            self._logger.error(" H2H policy negotiation failed in {} RTT".format(self.rtt))
-            self._process_negotiation_failure()
-            self.h2h_negotiation_status = False
             
-            if self.dstag==0:
-                return                                                                                            # Locally terminate session, as iCES is stateless
-            else:
-                #self._logger.info(" Responding remote CES with the terminate-TLV")                               # Since remote CES has completed the transaction
-                cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs = error_tlvs)        # Send as 'Info' TLV
-                self.last_packet_sent = cetp_message
-                self.cetp_negotiation_history.append(cetp_message)
-                #self.pprint(cetp_message, m="oCES Packet")
-                return cetp_message
-        else:
-            if self._is_ready():
-                if self._create_connection():
-                    self._logger.info(" '{}'\n H2H policy negotiation succeeded in {} RTT".format(30*'#', self.rtt))
-                    #self.rtt_time.append(time.time()-self.start_time)
-                    self._process_negotiation_success()
-                    self.h2h_negotiation_status = True
-                    return
+            # Evaluation of Policy Matching
+            if error:
+                self._logger.error(" H2H policy negotiation failed in {} RTT".format(self.rtt))
+                self._process_negotiation_failure()
+                self.h2h_negotiation_status = False
                 
+                if self.dstag==0:
+                    return                                                                                            # Locally terminate session, as iCES is stateless
                 else:
-                    self._logger.error(" Failed to create connection -> Responding host session with the terminate-TLV")
-                    self._process_negotiation_failure()
-                    tlvs_to_send = [self._get_terminate_tlv()]
-                    if len(error_tlvs) != 0:   tlvs_to_send = error_tlvs
-                    
-                    cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
-                    self.pprint(cetp_message, m="Outbound Msg")
-                    self.h2h_negotiation_status = False
-                    return cetp_message
-            else:
-                if self.rtt < NEGOTIATION_RTT_THRESHOLD:
-                    # Issuing all sender policy requirements
-                    for rtlv in self.opolicy.get_required():
-                        ret_tlv = self._create_request_tlv(rtlv)
-                        tlvs_to_send += ret_tlv
-                
-                    tlvs_to_send.append(self.append_dstep_info())
-                    cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)           # Sending 'response' as 'info'
+                    self._logger.info(" Responding remote CES with the terminate-TLV")                               # Since remote CES has completed the transaction
+                    cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs = error_tlvs)        # Send as 'Info' TLV
                     self.last_packet_sent = cetp_message
-                    self.last_packet_received = self.packet
                     self.cetp_negotiation_history.append(cetp_message)
-                    ##self.pprint(cetp_msg, m="Sent packet")
-                    self.h2h_negotiation_status = None
+                    self.pprint(cetp_message, m="oCES Packet")
                     return cetp_message
-                
-                else:
-                    self._logger.error(" Inbound packet didn't meet all the policy requirements of the sender-host in {} RTT".format(self.rtt))
-                    self._process_negotiation_failure()
-                    self.h2h_negotiation_status = False
+            else:
+                if self._is_ready():
+                    if self._create_connection():
+                        self._logger.info(" '{}'\n H2H policy negotiation succeeded in {} RTT".format(30*'#', self.rtt))
+                        #self.rtt_time.append(time.time()-self.start_time)
+                        self._process_negotiation_success()
+                        self.h2h_negotiation_status = True
+                        return
                     
-                    if self.dstag!=0:
+                    else:
+                        self._logger.error(" Failed to create connection -> Responding host session with the terminate-TLV")
+                        self._process_negotiation_failure()
                         tlvs_to_send = [self._get_terminate_tlv()]
+                        if len(error_tlvs) != 0:   tlvs_to_send = error_tlvs
+                        
                         cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
-                        self.pprint(cetp_message)
+                        self.pprint(cetp_message, m="Outbound Msg")
+                        self.h2h_negotiation_status = False
                         return cetp_message
+                else:
+                    if self.rtt < NEGOTIATION_RTT_THRESHOLD:
+                        # Issuing all sender policy requirements
+                        for rtlv in self.opolicy.get_required():
+                            ret_tlv = self._create_request_tlv(rtlv)
+                            tlvs_to_send += ret_tlv
+                    
+                        tlvs_to_send.append(self.append_dstep_info())
+                        cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)           # Sending 'response' as 'info'
+                        self.last_packet_sent = cetp_message
+                        self.last_packet_received = self.packet
+                        self.cetp_negotiation_history.append(cetp_message)
+                        self.pprint(cetp_msg, m="Sent packet")
+                        self.h2h_negotiation_status = None
+                        return cetp_message
+                    
+                    else:
+                        self._logger.error(" Inbound packet didn't meet all the policy requirements of the sender-host in {} RTT".format(self.rtt))
+                        self._process_negotiation_failure()
+                        self.h2h_negotiation_status = False
+                        
+                        if self.dstag!=0:
+                            tlvs_to_send = [self._get_terminate_tlv()]
+                            cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
+                            self.pprint(cetp_message)
+                            return cetp_message
 
-        #except Exception as ex:
-        #    #self._logger.info(" Exception in negotiating CETP-H2H session: {}".format(ex))
-        #    return (None, "")
+        except:
+            utils3.trace()
+            return None
+
 
     def _is_ready(self):
         return len(self.opolicy_tmp.required)==0 and (self.dstag!=0)
@@ -661,22 +672,18 @@ class H2HTransactionOutbound(H2HTransaction):
                 return False
             
             negotiated_params = [self.lfqdn, self.rfqdn, self.lid, self.rid, self.lip, self.lpip]
-            #self._logger.info("Negotiated params: {}".format(negotiated_params))
-            self.conn = connection.H2HConnection(self.network, self.cetpstate_table, self.ap, self.host_table, 120.0, self.lid, self.lip, self.lpip, self.rid, self.lfqdn, self.rfqdn, \
-                                                      self.sstag, self.dstag, self.r_cesid, self.conn_table)
-            
-            if self.lpip != None:
-                self._execute_dns_callback(r_addr = self.lpip)
+            self._logger.info("Negotiated params: {}".format(negotiated_params))
+            self.conn = connection.H2HConnection(self.network, self.cetpstate_table, self.ap, self.host_table, 120.0, self.lid, self.lip, self.lpip, \
+                                                 self.rid, self.lfqdn, self.rfqdn, self.sstag, self.dstag, self.r_cesid, self.conn_table)
             
             self.conn_table.add(self.conn)
+            self._execute_dns_callback(r_addr = self.lpip)
             return True
     
         except Exception as ex:
             self._logger.error("Exception in connection creation: '{}'".format(ex))
             return False
     
-
-
     
     def _execute_dns_callback(self, r_addr=None):
         """ Executes DNS callback towards host """
@@ -732,7 +739,7 @@ class H2HTransactionOutbound(H2HTransaction):
         if self.is_negotiated():
             keys = [((KEY_ESTABLISHED_TAGS, self.sstag, self.dstag), True), ((KEY_HOST_IDS, self.src_id, self.dst_id), True), ((KEY_RCESID, self.r_cesid), False)]
         else:
-            keys = [((KEY_INITIATED_TAGS, self.sstag, 0), True), ((KEY_RCESID, self.r_cesid), False)]
+            keys = [((KEY_INITIATED_TAGS, self.sstag, 0), True), ((KEY_HOST_IDS, self.src_id, self.dst_id), True), ((KEY_RCESID, self.r_cesid), False)]
 
         return keys
         
@@ -740,7 +747,7 @@ class H2HTransactionOutbound(H2HTransaction):
         """  Processes a CETP packet received on a negotiated H2H session.  e.g. a 'terminate' TLV, or change in ratelimit of data connection. 
         """
         try:
-            #self._logger.info(" Post-H2H negotiation packet on (SST={}, DST={})".format(self.sstag, self.dstag))
+            self._logger.info(" Post-H2H negotiation packet on (SST={}, DST={})".format(self.sstag, self.dstag))
             self.packet = cetp_message
             tlv_to_send = []
             
@@ -890,8 +897,8 @@ class H2HTransactionInbound(H2HTransaction):
     def start_cetp_processing(self, cetp_message):
         """ Processes the inbound CETP-packet for negotiating the H2H policies """
         #try:
-        #self._logger.info("{}".format(42*'*') )
-        #self.pprint(cetp_message, m="H2H Inbound packet")
+        self._logger.info("{}".format(42*'*') )
+        self.pprint(cetp_message, m="H2H Inbound packet")
         tlvs_to_send, error_tlvs = [], []
         negotiation_status  = None
         cetp_response       = ""
@@ -915,7 +922,7 @@ class H2HTransactionInbound(H2HTransaction):
                         continue
                     
                     if self._check_tlv(received_tlv, cmp="optional"):
-                        #self._logger.info(" An optional requirement TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
+                        self._logger.info(" An optional requirement TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
                         ret_tlv = self._get_unavailable_response(received_tlv)
                         tlvs_to_send.append(ret_tlv)
                     else:
@@ -935,12 +942,12 @@ class H2HTransactionInbound(H2HTransaction):
                         if not self.ipolicy.is_mandatory_required(received_tlv):
                             self.ipolicy_tmp.del_required(received_tlv)
                         else:
-                            #self._logger.info("TLV {}.{} failed verification".format(received_tlv['group'], received_tlv['code']))
+                            self._logger.info("TLV {}.{} failed verification".format(received_tlv['group'], received_tlv['code']))
                             error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
                             error = True
                             break
                 else:
-                    #self._logger.info(" A Non-requested TLV {} is received: ".format(received_tlv))
+                    self._logger.info(" A Non-requested TLV {} is received: ".format(received_tlv))
                     pass
     
         if error:
@@ -962,7 +969,7 @@ class H2HTransactionInbound(H2HTransaction):
                     tlvs_to_send       = error_tlvs
                     
             else:
-                #self._logger.info(" {} unsatisfied iCES requirements -> Initiate full query: ".format(len(self.ipolicy_tmp.required)) )
+                self._logger.info(" {} unsatisfied iCES requirements -> Initiate full query: ".format(len(self.ipolicy_tmp.required)) )
                 tlvs_to_send = []
                 negotiation_status = None
                 
@@ -972,13 +979,13 @@ class H2HTransactionInbound(H2HTransaction):
 
                 
         cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
-        ##self.pprint(cetp_message, m="CETP Response packet")
+        self.pprint(cetp_message, m="CETP Response packet")
         if negotiation_status is True:
             stateful_transansaction.last_packet_sent = cetp_message
         return cetp_message
     
         #except Exception as ex:
-        #    #self._logger.info("Exception: {}".format(ex))
+        #    self._logger.info("Exception: {}".format(ex))
         #    return (None, "")
 
     def _is_ready(self):
@@ -1106,10 +1113,10 @@ class H2HTransactionLocal(H2HTransaction):
             self._execute_dns_callback(r_addr=self.host_ip)
             return True
          
-        ##self._logger.info("Local-host policy: {}".format(self.opolicy))
-        ##self._logger.info("Remote-host policy: {}".format(self.ipolicy))
+        self._logger.info("Local-host policy: {}".format(self.opolicy))
+        self._logger.info("Remote-host policy: {}".format(self.ipolicy))
         
-        ##self._logger.info("Match Outbound-Requirements vs Inbound-Available")
+        self._logger.info("Match Outbound-Requirements vs Inbound-Available")
         for rtlv in self.opolicy.get_required():
             if rtlv["group"] != "id":
                 continue
@@ -1129,7 +1136,7 @@ class H2HTransactionLocal(H2HTransaction):
                 break
 
         if not error:
-            ##self._logger.info("Match Inbound-Requirements vs Outbound-Available")
+            self._logger.info("Match Inbound-Requirements vs Outbound-Available")
             for rtlv in self.ipolicy.get_required():
                 if rtlv["group"] != "id":
                     continue
@@ -1139,7 +1146,7 @@ class H2HTransactionLocal(H2HTransaction):
                     if not self._verify_tlv(resp_tlv, policy=self.ipolicy):
                         # Absorbs failure in case of 'optional' required policy TLV
                         if self.opolicy.is_mandatory_required(rtlv):
-                            #self._logger.info(" TLV {}.{} failed verification".format(resp_tlv['group'], resp_tlv['code']))
+                            self._logger.info(" TLV {}.{} failed verification".format(resp_tlv['group'], resp_tlv['code']))
                             error=True
                             break
                 else:
@@ -1173,7 +1180,7 @@ class H2HTransactionLocal(H2HTransaction):
             lid, rid        = None, None
             lpip            = self._allocate_proxy_address(self.src_id)
             rpip            = self._allocate_proxy_address(self.dst_id)
-            #self._logger.info("Creating Local connection between '{}' and '{}'.format(lfqdn, rfqdn))
+            self._logger.info("Creating Local connection between '{}' and '{}'".format(lfqdn, rfqdn))
             
             if (lpip is None) or (rpip is None):
                 self._logger.error("Error assigning proxy addresses: lpip={}, rpip={}".format(lpip, rpip))
