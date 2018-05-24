@@ -23,6 +23,7 @@ import helpers_n_wrappers
 from customdns import dnsutils
 from helpers_n_wrappers import utils3
 from helpers_n_wrappers import network_helper3
+from helpers_n_wrappers import container3
 
 LOGLEVEL_H2HTransaction         = logging.INFO
 LOGLEVEL_H2HTransactionOutbound = logging.INFO
@@ -39,10 +40,10 @@ KEY_CES_IDS               = 4
 NEGOTIATION_RTT_THRESHOLD       = 2
 
 
-class CETPTransaction(object):
+class CETPTransaction(container3.ContainerNode):
 
     def __init__(self, name="CETPTransaction"):
-        self.name       = name
+        self._name      = name
         self._logger    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HTransaction)
 
@@ -318,13 +319,14 @@ class H2HTransactionOutbound(H2HTransaction):
         self.network            = network
         self.rtt                = 0
         self.terminated         = False
-        self.name               = name
+        self._name              = name
         self._logger            = logging.getLogger(name)
         self.start_time         = time.time()
         self._logger.setLevel(LOGLEVEL_H2HTransactionOutbound)
         self.h2h_negotiation_status = False
         self.cetp_negotiation_history   = []
         self.rtt_time           = rtt_time
+        self.cb_list            = [cb]
 
     def load_parameters(self):
         self.completion_t0      = self.ces_params['incomplete_cetp_state_t0']
@@ -354,12 +356,19 @@ class H2HTransactionOutbound(H2HTransaction):
             self.policy      = self.opolicy
             return self.policy
 
+
+    def has_ongoing_h2h_negotiation(self, src_id, dst_id):
+        key = (KEY_HOST_IDS, src_id, dst_id)
+        if self.cetpstate_table.has(key):
+            h2h_state = self.cetpstate_table.get(key)
+            h2h_state.add_cb(self.cb)
+            return True
+
     @asyncio.coroutine
     def _initialize(self):
         """ Loads policies, generates session tags, and initiates event handlers """
         try:
-            key = (KEY_HOST_IDS, self.src_id, self.dst_id)
-            if self.cetpstate_table.has(key):
+            if self.has_ongoing_h2h_negotiation(self.src_id, self.dst_id):
                 return False
             
             self.load_parameters()
@@ -407,6 +416,9 @@ class H2HTransactionOutbound(H2HTransaction):
 
     def set_negotiated(self, status=True):
         self.h2h_negotiation_status = status
+        
+    def add_cb(self, cb):
+        self.cb_list.append(cb)
     
     @asyncio.coroutine
     def start_cetp_processing(self):
@@ -416,7 +428,6 @@ class H2HTransactionOutbound(H2HTransaction):
             
             if not initialized:
                 self._logger.error(" Failure in initiating the Host-to-Host session.")
-                self._execute_dns_callback()
                 return None
             
             #self._logger.debug(" Starting H2H session towards '{}' (SST= {} -> DST={})".format(self.dst_id, self.sstag, self.dstag))
@@ -468,15 +479,9 @@ class H2HTransactionOutbound(H2HTransaction):
 
     def terminate(self):
         """ Execute to unregister H2HTransaction """
-        try:
-            self.terminated = True
-            self.cetpstate_table.remove(self)
-        except Exception as ex:
-            pass
-    
-    def delete(self):
-        pass
-        
+        self.terminated = True
+        self.cetpstate_table.remove(self)
+
     def get_remote_cesid(self):
         return self.r_cesid
     
@@ -688,15 +693,22 @@ class H2HTransactionOutbound(H2HTransaction):
     def _execute_dns_callback(self, r_addr=None):
         """ Executes DNS callback towards host """
         try:
-            (cb_f, cb_args) = self.cb
-            dns_q, addr = cb_args
-            
-            if r_addr is None:
-                cb_f(dns_q, addr)
-            else:
-                response = dnsutils.make_response_answer_rr(dns_q, self.dst_id, dns.rdatatype.A, r_addr, rdclass=1, ttl=120, recursion_available=True)
-                cb_f(dns_q, addr, response)
-            
+            for cb in self.cb_list:                
+                (cb_f, cb_args) = cb
+                dns_q, addr = cb_args
+                q = dns_q.question[0]
+                rdtype = q.rdtype
+                    
+                if network_helper3.is_ipv4(r_addr) and (rdtype == dns.rdatatype.A):
+                    response = dnsutils.make_response_answer_rr(dns_q, self.dst_id, rdtype, r_addr, rdclass=1, ttl=120, recursion_available=True)
+                    cb_f(dns_q, addr, response)
+                elif network_helper3.is_ipv6(r_addr) and (rdtype == dns.rdatatype.AAAA):
+                    response = dnsutils.make_response_answer_rr(dns_q, self.dst_id, rdtype, r_addr, rdclass=1, ttl=120, recursion_available=True)
+                    cb_f(dns_q, addr, response)
+                else:
+                    self._logger.warning("Requested DNS record type and proxy address do not match.")
+                    cb_f(dns_q, addr)
+                        
         except Exception as ex:
             self._logger.error("Exception in _execute_dns_callback {}".format(ex))
     
@@ -792,7 +804,7 @@ class H2HTransactionInbound(H2HTransaction):
         self.ces_params         = ces_params
         self.host_table         = host_table
         self.pool_table         = pool_table
-        self.name               = name
+        self._name              = name
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HTransactionInbound)
 
@@ -1052,7 +1064,7 @@ class H2HTransactionLocal(H2HTransaction):
         self.network            = network
         self.l_cesid            = ""
         self.r_cesid            = ""                        # For compatbility with H2HTransaction sake 
-        self.name               = name
+        self._name              = name
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HTransactionLocal)
     

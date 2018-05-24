@@ -84,10 +84,18 @@ class CETPH2H:
             src_id, dst_id, naptr_rr, cb = queued_data
             self.trigger_h2h_negotiation(src_id, dst_id, naptr_rr, cb, from_queue=True)
     
+    def has_ongoing_h2h_negotiation(self, src_id, dst_id, cb):
+        key = (H2HTransaction.KEY_HOST_IDS, src_id, dst_id)
+        if self.cetpstate_table.has(key):
+            h2h_state = self.cetpstate_table.get(key)
+            h2h_state.add_cb(cb)                        # Record the DNS callback, for an ongoing CETP-H2H negotiation
+            return h2h_state
+    
     def trigger_h2h_negotiation(self, src_id, dst_id, naptr_rr, cb, from_queue=False):
         try:
-            #if self.has_cetp_state(src_id, dst_id):
-            #    return                                    # Absorb DNS query, since CETP negotiation process is currently converging
+            h2h_state = self.has_ongoing_h2h_negotiation(src_id, dst_id, cb)
+            if h2h_state is not None:
+                return
 
             #if self.ongoing_h2h_transactions < self.max_session_limit:              # Number of simultaneous H2H-transactions are below the upper limit  
             asyncio.ensure_future( self.h2h_transaction_start(cb, dst_id) )       # "try, except" within task can consume a task-related exception
@@ -119,10 +127,6 @@ class CETPH2H:
         if connected:       self.start_h2h_consumption()
         else:               self.suspend_h2h_consumption()
     
-    def has_cetp_state(self, src_id, dst_id):
-        key = (H2HTransaction.KEY_HOST_IDS, src_id, dst_id)
-        return self.cetpstate_table.has(key)
-
     @asyncio.coroutine
     def h2h_transaction_start(self, cb, dst_id):
         (cb_func, cb_args) = cb

@@ -21,7 +21,7 @@ from H2HTransaction import CETPTransaction
 
 import helpers_n_wrappers
 from helpers_n_wrappers import network_helper3
-
+from helpers_n_wrappers import utils3
 
 
 LOGLEVELCETP              = logging.DEBUG
@@ -33,7 +33,6 @@ NEGOTIATION_RTT_THRESHOLD = 2
 
 KEY_INITIATED_TAGS        = H2HTransaction.KEY_INITIATED_TAGS
 KEY_ESTABLISHED_TAGS      = H2HTransaction.KEY_ESTABLISHED_TAGS
-KEY_HOST_IDS              = H2HTransaction.KEY_HOST_IDS
 KEY_RCESID                = H2HTransaction.KEY_RCESID
 KEY_CES_IDS               = H2HTransaction.KEY_CES_IDS
 
@@ -83,7 +82,6 @@ class C2CTransaction(CETPTransaction):
                 func = CETP.SEND_TLV_GROUP[group][code]
                 tlv = func(tlv=tlv, code=code, ces_params=self.ces_params, cesid=self.l_cesid, r_cesid=self.r_cesid, r_addr=self.remote_addr, \
                            cetp_security=self.cetp_security, policy = self.ces_policy, interfaces=self.interfaces, payloadID_table=self.payloadID_table, query=False)
-                
             return tlv
         
         except Exception as ex:
@@ -343,7 +341,7 @@ class oC2CTransaction(C2CTransaction):
         self.c2c_negotiation_status = False
         self.terminated             = False
         self._start_time            = time.time()
-        self.name                   = name
+        self._name                  = name
         self.cetp_mgr               = cetp_mgr
         self._logger                = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_oC2CTransaction)
@@ -451,6 +449,7 @@ class oC2CTransaction(C2CTransaction):
         
         except Exception as ex:
             self._logger.error(" Exception '{}' in initiating CES-to-CES session towards: '{}'".format(ex, self.r_cesid))
+            utils3.trace()
             return None
     
     def set_terminated(self, terminated=True):
@@ -464,9 +463,6 @@ class oC2CTransaction(C2CTransaction):
             if hasattr(self, 'unregister_handler'):
                 self.unregister_handler.cancel()
     
-    def delete(self):
-        pass
-
     def get_remote_cesid(self):
         return self.r_cesid
     
@@ -1010,7 +1006,7 @@ class iC2CTransaction(C2CTransaction):
         self.ces_params                 = ces_params
         self.cetp_security              = cetp_security
         self.interfaces                 = interfaces
-        self.name                       = name
+        self._name                      = name
         self.conn_table                 = conn_table
         self.cetpstate_table            = cetpstate_table
         self.payloadID_table            = payloadID_table

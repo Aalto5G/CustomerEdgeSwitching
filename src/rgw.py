@@ -47,6 +47,7 @@ import time
 import yaml
 
 import cetpManager
+import connection
 import CETP
 
 from contextlib import suppress
@@ -480,9 +481,9 @@ class RealmGateway(object):
         try:
             while True:
                 yield from asyncio.sleep(delay)
-                KEY_CETP_CONN = 1
-                cp_conns      = self._connectiontable.lookup(KEY_CETP_CONN, update=False, check_expire=False)        # Get the CP H2H connection states.
-                dp_stats      = yield from self._network.get_dp_flow_stats()                                         # Get the data-plane stats
+                key        = connection.KEY_MAP_CETP_CONN
+                cp_conns   = self._connectiontable.lookup(key, update=False, check_expire=False)        # Get the CP H2H connection states.
+                dp_stats   = yield from self._network.get_dp_flow_stats()                                         # Get the data-plane stats
                 
                 if (cp_conns is not None) and (dp_stats is not None):
                     self._network._synchronize_conns(self._connectiontable, cp_conns, dp_stats)

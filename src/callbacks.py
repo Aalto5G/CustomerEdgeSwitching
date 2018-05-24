@@ -101,7 +101,8 @@ class DNSCallbacks(object):
 
         host_obj = HostEntry(name=fqdn, fqdn=fqdn, ipv4=ipaddr, services=user_data)
         self.hosttable.add(host_obj)
-
+        
+        """
         # Create network resources
         hostname = ipaddr
         self.network.ipt_add_user(hostname, ipaddr)
@@ -122,7 +123,8 @@ class DNSCallbacks(object):
             carriergrade_ipt = host_obj.get_service('CARRIERGRADE', [])
             self.network.ipt_add_user_carriergrade(hostname, carriergrade_ipt)
 
-
+        """
+        
     @asyncio.coroutine
     def ddns_deregister_user(self, fqdn, rdtype, ipaddr):
         self._logger.info('Deregister user {} @ {}'.format(fqdn, ipaddr))
@@ -334,6 +336,7 @@ class DNSCallbacks(object):
             resolver.do_continue(query)
             return
 
+        """ Temporary code insertion by Hammad to get CETP working """
         # Resolving the NAPTR query.
         naptr_rrs = self.resolve_naptr(fqdn)
         
@@ -344,6 +347,8 @@ class DNSCallbacks(object):
                 dest_id, r_cesid, r_ip, r_port, r_transport = naptr_resp
                 self.cetp_mgr.process_dns_message(cback, cb_args, dest_id, r_cesid, naptr_rrs)
                 return
+        """ ------------ """
+        
 
         # Create factory for new resolution
         raddr = self.dns_get_resolver()

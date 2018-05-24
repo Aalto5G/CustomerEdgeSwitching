@@ -573,14 +573,14 @@ class Network(object):
         dp_stats        = json.loads(d)
         stats           = dp_stats[str(OVS_DATAPATH_ID)]
         
-        #"""
+        """
         count = 0
         for stat in stats:
             if stat["cookie"] != 0:
                 count += 1
             
         self._logger.info("{} H2H connections found in DP.".format(count))
-        #"""
+        """
         return stats
             
     
@@ -588,7 +588,7 @@ class Network(object):
         """ Synchronizing the CP and DP """
         dp_cookies = []        
         to_remove  = []
-        self._logger.info("{} H2H connections found in CES-CP.".format(len(cp_conns)))
+        #self._logger.info("{} H2H connections found in CES-CP.".format(len(cp_conns)))
 
         # Generate a list of all DP connection cookies        
         for d in dp_stats:
@@ -719,7 +719,7 @@ class Network(object):
         
         #"""
         # Create incoming unidirectional connection
-        data = {'dpid': OVS_DATAPATH_ID, 'table_id':2, 'priority':10, 'cookie':cookie, 'hard_timeout':hard_timeout,
+        data = {'dpid': OVS_DATAPATH_ID, 'table_id':2, 'priority':10, 'cookie':cookie,
                 'match':{'in_port':tunnel_port, 'eth_type':2048,
                          'ipv4_src': dst_ip,    'ipv4_dst': src_ip,
                          'tun_ipv4_src':tun_dst, 'tun_ipv4_dst':tun_src, 'tunnel_id':tun_id_in},
