@@ -144,7 +144,6 @@ class CETPH2H:
                                                     network=self.network, rtt_time=self.rtt_measurement)
         cetp_message = yield from h2h.start_cetp_processing()
         if cetp_message != None:
-            #self._logger.info(" H2H transaction started.")
             self.send(cetp_message)
 
     def process_h2h_transaction(self, cetp_msg):

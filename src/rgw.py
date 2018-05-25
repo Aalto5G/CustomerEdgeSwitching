@@ -222,7 +222,7 @@ class RealmGateway(object):
         _t = asyncio.ensure_future(self._init_cleanup_pbra_timers(10.0))
         RUNNING_TASKS.append((_t, 'cleanup_pbra_timers'))
         # Create task for cleaning & synchronizing the CETP-H2H conns.
-        _t = asyncio.ensure_future(self._init_cleanup_ovsConnections(5.0))
+        _t = asyncio.ensure_future(self._init_cleanup_ovsConnections(2.0))
         RUNNING_TASKS.append((_t, 'H2H_conn_timers'))
         # Create task: Show DNS groups
         _t = asyncio.ensure_future(self._init_show_dnsgroups(60.0))
@@ -483,7 +483,7 @@ class RealmGateway(object):
                 yield from asyncio.sleep(delay)
                 key        = connection.KEY_MAP_CETP_CONN
                 cp_conns   = self._connectiontable.lookup(key, update=False, check_expire=False)        # Get the CP H2H connection states.
-                dp_stats   = yield from self._network.get_dp_flow_stats()                                         # Get the data-plane stats
+                dp_stats   = yield from self._network.get_dp_flow_stats()                               # Get the data-plane stats
                 
                 if (cp_conns is not None) and (dp_stats is not None):
                     self._network._synchronize_conns(self._connectiontable, cp_conns, dp_stats)

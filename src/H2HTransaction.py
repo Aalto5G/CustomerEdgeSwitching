@@ -202,6 +202,8 @@ class CETPTransaction(container3.ContainerNode):
         s = self.show(packet)
         print(s, "\n")   
 
+    def add_negotiated_param(self, k, v):
+        self.negotiated_params[k]=v
 
 
 
@@ -265,6 +267,16 @@ class H2HTransaction(CETPTransaction):
         key = (host.KEY_HOST_SERVICE, fqdn)
         res = self.host_table.has(key)
         return res
+    
+    def _record_negotiated_params(self):
+        self.add_negotiated_param("lfqdn", self.lfqdn)
+        self.add_negotiated_param("rfqdn", self.rfqdn)
+        self.add_negotiated_param("lid", self.lid)
+        self.add_negotiated_param("rid", self.rid)
+        self.add_negotiated_param("lip", self.lip)
+        self.add_negotiated_param("lpip", self.lpip)
+        self.add_negotiated_param("sst", self.sstag)
+        self.add_negotiated_param("dst", self.dstag)
 
     def is_ipv4(self, ip4_addr):
         return network_helper3.is_ipv4(ip4_addr)
@@ -285,11 +297,8 @@ class H2HTransaction(CETPTransaction):
                 pip     = self.ap.allocate(host_id)
                 return pip
             
-            #if self.is_ipv4(lip):     ap = "IPV4"
-            #elif self.is_ipv6(lip):   ap = "IPv6"
-            
         except Exception as ex:
-            self._logger.error(ex)
+            self._logger.error("Exception '{}' in _allocate_proxy_address".format(ex))
             return
 
 
@@ -297,7 +306,7 @@ class H2HTransaction(CETPTransaction):
 class H2HTransactionOutbound(H2HTransaction):
     def __init__(self, loop=None, sstag=0, dstag=0, cb=None, host_ip="", src_id="", dst_id="", l_cesid="", r_cesid="", policy_mgr= None, host_table=None, cetp_security=None, \
                  cetpstate_table=None, cetp_h2h=None, ces_params=None, interfaces=None, conn_table=None, pool_table=None, network = None, \
-                 direction="outbound", name="H2HTransactionOutbound", rtt_time=[]):
+                 direction="outbound", name="H2HTransactionOutbound", rtt_time=[], negotiated_params={}):
         self.sstag, self.dstag  = sstag, dstag
         self.cb                 = cb
         self.host_ip            = host_ip                   # IP of the sender host
@@ -317,6 +326,7 @@ class H2HTransactionOutbound(H2HTransaction):
         self.conn_table         = conn_table
         self.cetp_security      = cetp_security
         self.network            = network
+        self.negotiated_params  = negotiated_params
         self.rtt                = 0
         self.terminated         = False
         self._name              = name
@@ -664,6 +674,7 @@ class H2HTransactionOutbound(H2HTransaction):
         self.unregister_handler.cancel()
         #self.cetp_h2h.update_H2H_transaction_count(initiated=False)                            # To reduce number of ongoing transactions.
         return True
+    
 
     def _create_connection(self):
         """ Extract the negotiated parameters to create a connection state """
@@ -676,10 +687,17 @@ class H2HTransactionOutbound(H2HTransaction):
             if self.lpip is None:
                 return False
             
-            negotiated_params = [self.lfqdn, self.rfqdn, self.lid, self.rid, self.lip, self.lpip]
-            self._logger.info("Negotiated params: {}".format(negotiated_params))
-            self.conn = connection.H2HConnection(self.network, self.cetpstate_table, self.ap, self.host_table, 120.0, self.lid, self.lip, self.lpip, \
-                                                 self.rid, self.lfqdn, self.rfqdn, self.sstag, self.dstag, self.r_cesid, self.conn_table)
+            self._record_negotiated_params()
+            self._logger.info("Negotiated params: {}".format(self.negotiated_params))
+            
+            hard_ttl, idle_ttl = None, None
+            if 'hard_ttl' in self.negotiated_params:
+                hard_ttl = self.negotiated_params['hard_ttl']
+            if 'idle_ttl' in self.negotiated_params:
+                idle_ttl = self.negotiated_params["idle_ttl"]
+            
+            self.conn = connection.H2HConnection(self.network, self.cetpstate_table, self.ap, self.host_table, self.conn_table, self.lid, self.lip, self.lpip, \
+                                                 self.rid, self.lfqdn, self.rfqdn, self.sstag, self.dstag, self.r_cesid, hard_ttl=hard_ttl, idle_ttl=idle_ttl)
             
             self.conn_table.add(self.conn)
             self._execute_dns_callback(r_addr = self.lpip)
@@ -720,7 +738,7 @@ class H2HTransactionOutbound(H2HTransaction):
     
     def _send(self, msg):
         self.cetp_h2h.send(msg)
-    
+        
     def is_local_host_allowed(self, hostid):
         """ Checks in the CETPSecurity module if the traffic from the sender is permitted (towards remote CES).. OR  whether the host is blacklisted """
         if self.cetp_security.has_filtered_domain(CETPSecurity.KEY_BlacklistedLHosts, hostid):
@@ -804,6 +822,7 @@ class H2HTransactionInbound(H2HTransaction):
         self.ces_params         = ces_params
         self.host_table         = host_table
         self.pool_table         = pool_table
+        self.negotiated_params  = {}
         self._name              = name
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HTransactionInbound)
@@ -840,6 +859,7 @@ class H2HTransactionInbound(H2HTransaction):
         try:
             self.get_packet_details(cetp_msg)
             self.src_id, self.dst_id = "", ""
+            dstep_tlv                = None
             
             if len(self.received_tlvs) == 0:
                 self._logger.debug("Inbound CETP has no TLVs for processing")
@@ -851,6 +871,9 @@ class H2HTransactionInbound(H2HTransaction):
                         self.src_id = received_tlv['value']
                     elif (received_tlv['group']=="control") and (received_tlv['code']=="dstep"):
                         self.dst_id = received_tlv["value"]
+                        dstep_tlv = received_tlv
+            
+            self.received_tlvs.remove(dstep_tlv)
             
             # Enforcing Max length of FQDN = 256
             if (len(self.src_id)==0) or (len(self.src_id)>256):
@@ -1015,11 +1038,18 @@ class H2HTransactionInbound(H2HTransaction):
             if self.lpip is None:
                 return False
             
-            negotiated_params = [self.lfqdn, self.rfqdn, self.lid, self.rid, self.lip, self.lpip]
-            self._logger.info("Negotiated params: {}".format(negotiated_params))
-    
-            self.conn = connection.H2HConnection(self.network, self.cetpstate_table, self.ap, self.host_table, 120.0, self.lid, self.lip, self.lpip, self.rid, self.lfqdn, self.rfqdn, \
-                                                 self.sstag, self.dstag, self.r_cesid, self.conn_table)
+            self._record_negotiated_params()
+            self._logger.info("Negotiated params: \n ---- \n {} \n ---- ".format(self.negotiated_params))
+            
+            hard_ttl, idle_ttl = None, None
+            if 'hard_ttl' in self.negotiated_params:
+                hard_ttl = self.negotiated_params['hard_ttl']
+            if 'idle_ttl' in self.negotiated_params:
+                idle_ttl = self.negotiated_params["idle_ttl"]
+            
+            self.conn = connection.H2HConnection(self.network, self.cetpstate_table, self.ap, self.host_table, self.conn_table, self.lid, self.lip, self.lpip, \
+                                                 self.rid, self.lfqdn, self.rfqdn, self.sstag, self.dstag, self.r_cesid, hard_ttl=hard_ttl, idle_ttl=idle_ttl)
+
             self.conn_table.add(self.conn)
             return True
         

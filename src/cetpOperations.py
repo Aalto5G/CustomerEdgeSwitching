@@ -936,7 +936,7 @@ def send_ctrl_caep(**kwargs):
     return [new_tlv]
 
 
-def send_ctrl_dp_ttl(**kwargs):
+def send_ctrl_hard_ttl(**kwargs):
     tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
     new_tlv = copy.deepcopy(tlv)
     if query==True:
@@ -947,6 +947,17 @@ def send_ctrl_dp_ttl(**kwargs):
             new_tlv["value"] = ""
     return [new_tlv]
 
+
+def send_ctrl_idle_ttl(**kwargs):
+    tlv, code, query = kwargs["tlv"], kwargs["code"], kwargs["query"] 
+    new_tlv = copy.deepcopy(tlv)
+    if query==True:
+        if 'value' in new_tlv:
+            del new_tlv["value"]
+    else:
+        if not ('value' in new_tlv):
+            new_tlv["value"] = ""
+    return [new_tlv]
 
 def send_ctrl_dp_keepalive_cycle(**kwargs):
     tlv, code, query = kwargs["tlv"], kwargs["code"],  kwargs["query"] 
@@ -1118,19 +1129,37 @@ def response_ctrl_caep(**kwargs):
         return None
 
 
-def response_ctrl_dp_ttl(**kwargs):
+def response_ctrl_hard_ttl(**kwargs):
     try:
         tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
         new_tlv = copy.deepcopy(tlv)
         ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
         new_tlv['ope'] = 'info'
+        
         if response_value==None:
             new_tlv["value"] = ""
         else:
             new_tlv["value"] = response_value
         return [new_tlv]
     except Exception as ex:
-        print("Exception in response_ctrl_dp_ttl()", ex)
+        print("Exception in response_ctrl_hard_ttl()", ex)
+        return None
+
+
+def response_ctrl_idle_ttl(**kwargs):
+    try:
+        tlv, code, policy = kwargs["tlv"], kwargs["code"], kwargs["policy"]
+        new_tlv = copy.deepcopy(tlv)
+        ope, cmp, group, code, response_value = policy.get_available_policy(new_tlv)
+        new_tlv['ope'] = 'info'
+        
+        if response_value==None:
+            new_tlv["value"] = ""
+        else:
+            new_tlv["value"] = response_value
+        return [new_tlv]
+    except Exception as ex:
+        print("Exception in response_ctrl_idle_ttl()", ex)
         return None
 
 
@@ -1315,12 +1344,58 @@ def verify_ctrl_caep(**kwargs):
     
     return True
 
-def verify_ctrl_dp_ttl(**kwargs):
-    tlv, code = kwargs["tlv"], kwargs["code"]
+def verify_ctrl_hard_ttl(**kwargs):
+    tlv, code, transaction, policy = kwargs["tlv"], kwargs["code"], kwargs["transaction"], kwargs["policy"]
     if 'cmp' in tlv:
         if tlv['cmp'] == "notAvailable":
             return False
+    
+    ttl = None
+    ope, cmp, group, code, remote_offer = policy.get_tlv_details(tlv)               # Get remote ttl value from tlv
+    ope, cmp, group, code, local_offer = policy.get_available_policy(tlv)           # Get local ttl value from policy
+    
+    if remote_offer is None and local_off is None:
+        pass # Set ttl parameter as None
+    
+    try:
+        if remote_offer >= local_offer:                                             # Compare the two ttl values, and use the smallest value. 
+            ttl = local_offer
+        else:
+            ttl = remote_offer
+        
+    except:
+        ttl = None
+    
+    add_negotiated_parameter(transaction, "hard_ttl", ttl)
     return True
+
+def verify_ctrl_idle_ttl(**kwargs):
+    tlv, code, transaction, policy = kwargs["tlv"], kwargs["code"], kwargs["transaction"], kwargs["policy"]
+    if 'cmp' in tlv:
+        if tlv['cmp'] == "notAvailable":
+            return False
+    
+    ttl = None
+    ope, cmp, group, code, remote_offer = policy.get_tlv_details(tlv)               # Get remote ttl value from tlv
+    ope, cmp, group, code, local_offer = policy.get_available_policy(tlv)           # Get local ttl value from policy
+    
+    if remote_offer is None and local_off is None:
+        pass # Set ttl parameter as None
+    
+    try:
+        if remote_offer >= local_offer:                                             # Compare the two ttl values, and use the smallest value. 
+            ttl = local_offer
+        else:
+            ttl = remote_offer
+        
+    except:
+        ttl = None
+    
+    add_negotiated_parameter(transaction, "idle_ttl", ttl)
+    return True
+
+def add_negotiated_parameter(t, k, v):
+    t.add_negotiated_param(k, v)
 
 def verify_ctrl_dp_keepalive_cycle(**kwargs):
     tlv, code = kwargs["tlv"], kwargs["code"]

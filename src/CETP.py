@@ -132,12 +132,12 @@ PPRINT_CODE  = {"cesid":"cesid", "pow":"pwork", "caces":"caces",     "fw_version
                 }
 
 # 'session_limit':'ces_session_limit',    'ces_session_limit':'session_limit',    #Contains waning codes {backoff}
-# 'ttl':'dp_ttl',                         'dp_ttl':'ttl',                         #Contains the TTL of the connection
+# 'ttl':'hard_ttl',                         'hard_ttl':'ttl',                         #Contains the TTL of the connection
 
 CONTROL_CODES = ['caep', 'ack']
 
-ALL_C2C_CODES = {'cesid', 'ttl', 'cert', 'keepalive_cycle', 'fw_ver', 'session_limit', 'terminate', 'warning', 'host_sessions', 'headersignature', \
-                 'caces', 'pow', 'keepalive'}
+ALL_C2C_CODES = ['cesid', 'ttl', 'keepalive_cycle', 'fw_ver', 'session_limit', 'terminate', 'warning', 'host_sessions', 'headersignature', \
+                 'caces', 'pow', 'keepalive']
 
 
 ALL_GROUPS = {'id', 'payload', 'rloc', 'control', 'mobility','ces'}
@@ -225,7 +225,8 @@ SEND_TLV_CONTROL_CODE = {"dstep":cetpOperations.send_ctrl_dstep,
                          "fqdn":cetpOperations.send_ctrl_fqdn,
                          "certificate":cetpOperations.send_ctrl_certificate,
                          "caep":cetpOperations.send_ctrl_caep,
-                         "dp_ttl":cetpOperations.send_ctrl_dp_ttl,
+                         "hard_ttl":cetpOperations.send_ctrl_hard_ttl,
+                         "idle_ttl":cetpOperations.send_ctrl_idle_ttl,
                          "dp_keepalive_cycle":cetpOperations.send_ctrl_dp_keepalive_cycle,
                          "qos":cetpOperations.send_ctrl_qos,
                          "ack":cetpOperations.send_ack,
@@ -243,7 +244,7 @@ SEND_TLV_CONTROL_CODE = {"dstep":cetpOperations.send_ctrl_dstep,
 "dp_proto", "dp_port", "dp_ratelimit" -- If provided, these informations can help oCES or iCES to filter the unwanted traffic towards the destination domain. 
                                         i.e. Traffic other than this port, protocol, or exceeding the ratelimit.        (Port, proto) can be redundant with use of SFQQDN.
                                         
-dp_rloc, dp_ttl, dp_keepalive cycle, qos -- can be added to host policy by network admin.. Based on its SLA with the customer.
+dp_rloc, hard_ttl, dp_keepalive cycle, qos -- can be added to host policy by network admin.. Based on its SLA with the customer.
 """
 
 SEND_TLV_CES_CODE =  {"cesid":cetpOperations.send_ces_cesid,
@@ -278,7 +279,8 @@ RESPONSE_TLV_CONTROl_CODE = {"dstep":cetpOperations.response_ctrl_dstep,
                              "fqdn":cetpOperations.response_ctrl_fqdn,
                              "certificate":cetpOperations.response_ctrl_certificate,
                              "caep":cetpOperations.response_ctrl_caep,
-                             "dp_ttl":cetpOperations.response_ctrl_dp_ttl,
+                             "hard_ttl":cetpOperations.response_ctrl_hard_ttl,
+                             "idle_ttl":cetpOperations.response_ctrl_idle_ttl,
                              "dp_keepalive_cycle":cetpOperations.response_ctrl_dp_keepalive_cycle,
                              "qos":cetpOperations.response_ctrl_qos,
                              "ack":cetpOperations.response_ctrl_ack,
@@ -320,7 +322,8 @@ VERIFY_TLV_CONTROl_CODE = {"dstep":cetpOperations.verify_ctrl_dstep,
                            "fqdn":cetpOperations.verify_ctrl_fqdn,
                           "certificate":cetpOperations.verify_ctrl_certificate,
                           "caep":cetpOperations.verify_ctrl_caep,
-                          "dp_ttl":cetpOperations.verify_ctrl_dp_ttl,
+                          "hard_ttl":cetpOperations.verify_ctrl_hard_ttl,
+                          "idle_ttl":cetpOperations.verify_ctrl_idle_ttl,
                           "dp_keepalive_cycle":cetpOperations.verify_ctrl_dp_keepalive_cycle,
                           "qos":cetpOperations.verify_ctrl_qos,
                           "ack":cetpOperations.verify_ack,
@@ -357,5 +360,4 @@ VERIFY_TLV_GROUP = {TLV_GROUP["id"]:VERIFY_TLV_ID_CODE,
                    TLV_GROUP["rloc"]:VERIFY_TLV_RLOC_CODE,
                    TLV_GROUP["control"]:VERIFY_TLV_CONTROl_CODE,
                    TLV_GROUP['ces']:VERIFY_TLV_CES_CODE }
-
 

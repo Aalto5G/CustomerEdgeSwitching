@@ -280,7 +280,7 @@ class C2CConnectionTemplate(container3.ContainerNode):
 
 
 class H2HConnection(container3.ContainerNode):
-    def __init__(self, network, cetpstate_table, adress_pool, host_table, timeout, lid, lip, lpip, rid, lfqdn, rfqdn, sstag, dstag, r_cesid, conn_table, name="H2HConnection"):
+    def __init__(self, network, cetpstate_table, adress_pool, host_table, conn_table, lid, lip, lpip, rid, lfqdn, rfqdn, sstag, dstag, r_cesid, hard_ttl=None, idle_ttl=None, name="H2HConnection"):
         """
         Initialize a H2HConnection object.
         
@@ -304,15 +304,16 @@ class H2HConnection(container3.ContainerNode):
         self.host_table          = host_table
         self.cetpstate_table     = cetpstate_table
         self.adress_pool         = adress_pool
-        self.timeout             = timeout
         self.network             = network 
         self.connectiontype      = "CONNECTION_H2H"
+        self.hard_ttl            = hard_ttl
+        self.idle_ttl            = idle_ttl
         self._logger             = logging.getLogger(name+str(lfqdn)+"->"+str(rfqdn))
         self._logger.setLevel(LOGLEVEL_H2HConnection)
         self._logger.debug("Connection tags: {} -> {}".format(sstag, dstag))
         self._build_lookupkeys()
         self._get_c2c_connection_params()
-        self.add()
+        self._set_cookie()
 
     def _get_c2c_connection_params(self):
         key         = (KEY_MAP_RCESID_C2C, self.r_cesid)
@@ -337,7 +338,7 @@ class H2HConnection(container3.ContainerNode):
         if (self.sstag is not None) and (self.dstag is not None):
             self._built_lookupkeys += [ ((KEY_MAP_CES_TO_CES, self.sstag, self.dstag), True) ]
     
-    def add(self):
+    def _set_cookie(self):
         global H2H_cookie
         H2H_cookie += 1
         
@@ -345,8 +346,13 @@ class H2HConnection(container3.ContainerNode):
             H2H_cookie = 1
             
         self.conn_cookie = H2H_cookie
+        asyncio.ensure_future(self.insert_dataplane_connection())
+    
+    @asyncio.coroutine
+    def insert_dataplane_connection(self):
         #self._logger.info("lrloc: {}, rrloc:{}, tunnel_id_in:{}, tunnel_id_out:{}, tunnel_type:{}".format(self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type))
-        asyncio.ensure_future( self.network.add_tunnel_connection(self.lip, self.lpip, self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type, self.conn_cookie, self.sstag, self.dstag) )
+        yield from self.network.add_tunnel_connection(self.lip, self.lpip, self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type, \
+                                                                  self.conn_cookie, self.sstag, self.dstag, hard_timeout=self.hard_ttl, idle_timeout=self.idle_ttl)
         
     def lookupkeys(self):
         return self._built_lookupkeys

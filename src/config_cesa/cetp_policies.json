@@ -54,16 +54,19 @@
 "policy": {
     "request": [
         { "ope":"query", "group": "id", "code": "fqdn" },
-        { "ope":"query", "group": "control", "code": "caep" }
+        { "ope":"query", "group": "control", "code": "caep" },
+        { "ope":"query", "group": "control", "code": "idle_ttl" }
     ],
     "offer": [
         { "ope":"info", "group": "id", "code": "fqdn", "value":"hosta1.cesa.lte." },
-        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" }
+        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" },
+        { "ope":"info", "group": "control", "code": "idle_ttl", "value":"60" }
     ],
     "available": [
         { "ope":"info", "group": "id", "code": "fqdn", "value":"hosta1.cesa.lte." },
         { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" },
-        { "ope":"info", "group": "control", "code": "ack" }
+        { "ope":"info", "group": "control", "code": "ack" },
+        { "ope":"info", "group": "control", "code": "idle_ttl", "value":"60" }
     ]
     }
 },
@@ -120,11 +123,11 @@
 "direction": "inbound",
 "policy": {
     "request": [
-        { "ope":"query", "group": "id", "code": "fqdn", "value":["hostc1.cesa.lte.", "hostb1.cesb.lte."]},
+        { "ope":"query", "group": "id", "code": "fqdn", "value":["hosta1.cesa.lte.", "hostb1.cesb.lte."]},
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "available": [
-        { "ope":"info", "group": "id", "code": "fqdn", "value":"srv1.hosta1.cesa.lte." },
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"srv1.hosta2.cesa.lte." },
         { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" },
         { "ope":"info", "group": "control", "code": "ack" }
     ]
@@ -162,6 +165,22 @@
     "available": [
         { "ope":"info", "group": "id", "code": "fqdn", "value":"hosta2.cesa.lte." },
         { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" }
+    ]
+    }
+},
+{
+"type": "hostpolicy",
+"fqdn": "srv1.hosta3.cesa.lte.",
+"direction": "inbound",
+"policy": {
+    "request": [
+        { "ope":"query", "group": "id", "code": "fqdn", "value":["hosta1.cesa.lte.", "hosta2.cesa.lte.", "hostb1.cesb.lte."]},
+        { "ope":"query", "group": "control", "code": "caep" }
+    ],
+    "available": [
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"srv1.hosta3.cesa.lte." },
+        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145" },
+        { "ope":"info", "group": "control", "code": "ack" }
     ]
     }
 },
