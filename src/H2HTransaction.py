@@ -524,7 +524,7 @@ class H2HTransactionOutbound(H2HTransaction):
             self._logger.error(" Exception '{}' in pre-processing the CETP packet".format(ex))
             return False
 
-
+    @asyncio.coroutine
     def continue_cetp_processing(self, cetp_msg):
         try:
             self._logger.info("Continue establishing H2H session towards '{}' ({} -> {})".format(self.dst_id, self.sstag, 0))
@@ -611,7 +611,9 @@ class H2HTransactionOutbound(H2HTransaction):
                     return cetp_message
             else:
                 if self._is_ready():
-                    if self._create_connection():
+                    conn_created = yield from self._create_connection()
+                    
+                    if conn_created:
                         self._logger.info(" '{}'\n H2H policy negotiation succeeded in {} RTT".format(30*'#', self.rtt))
                         #self.rtt_time.append(time.time()-self.start_time)
                         self._process_negotiation_success()
@@ -675,7 +677,7 @@ class H2HTransactionOutbound(H2HTransaction):
         #self.cetp_h2h.update_H2H_transaction_count(initiated=False)                            # To reduce number of ongoing transactions.
         return True
     
-
+    @asyncio.coroutine
     def _create_connection(self):
         """ Extract the negotiated parameters to create a connection state """
         try:
@@ -699,6 +701,7 @@ class H2HTransactionOutbound(H2HTransaction):
             self.conn = connection.H2HConnection(self.network, self.cetpstate_table, self.ap, self.host_table, self.conn_table, self.lid, self.lip, self.lpip, \
                                                  self.rid, self.lfqdn, self.rfqdn, self.sstag, self.dstag, self.r_cesid, hard_ttl=hard_ttl, idle_ttl=idle_ttl)
             
+            yield from self.conn.insert_dataplane_connection()
             self.conn_table.add(self.conn)
             self._execute_dns_callback(r_addr = self.lpip)
             return True
@@ -992,7 +995,9 @@ class H2HTransactionInbound(H2HTransaction):
         else:
             if self._is_ready():
                 # Create H2H connection, if all the  requirements of remote-host are met
-                if self._create_connection():
+                conn_created = yield from self._create_connection()
+                
+                if conn_created:
                     self._logger.info("{} H2H-policy negotiation succeeded -> Create transaction (SST={}, DST={})".format(42*'#', self.sstag, self.dstag))
                     negotiation_status = True
                     stateful_transansaction     = self._export_to_stateful()            # Create stateful version
@@ -1025,7 +1030,8 @@ class H2HTransactionInbound(H2HTransaction):
 
     def _is_ready(self):
         return len(self.ipolicy_tmp.required)==0
-
+    
+    @asyncio.coroutine
     def _create_connection(self):
         try:
             self.sstag                      = self.generate_session_tags(self.dstag)
@@ -1049,7 +1055,8 @@ class H2HTransactionInbound(H2HTransaction):
             
             self.conn = connection.H2HConnection(self.network, self.cetpstate_table, self.ap, self.host_table, self.conn_table, self.lid, self.lip, self.lpip, \
                                                  self.rid, self.lfqdn, self.rfqdn, self.sstag, self.dstag, self.r_cesid, hard_ttl=hard_ttl, idle_ttl=idle_ttl)
-
+            
+            yield from self.conn.insert_dataplane_connection()
             self.conn_table.add(self.conn)
             return True
         

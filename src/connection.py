@@ -346,7 +346,6 @@ class H2HConnection(container3.ContainerNode):
             H2H_cookie = 1
             
         self.conn_cookie = H2H_cookie
-        asyncio.ensure_future(self.insert_dataplane_connection())
     
     @asyncio.coroutine
     def insert_dataplane_connection(self):

@@ -164,9 +164,7 @@ class CETPH2H:
             o_h2h = self.cetpstate_table.get( (H2HTransaction.KEY_INITIATED_TAGS, sstag, 0) )
             
             if o_h2h.get_remote_cesid() == self.r_cesid:
-                cetp_resp = o_h2h.continue_cetp_processing(cetp_msg)
-                if cetp_resp is not None:
-                    self.send(cetp_resp)
+                asyncio.ensure_future( self.process_ongoing_negotiation(o_h2h, cetp_msg) )
             
         elif inbound_dstag == 0:
             #self._logger.info(" No prior H2H-transaction found -> Initiating Inbound H2HTransaction (SST={} -> DST={})".format(inbound_sstag, inbound_dstag))
@@ -174,10 +172,16 @@ class CETPH2H:
                                                          interfaces=self.interfaces, conn_table=self.conn_table, cetp_h2h=self, cetp_security=self.cetp_security, \
                                                          ces_params=self.ces_params, host_table=self.host_table, pool_table=self.pool_table, network=self.network)
 
-            asyncio.ensure_future(self.process_inbound_transaction(ih2h, cetp_msg))
+            asyncio.ensure_future( self.process_inbound_transaction(ih2h, cetp_msg) )
             
         # Add try, except?
-        
+    
+    @asyncio.coroutine
+    def process_ongoing_negotiation(self, o_h2h, cetp_msg):
+        cetp_resp = yield from o_h2h.continue_cetp_processing(cetp_msg)
+        if cetp_resp is not None:
+            self.send(cetp_resp)
+    
     @asyncio.coroutine
     def process_inbound_transaction(self, ih2h, cetp_msg):
         cetp_resp = yield from ih2h.start_cetp_processing(cetp_msg)
