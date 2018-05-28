@@ -290,8 +290,8 @@ class H2HTransaction(CETPTransaction):
             key      = (host.KEY_HOST_SERVICE, fqdn)
             host_obj = self.host_table.get(key)
             host_id  = host_obj.fqdn
+            key      = "proxypool"
             
-            key = "proxypool"
             if self.pool_table.has(key):
                 self.ap = self.pool_table.get(key)
                 pip     = self.ap.allocate(host_id)
@@ -559,16 +559,16 @@ class H2HTransactionOutbound(H2HTransaction):
                             if ret_tlv != None:
                                 tlvs_to_send += ret_tlv
                                 continue
-                                                        
-                            if self._check_tlv(received_tlv, cmp="optional"):
-                                self._logger.info(" An optional requirement {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
-                                ret_tlv = self._get_unavailable_response(received_tlv)
-                                tlvs_to_send.append(ret_tlv)
-                            else:
-                                self._logger.error(" A required TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
-                                #error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
-                                error = True
-                                break
+                        
+                        if self._check_tlv(received_tlv, cmp="optional"):
+                            self._logger.info(" An optional requirement {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
+                            ret_tlv = self._get_unavailable_response(received_tlv)
+                            tlvs_to_send.append(ret_tlv)
+                        else:
+                            self._logger.error(" A required TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
+                            #error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
+                            error = True
+                            break
                 
                 #A CETP response message is processed for: Policy Matching and TLV Verification. The message can have: 1) Less than required TLVs; 2) TLVs with wrong value; 3) a notAvailable TLV; OR 4) a terminate TLV.
                 elif self._check_tlv(received_tlv, ope="info"):
@@ -642,7 +642,7 @@ class H2HTransactionOutbound(H2HTransaction):
                         self.last_packet_sent = cetp_message
                         self.last_packet_received = self.packet
                         self.cetp_negotiation_history.append(cetp_message)
-                        self.pprint(cetp_msg, m="Sent packet")
+                        self.pprint(cetp_message, m="Sent packet")
                         self.h2h_negotiation_status = None
                         return cetp_message
                     
@@ -701,8 +701,8 @@ class H2HTransactionOutbound(H2HTransaction):
             self.conn = connection.H2HConnection(self.network, self.cetpstate_table, self.ap, self.host_table, self.conn_table, self.lid, self.lip, self.lpip, \
                                                  self.rid, self.lfqdn, self.rfqdn, self.sstag, self.dstag, self.r_cesid, hard_ttl=hard_ttl, idle_ttl=idle_ttl)
             
-            yield from self.conn.insert_dataplane_connection()
             self.conn_table.add(self.conn)
+            yield from self.conn.insert_dataplane_connection()
             self._execute_dns_callback(r_addr = self.lpip)
             return True
     
@@ -959,15 +959,15 @@ class H2HTransactionInbound(H2HTransaction):
                         tlvs_to_send += ret_tlv
                         continue
                     
-                    if self._check_tlv(received_tlv, cmp="optional"):
-                        self._logger.info(" An optional requirement TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
-                        ret_tlv = self._get_unavailable_response(received_tlv)
-                        tlvs_to_send.append(ret_tlv)
-                    else:
-                        #self._logger.error(" A required TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
-                        error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
-                        error = True
-                        break
+                if self._check_tlv(received_tlv, cmp="optional"):
+                    self._logger.info(" An optional requirement TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
+                    ret_tlv = self._get_unavailable_response(received_tlv)
+                    tlvs_to_send.append(ret_tlv)
+                else:
+                    #self._logger.error(" A required TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
+                    error_tlvs = [self._get_terminate_tlv(err_tlv=received_tlv)]
+                    error = True
+                    break
                         
             # Checks whether the sender's offer met the policy requirements of destination, and the Offer can be verified.
             elif self._check_tlv(received_tlv, ope="info"):
@@ -1056,8 +1056,8 @@ class H2HTransactionInbound(H2HTransaction):
             self.conn = connection.H2HConnection(self.network, self.cetpstate_table, self.ap, self.host_table, self.conn_table, self.lid, self.lip, self.lpip, \
                                                  self.rid, self.lfqdn, self.rfqdn, self.sstag, self.dstag, self.r_cesid, hard_ttl=hard_ttl, idle_ttl=idle_ttl)
             
-            yield from self.conn.insert_dataplane_connection()
             self.conn_table.add(self.conn)
+            yield from self.conn.insert_dataplane_connection()
             return True
         
         except Exception as ex:
@@ -1162,8 +1162,8 @@ class H2HTransactionLocal(H2HTransaction):
             self._execute_dns_callback(r_addr=self.host_ip)
             return True
          
-        self._logger.info("Local-host policy: {}".format(self.opolicy))
-        self._logger.info("Remote-host policy: {}".format(self.ipolicy))
+        self._logger.info("Local-host policy: \n--- {} ----".format(self.opolicy))
+        self._logger.info("Remote-host policy: \n--- {} ----".format(self.ipolicy))
         
         self._logger.info("Match Outbound-Requirements vs Inbound-Available")
         for rtlv in self.opolicy.get_required():
@@ -1210,7 +1210,7 @@ class H2HTransactionLocal(H2HTransaction):
             return False
         else:
             self._logger.info(" Local CETP Policy matched! Allocate proxy address. {} -> {}".format(self.src_id, self.dst_id))
-            lpip = self._create_local_connection()
+            lpip = yield from self._create_connection()
             
             if lpip is not False:
                 self._execute_dns_callback(r_addr = lpip)           # Returning CES proxy address for DNS response
@@ -1218,9 +1218,10 @@ class H2HTransactionLocal(H2HTransaction):
             else:
                 self._execute_dns_callback()
                 return False
+
         
-        
-    def _create_local_connection(self):
+    @asyncio.coroutine        
+    def _create_connection(self):
         try:
             lip             = self.host_ip
             host_obj        = self.host_table.get((host.KEY_HOST_SERVICE, self.dst_id))
@@ -1229,20 +1230,18 @@ class H2HTransactionLocal(H2HTransaction):
             lid, rid        = None, None
             lpip            = self._allocate_proxy_address(self.src_id)
             rpip            = self._allocate_proxy_address(self.dst_id)
-            self._logger.info("Creating Local connection between '{}' and '{}'".format(lfqdn, rfqdn))
             
             if (lpip is None) or (rpip is None):
                 self._logger.error("Error assigning proxy addresses: lpip={}, rpip={}".format(lpip, rpip))
                 return False
             else:
-                self._logger.info(" Creating dataplane H2HLocal connection")
-                timeout = 120.0
-                self.conn = connection.LocalConnection(self.network, timeout, lip=lip, lpip=lpip, rip=rip, rpip=rpip, lfqdn=lfqdn, rfqdn=rfqdn)
+                self.conn = connection.LocalConnection(self.network, self.ap, self.host_table, lip=lip, lpip=lpip, rip=rip, rpip=rpip, lfqdn=lfqdn, rfqdn=rfqdn)
                 self.conn_table.add(self.conn)
+                yield from self.conn.insert_dataplane_connection()                
                 return lpip
         
         except Exception as ex:
-            self._logger.error(" Exception '{}' in _create_local_connection()".format(ex))
+            self._logger.error(" Exception '{}' in _create_connection()".format(ex))
             return False
         
     def _execute_dns_callback(self, r_addr=None):

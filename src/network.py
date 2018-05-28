@@ -609,14 +609,14 @@ class Network(object):
                     
 
     @asyncio.coroutine
-    def add_local_connection(self, src, psrc, dst, pdst):
+    def add_local_connection(self, src, psrc, dst, pdst, cookie=0):
         self._logger.info('Create CES local connection {}:{} <=> {}:{}'.format(src, psrc, dst, pdst))
 
         # Build URL for add operations
         url_add    = urllib.parse.urljoin(self.api_url, API_URL_FLOW_ADD)
 
         # Create first unidirectional connection
-        data = {'dpid': OVS_DATAPATH_ID, 'table_id':1, 'priority':10,
+        data = {'dpid': OVS_DATAPATH_ID, 'table_id':1, 'priority':10, 'cookie':cookie,
                 'match':{'in_port':OVS_PORT_TUN_L3, 'eth_type':2048,
                          'ipv4_src':src, 'ipv4_dst':psrc},
                 'actions':[{'type':'SET_FIELD', 'field':'ipv4_src', 'value':pdst},
@@ -627,7 +627,7 @@ class Network(object):
         yield from self.rest_api.do_post(url_add, json.dumps(data))
 
         # Create second unidirectional connection
-        data = {'dpid': OVS_DATAPATH_ID, 'table_id':1, 'priority':10,
+        data = {'dpid': OVS_DATAPATH_ID, 'table_id':1, 'priority':10, 'cookie':cookie,
                 'match':{'in_port':OVS_PORT_TUN_L3, 'eth_type':2048,
                          'ipv4_src':dst, 'ipv4_dst':pdst},
                 'actions':[{'type':'SET_FIELD', 'field':'ipv4_src', 'value':psrc},

@@ -260,8 +260,10 @@ class DNSCallbacks(object):
 
         if self.hosttable.has((host.KEY_HOST_SERVICE, fqdn)):
             # The service exists in RGW
+            print("Found")
             host_obj = self.hosttable.get((host.KEY_HOST_SERVICE, fqdn))
             service_data = host_obj.get_service_sfqdn(fqdn)
+            print("service_data: ", service_data)
             self._logger.debug('Found service: {} / {}'.format(fqdn, service_data))
         elif self.hosttable.has_carriergrade(fqdn):
             # There is a host with CarrierGrade service in RGW

@@ -10,7 +10,7 @@ from helpers_n_wrappers import utils3
 import asyncio
 
 KEY_RGW = 0
-H2H_cookie = 0
+DP_CONN_cookie = 0
 
 class ConnectionTable(container3.Container):
     def __init__(self, name='ConnectionTable'):
@@ -280,7 +280,7 @@ class C2CConnectionTemplate(container3.ContainerNode):
 
 
 class H2HConnection(container3.ContainerNode):
-    def __init__(self, network, cetpstate_table, adress_pool, host_table, conn_table, lid, lip, lpip, rid, lfqdn, rfqdn, sstag, dstag, r_cesid, hard_ttl=None, idle_ttl=None, name="H2HConnection"):
+    def __init__(self, network, cetpstate_table, address_pool, host_table, conn_table, lid, lip, lpip, rid, lfqdn, rfqdn, sstag, dstag, r_cesid, hard_ttl=None, idle_ttl=None, name="H2HConnection"):
         """
         Initialize a H2HConnection object.
         
@@ -303,7 +303,7 @@ class H2HConnection(container3.ContainerNode):
         self.conn_table          = conn_table
         self.host_table          = host_table
         self.cetpstate_table     = cetpstate_table
-        self.adress_pool         = adress_pool
+        self.address_pool        = address_pool
         self.network             = network 
         self.connectiontype      = "CONNECTION_H2H"
         self.hard_ttl            = hard_ttl
@@ -339,19 +339,19 @@ class H2HConnection(container3.ContainerNode):
             self._built_lookupkeys += [ ((KEY_MAP_CES_TO_CES, self.sstag, self.dstag), True) ]
     
     def _set_cookie(self):
-        global H2H_cookie
-        H2H_cookie += 1
+        global DP_CONN_cookie
+        DP_CONN_cookie += 1
         
-        if H2H_cookie == 0xFFFFFFFFFFFFFFF0:
-            H2H_cookie = 1
+        if DP_CONN_cookie == 0xFFFFFFFFFFFFFFF0:
+            DP_CONN_cookie = 1
             
-        self.conn_cookie = H2H_cookie
+        self.conn_cookie = DP_CONN_cookie
     
     @asyncio.coroutine
     def insert_dataplane_connection(self):
         #self._logger.info("lrloc: {}, rrloc:{}, tunnel_id_in:{}, tunnel_id_out:{}, tunnel_type:{}".format(self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type))
         yield from self.network.add_tunnel_connection(self.lip, self.lpip, self.lrloc, self.rrloc, self.tunnel_id_in, self.tunnel_id_out, self.tunnel_type, \
-                                                                  self.conn_cookie, self.sstag, self.dstag, hard_timeout=self.hard_ttl, idle_timeout=self.idle_ttl)
+                                                      self.conn_cookie, self.sstag, self.dstag, hard_timeout=self.hard_ttl, idle_timeout=self.idle_ttl)
         
     def lookupkeys(self):
         return self._built_lookupkeys
@@ -372,14 +372,14 @@ class H2HConnection(container3.ContainerNode):
         host_obj = self.host_table.get(key)
         host_id  = host_obj.fqdn
         
-        if self.adress_pool.in_allocated(host_id, self.lpip):
-            self.adress_pool.release(host_id, self.lpip)
+        if self.address_pool.in_allocated(host_id, self.lpip):
+            self.address_pool.release(host_id, self.lpip)
 
         # Add the logic for deleting the cached DNS response, if any.
 
 
 class LocalConnection(container3.ContainerNode):
-    def __init__(self, network, timeout, lid=None, lip=None, lpip=None, rid=None, rip=None, rpip=None, lfqdn=None, rfqdn=None, name="LocalConnection"):
+    def __init__(self, network, address_pool, host_table, lid=None, lip=None, lpip=None, rid=None, rip=None, rpip=None, lfqdn=None, rfqdn=None, name="LocalConnection"):
         """
         Initialize a LocalConnection object.
         
@@ -392,17 +392,18 @@ class LocalConnection(container3.ContainerNode):
         @param rpip: The IP proxy address of the remote host
         """
         super().__init__(name)
-        self.timeout          = timeout
+        self.network          = network
+        self.address_pool     = address_pool
+        self.host_table       = host_table
         self.lip, self.lpip   = lip, lpip
         self.rip, self.rpip   = rip, rpip
         self.localFQDN        = lfqdn
         self.remoteFQDN       = rfqdn
-        self.network          = network
         self.connectiontype   = "CONNECTION_LOCAL"
         self._logger = logging.getLogger(name+str(lfqdn)+"->"+str(rfqdn))
         self._logger.setLevel(LOGLEVEL_LocalConnection)
         self._build_lookupkeys()
-        self.add()
+        self._set_cookie()
 
     def _build_lookupkeys(self):
         self._built_lookupkeys = []
@@ -418,10 +419,19 @@ class LocalConnection(container3.ContainerNode):
     def lookupkeys(self):
         """ Keys for indexing Local Connection object """
         return self._built_lookupkeys    
+
+    def _set_cookie(self):
+        global DP_CONN_cookie
+        DP_CONN_cookie += 1
+        
+        if DP_CONN_cookie == 0xFFFFFFFFFFFFFFF0:
+            DP_CONN_cookie = 1
+            
+        self.conn_cookie = DP_CONN_cookie
     
-    def add(self):
-        #add_local_connection(self.lip, self.lpip, self.rip, self.rpip)
-        asyncio.ensure_future( self.network.add_local_connection(self.lip, self.lpip, self.rip, self.rpip) )
+    @asyncio.coroutine
+    def insert_dataplane_connection(self):
+        yield from self.network.add_local_connection(self.lip, self.lpip, self.rip, self.rpip, cookie = self.conn_cookie)
 
     def delete(self):
         self._logger.debug("Deleting a {} connection!".format(self.connectiontype))
@@ -433,15 +443,15 @@ class LocalConnection(container3.ContainerNode):
         host_obj = self.host_table.get(key)
         host_id  = host_obj.fqdn
         
-        if self.adress_pool.in_allocated(host_id, self.lpip):
-            self.adress_pool.release(host_id, self.lpip)
+        if self.address_pool.in_allocated(host_id, self.lpip):
+            self.address_pool.release(host_id, self.lpip)
 
         key     = (host.KEY_HOST_SERVICE, self.remoteFQDN)
         host_obj = self.host_table.get(key)
         host_id  = host_obj.fqdn
         
-        if self.adress_pool.in_allocated(host_id, self.rpip):
-            self.adress_pool.release(host_id, self.rpip)
+        if self.address_pool.in_allocated(host_id, self.rpip):
+            self.address_pool.release(host_id, self.rpip)
 
         # Release the cached DNS responses, if any.
         """

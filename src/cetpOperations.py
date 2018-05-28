@@ -1353,21 +1353,16 @@ def verify_ctrl_hard_ttl(**kwargs):
     ttl = None
     ope, cmp, group, code, remote_offer = policy.get_tlv_details(tlv)               # Get remote ttl value from tlv
     ope, cmp, group, code, local_offer = policy.get_available_policy(tlv)           # Get local ttl value from policy
-    
-    if remote_offer is None and local_off is None:
-        pass # Set ttl parameter as None
-    
+   
     try:
-        if remote_offer >= local_offer:                                             # Compare the two ttl values, and use the smallest value. 
-            ttl = local_offer
-        else:
-            ttl = remote_offer
+        ttl = do_ttl_comparison(remote_offer, local_offer)
+        add_negotiated_parameter(transaction, "hard_ttl", ttl)
+        return True
         
     except:
         ttl = None
-    
-    add_negotiated_parameter(transaction, "hard_ttl", ttl)
-    return True
+        add_negotiated_parameter(transaction, "hard_ttl", ttl)
+        return False
 
 def verify_ctrl_idle_ttl(**kwargs):
     tlv, code, transaction, policy = kwargs["tlv"], kwargs["code"], kwargs["transaction"], kwargs["policy"]
@@ -1379,20 +1374,48 @@ def verify_ctrl_idle_ttl(**kwargs):
     ope, cmp, group, code, remote_offer = policy.get_tlv_details(tlv)               # Get remote ttl value from tlv
     ope, cmp, group, code, local_offer = policy.get_available_policy(tlv)           # Get local ttl value from policy
     
-    if remote_offer is None and local_off is None:
-        pass # Set ttl parameter as None
-    
     try:
-        if remote_offer >= local_offer:                                             # Compare the two ttl values, and use the smallest value. 
-            ttl = local_offer
-        else:
-            ttl = remote_offer
+        ttl = do_ttl_comparison(remote_offer, local_offer)
+        add_negotiated_parameter(transaction, "idle_ttl", ttl)
+        return True
         
     except:
         ttl = None
+        add_negotiated_parameter(transaction, "idle_ttl", ttl)
+        return False
+
+
+def do_ttl_comparison(remote_offer, local_offer):
+    ttl = None
+    can_be_compared = False
     
-    add_negotiated_parameter(transaction, "idle_ttl", ttl)
-    return True
+    if remote_offer == "" and (local_offer is None):
+        ttl = None
+        return ttl
+            
+    elif ( type(remote_offer)==type(str()) ) and (local_offer is None):
+        ttl = remote_offer
+        return str(int(ttl))                                                     # For format compliance sake
+
+    elif remote_offer == "" and ( type(local_offer) == type(str()) ):
+        ttl = local_offer
+        return str(int(ttl))                                                     # For format compliance sake
+    
+    else:
+        can_be_compared = True
+        remote_offer, local_offer = float(remote_offer), float(local_offer)
+        
+        
+    if can_be_compared:
+        if remote_offer >= local_offer:                                       # Compare the two ttl values, and use the smallest value. 
+            ttl = local_offer
+            return str(int(ttl))                                                     # For format compliance sake
+        else:
+            ttl = remote_offer
+            return str(int(ttl))                                                     # For format compliance sake
+    else:
+        raise Exception('Comparison failure')
+    
 
 def add_negotiated_parameter(t, k, v):
     t.add_negotiated_param(k, v)
