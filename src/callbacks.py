@@ -397,6 +397,7 @@ class DNSCallbacks(object):
         self.naptr_records['hostb2.cesb.lte.']              = [('hostb2.cesb.lte.',          'cesb.lte.', '10.1.3.103', '49002', 'tls')]
         self.naptr_records['srv1.hostb1.cesb.lte.']         = [('srv1.hostb1.cesb.lte.',     'cesb.lte.', '10.1.3.103', '49001', 'tls')]
         self.naptr_records['srv2.hostb1.cesb.lte.']         = [('srv2.hostb1.cesb.lte.',     'cesb.lte.', '10.1.3.103', '49002', 'tls')]
+        self.naptr_records['srv3.hostb1.cesb.lte.']         = [('srv3.hostb1.cesb.lte.',     'cesb.lte.', '10.1.3.103', '49002', 'tls')]
         self.naptr_records['srv12.hostb1.cesb.lte.']        = [('srv12.hostb1.cesb.lte.',    'cesb.lte.', '10.1.3.103', '49002', 'tls')]
         self.naptr_records['hostc1.cesc.lte.']              = [('hostc1.cesc.lte.',          'cesc.lte.', '10.0.3.104', '49001', 'tls')]
         self.naptr_records['hostd1.cesd.lte.']              = [('hostd1.cesd.lte.',          'cesd.lte.', '10.0.3.105', '49001', 'tls')]

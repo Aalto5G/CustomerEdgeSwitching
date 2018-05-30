@@ -148,6 +148,10 @@ class AddressPoolUser(container3.ContainerNode):
     def get_stats(self, userid):
         return self._pool[userid].get_stats()
 
+    def has_available(self, userid):
+        """ returns True, if the address pool has any address to allocate """
+        return self._pool[userid].has_available()
+    
     def in_pool(self, userid, addr):
         return self._pool[userid].in_pool(addr)
 
@@ -197,6 +201,10 @@ class _AddressPoolUnit_set(object):
     def get_stats(self):
         """ Return a tuple of (Total/Allocated/Available) """
         return (len(self._pool), len(self._allocated), len(self._available))
+
+    def has_available(self):
+        """ returns True, if the address pool has any address to allocate """
+        return len(self._available) > 0
 
     def in_pool(self, addr):
         return (addr in self._pool)
@@ -256,6 +264,10 @@ class _AddressPoolUnit_list(object):
     def get_stats(self):
         """ Return a tuple of (Total/Allocated/Available) """
         return (len(self._pool), len(self._allocated), len(self._available))
+    
+    def has_available(self):
+        """ returns True, if the address pool has any address to allocate """
+        return len(self._available) > 0
 
     def in_pool(self, addr):
         return (addr in self._pool)
