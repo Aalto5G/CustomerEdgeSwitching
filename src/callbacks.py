@@ -342,7 +342,8 @@ class DNSCallbacks(object):
             resolver.do_continue(query)
             return
 
-        """ Temporary code insertion by Hammad to get CETP working """
+        
+        """ Temporary code insertion by Hammad to get CETP working 
         # Resolving the NAPTR query.
         naptr_rrs = self.resolve_naptr(fqdn)
         
@@ -353,10 +354,30 @@ class DNSCallbacks(object):
                 dest_id, r_cesid, r_ip, r_port, r_transport = naptr_resp
                 self.cetp_mgr.process_dns_message(cback, cb_args, dest_id, r_cesid, naptr_rrs)
                 return
-        """ ------------ """
+        ------------ 
+        """
         
 
-        # Create factory for new resolution
+        # Create factory for NAPTR resolution
+        raddr = self.dns_get_resolver()
+        resolver = uDNSResolver()
+        self.activequeries[key] = resolver
+        
+        # Changing the A or AAAA queries to NAPTR queries to check if destination is served by a CES/CETP service
+        if rdtype in [dns.rdatatype.A, dns.rdatatype.AAAA, dns.rdatatype.PTR]:
+            
+            self._logger.info("Forwarding the {} query as NAPTR query for domain '{}'".format(rdtype, fqdn))
+            fwd_query   = dns.message.make_query(fqdn, dns.rdatatype.NAPTR)
+            raddr       = self.dns_get_resolver()                           # Create factory for NAPTR resolution
+            resolver    = uDNSResolver()
+            response    = yield from self._forward_naptr_query(fwd_query, resolver, raddr, rdtype, fqdn)
+            
+            if response is not None:
+                self._process_naptr_response(response)
+                del self.activequeries[key]
+                return
+
+        # Create new factory for actual query resolution
         raddr = self.dns_get_resolver()
         resolver = uDNSResolver()
         self.activequeries[key] = resolver
@@ -374,6 +395,35 @@ class DNSCallbacks(object):
         # Resolution ended, send generated response
         del self.activequeries[key]
         cback(query, addr, response)
+
+    
+    @asyncio.coroutine
+    def _forward_naptr_query(self, query, resolver, raddr, rdtype, fqdn):
+        response = None
+        try:
+            response = yield from resolver.do_resolve(query, raddr, timeouts=[0.5])
+        except ConnectionRefusedError:
+            # Failed to resolve DNS query - Drop DNS Query
+            self._logger.warning('ConnectionRefusedError: Failed resolving {} query for {} via {}:{}'.format(rdtype, fqdn, raddr[0], raddr[1]))
+        
+        return response
+    
+
+    def _process_naptr_response(self, response):
+        # Need to match DNS key state, and match on arrival of a query's response. 
+        self._logger.info("Encode logic to process NAPTR records")
+        self._logger.info("NAPTR record shall indicate CP-RLOC, port, protocol etc.")
+        
+        """
+        results = []
+        for rrObject in response.answer:
+            for part in rrObject.to_text().split("\n"):
+                results.append(string.splitfields(part, " "))
+        return results
+        """
+        
+        print("response, type(response)")
+        print(response, type(response))
 
     # ----------------------------- Hammad Additions to run CETPManager (running the CETP policy Engine)
     

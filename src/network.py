@@ -6,6 +6,7 @@ import socket, struct
 import os, subprocess
 import random, string
 import urllib.parse
+import time
 import Utils
 
 from helpers_n_wrappers import container3
@@ -445,7 +446,7 @@ class Network(object):
             return False
 
 
-    def rest_api_init(self, n=5):
+    def rest_api_init(self, n=10):
         """ Create long lived HTTP session """
         self.rest_api = aiohttp_client.HTTPRestClient(n)
 
@@ -609,7 +610,7 @@ class Network(object):
                     
 
     @asyncio.coroutine
-    def add_local_connection(self, src, psrc, dst, pdst, cookie=0):
+    def add_local_connection(self, src, psrc, dst, pdst, cookie=0, hard_timeout=None, idle_timeout=None):
         self._logger.info('Create CES local connection {}:{} <=> {}:{}'.format(src, psrc, dst, pdst))
 
         # Build URL for add operations
@@ -624,6 +625,13 @@ class Network(object):
                            {'type':'SET_FIELD', 'field':'eth_src', 'value':OVS_PORT_TUN_L3_MAC},
                            {'type':'SET_FIELD', 'field':'eth_src', 'value':OVS_PORT_TUN_L3_MAC},
                            {'type':'OUTPUT', 'port':OVS_PORT_IN}]}
+        
+        if hard_timeout is not None:
+            data['hard_timeout'] = hard_timeout
+
+        if idle_timeout is not None:
+            data['idle_timeout'] = idle_timeout
+        
         yield from self.rest_api.do_post(url_add, json.dumps(data))
 
         # Create second unidirectional connection
@@ -635,6 +643,13 @@ class Network(object):
                            {'type':'SET_FIELD', 'field':'eth_src', 'value':OVS_PORT_TUN_L3_MAC},
                            {'type':'SET_FIELD', 'field':'eth_src', 'value':OVS_PORT_TUN_L3_MAC},
                            {'type':'OUTPUT', 'port':OVS_PORT_IN}]}
+        
+        if hard_timeout is not None:
+            data['hard_timeout'] = hard_timeout
+
+        if idle_timeout is not None:
+            data['idle_timeout'] = idle_timeout
+        
         yield from self.rest_api.do_post(url_add, json.dumps(data))
 
     @asyncio.coroutine
@@ -658,7 +673,7 @@ class Network(object):
 
     @asyncio.coroutine
     def add_tunnel_connection(self, src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, cookie=0, sstag=0, dstag=0, hard_timeout=None, idle_timeout=None, diffserv=False):
-        self._logger.info('Create CES tunnel connection {}:{} / {}:{}  tun_in={} tun_out={} [{} diffserv={}]'.format(src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, diffserv))
+        #self._logger.info('Create CES tunnel connection {}:{} / {}:{}  tun_in={} tun_out={} [{} diffserv={}]'.format(src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, diffserv))
 
         # Build URL for add operations
         url_add    = urllib.parse.urljoin(self.api_url, API_URL_FLOW_ADD)
@@ -705,6 +720,7 @@ class Network(object):
         if diffserv:
             # Add second to last action for setting IP.dscp field for DiffServ treatment
             data['actions'].insert(-1, {'type':'SET_FIELD', 'field':'ip_dscp', 'value':OVS_DIFFSERV_MARK})
+        
         yield from self.rest_api.do_post(url_add, json.dumps(data))
 
         'ovs-ofctl add-flow -OOpenFlow13 br-ces0 "table=2,priority=10,in_port=tunnel_port,ip,tun_src=tun_dst,tun_dst=tun_src,tun_id=tun_id_in actions=mod_dl_src:OVS_PORT_TUN_L3_MAC,mod_dl_dst:OVS_PORT_TUN_L3_MAC,mod_nw_src:psrc,mod_nw_dst:src,output:OVS_PORT_TUN_L3"'
@@ -738,6 +754,7 @@ class Network(object):
         if diffserv:
             # Add matching of IP.dscp field for DiffServ treatment   - # if ofctl-connection runs, then also modify template string to include the following
             data['match']['ip_dscp'] = OVS_DIFFSERV_MARK
+
         yield from self.rest_api.do_post(url_add, json.dumps(data))
         #"""
 

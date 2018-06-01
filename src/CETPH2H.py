@@ -45,7 +45,8 @@ class CETPH2H:
         self._closure_signal            = False
         self.h2h_queue_task             = None
         self.pending_tasks              = []
-        self.rtt_measurement            = []                        # For experimentation only. Shall be removed in final version.
+        self.testing_results            = {}                        # For experimentation only. Shall be removed in final version.
+        self.testing_results            = {"rtt":[], "rest_ryu":[]}
         self._logger                    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPH2H)
         self._logger.info("CETPH2H layer created for cesid '{}'".format(r_cesid))
@@ -136,12 +137,12 @@ class CETPH2H:
         key      = (host.KEY_HOST_IPV4, ip_addr)
         host_obj = self.host_table.get(key)
         src_id   = host_obj.fqdn
-        self._logger.info("Initiating H2H policy negotiation between '{}' -> '{}'".format(src_id, dst_id))
+        #self._logger.info("Initiating H2H policy negotiation between '{}' -> '{}'".format(src_id, dst_id))
 
         h2h = H2HTransaction.H2HTransactionOutbound(loop=self._loop, cb=cb, host_ip=ip_addr, src_id=src_id, dst_id=dst_id, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetp_h2h=self, \
                                                     ces_params=self.ces_params, policy_mgr=self.policy_mgr, cetpstate_table=self.cetpstate_table, host_table=self.host_table, \
                                                     conn_table=self.conn_table, interfaces=self.interfaces, cetp_security=self.cetp_security, pool_table=self.pool_table, 
-                                                    network=self.network, rtt_time=self.rtt_measurement)
+                                                    network=self.network, rtt_time=self.testing_results)
         cetp_message = yield from h2h.start_cetp_processing()
         if cetp_message != None:
             self.send(cetp_message)
@@ -213,8 +214,8 @@ class CETPH2H:
         self.resource_cleanup()
         self._close_pending_tasks()
         self.cetp_mgr.remove_cetp_endpoint(self.r_cesid)        # Remove the endpoint after cleanup.
-        del(self)
         #self.show_measuremnt_results()
+        del(self)
     
     def resource_cleanup(self):
         """ Deletes the CETPH2H instance towards r_cesid, cancels the pending tasks, and handles the pending <H2H DNS-NAPTR responses. """
@@ -246,12 +247,15 @@ class CETPH2H:
 
     def show_measuremnt_results(self):
         """ Function displaying results of benchmarking or testing -- To be Removed finally """
-        if len(self.rtt_measurement)>0:
-            avg = sum(self.rtt_measurement)/len(self.rtt_measurement)
-            print("Min: ", min(self.rtt_measurement)*1000,"ms\t", "Max: ", max(self.rtt_measurement)*1000,"ms")
-            print("Average: ", avg*1000,"ms")
+        for i,k in list(enumerate(self.testing_results)):
+            print("-------\n", k, "\n-------")
+            v = self.testing_results[k]
+            if len(v)>1:
+                v = v[1:]
+                print("Min: ", min(v)*1000,"ms\t", "Max: ", max(v)*1000,"ms")
+                print("Average: ", sum(v)/len(v)*1000,"ms")
+                
             
-
 class CETPH2HLocal:
     def __init__(self, loop=None, l_cesid="", cetpstate_table= None, policy_mgr=None, cetp_mgr=None, ces_params=None, cetp_security=None, host_table= None, \
                  conn_table=None, pool_table=None, network=None, name="CETPH2H"):

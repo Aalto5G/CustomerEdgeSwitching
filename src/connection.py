@@ -326,7 +326,7 @@ class H2HConnection(container3.ContainerNode):
         
     def _build_lookupkeys(self):
         self._built_lookupkeys = []
-        self._built_lookupkeys +=[ (KEY_MAP_CETP_CONN, False)] 
+        self._built_lookupkeys +=[ (KEY_MAP_CETP_CONN, False)]
         self._built_lookupkeys +=[ ((KEY_MAP_LOCAL_HOST, self.lip), False),         ((KEY_MAP_CETP_PRIVATE_NW, self.lip, self.lpip), True) ]
         self._built_lookupkeys +=[ ((KEY_MAP_LOCAL_FQDN, self.localFQDN), False),   ((KEY_MAP_REMOTE_FQDN, self.remoteFQDN), False) ]
         self._built_lookupkeys +=[ ((KEY_MAP_REMOTE_CESID, self.r_cesid), False) ]
@@ -337,7 +337,8 @@ class H2HConnection(container3.ContainerNode):
             
         if (self.sstag is not None) and (self.dstag is not None):
             self._built_lookupkeys += [ ((KEY_MAP_CES_TO_CES, self.sstag, self.dstag), True) ]
-    
+
+        
     def _set_cookie(self):
         global DP_CONN_cookie
         DP_CONN_cookie += 1
@@ -379,7 +380,7 @@ class H2HConnection(container3.ContainerNode):
 
 
 class LocalConnection(container3.ContainerNode):
-    def __init__(self, network, address_pool, host_table, lid=None, lip=None, lpip=None, rid=None, rip=None, rpip=None, lfqdn=None, rfqdn=None, name="LocalConnection"):
+    def __init__(self, network, address_pool, host_table, lid=None, lip=None, lpip=None, rid=None, rip=None, rpip=None, lfqdn=None, rfqdn=None, hard_ttl=None, idle_ttl=None, name="LocalConnection"):
         """
         Initialize a LocalConnection object.
         
@@ -399,6 +400,8 @@ class LocalConnection(container3.ContainerNode):
         self.rip, self.rpip   = rip, rpip
         self.localFQDN        = lfqdn
         self.remoteFQDN       = rfqdn
+        self.hard_ttl         = hard_ttl
+        self.idle_ttl         = idle_ttl
         self.connectiontype   = "CONNECTION_LOCAL"
         self._logger = logging.getLogger(name+str(lfqdn)+"->"+str(rfqdn))
         self._logger.setLevel(LOGLEVEL_LocalConnection)
@@ -412,9 +415,9 @@ class LocalConnection(container3.ContainerNode):
         self._built_lookupkeys += [ ((KEY_MAP_LOCAL_FQDN, self.localFQDN), False),  ((KEY_MAP_LOCAL_FQDN, self.remoteFQDN), False) ]
         self._built_lookupkeys += [ ((KEY_MAP_LOCAL_FQDNs, self.localFQDN, self.remoteFQDN), True)]
         self._built_lookupkeys += [ ((KEY_MAP_HOST_FQDNs, self.localFQDN, self.remoteFQDN), True)]
-        
         if self.lip != self.rip:
             self._built_lookupkeys += [ ((KEY_MAP_LOCAL_HOST, self.rip), False),    ((KEY_MAP_CETP_PRIVATE_NW, self.rip, self.rpip), True)]
+
         
     def lookupkeys(self):
         """ Keys for indexing Local Connection object """
@@ -431,7 +434,8 @@ class LocalConnection(container3.ContainerNode):
     
     @asyncio.coroutine
     def insert_dataplane_connection(self):
-        yield from self.network.add_local_connection(self.lip, self.lpip, self.rip, self.rpip, cookie = self.conn_cookie)
+        yield from self.network.add_local_connection(self.lip, self.lpip, self.rip, self.rpip, cookie = self.conn_cookie, \
+                                                     hard_timeout=self.hard_ttl, idle_timeout=self.idle_ttl)
 
     def delete(self):
         self._logger.debug("Deleting a {} connection!".format(self.connectiontype))

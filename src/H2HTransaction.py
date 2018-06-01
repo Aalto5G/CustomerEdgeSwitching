@@ -351,7 +351,7 @@ class H2HTransactionOutbound(H2HTransaction):
         self._logger.setLevel(LOGLEVEL_H2HTransactionOutbound)
         self.h2h_negotiation_status = False
         self.cetp_negotiation_history   = []
-        self.rtt_time           = rtt_time
+        self.test_results           = rtt_time
         self.cb_list            = [cb]
 
     def load_parameters(self):
@@ -550,7 +550,8 @@ class H2HTransactionOutbound(H2HTransaction):
             self._logger.info("Continue establishing H2H session towards '{}' ({} -> {})".format(self.dst_id, self.sstag, 0))
             self._logger.info("Host policy: \n {} {} {}".format(15*'-', self.opolicy, 15*'-'))
             self.pprint(cetp_msg, m="Inbound Response")
-    
+            #self.c1 = time.time()
+            
             error                       = False
             tlvs_to_send, error_tlvs    = [], []
             self.rtt += 1
@@ -635,7 +636,7 @@ class H2HTransactionOutbound(H2HTransaction):
                     
                     if conn_created:
                         self._logger.info(" '{}'\n H2H policy negotiation succeeded in {} RTT".format(30*'#', self.rtt))
-                        #self.rtt_time.append(time.time()-self.start_time)
+                        #self.test_results.append(time.time()-self.start_time)
                         self._process_negotiation_success()
                         self.h2h_negotiation_status = True
                         return
@@ -795,6 +796,7 @@ class H2HTransactionOutbound(H2HTransaction):
             keys = [((KEY_INITIATED_TAGS, self.sstag, 0), True), ((KEY_HOST_IDS, self.src_id, self.dst_id), True), ((KEY_RCESID, self.r_cesid), False)]
 
         return keys
+
         
     def post_h2h_negotiation(self, cetp_message):
         """  Processes a CETP packet received on a negotiated H2H session.  e.g. a 'terminate' TLV, or change in ratelimit of data connection. 
@@ -1125,7 +1127,8 @@ class H2HTransactionLocal(H2HTransaction):
         self.pool_table         = pool_table
         self.network            = network
         self.l_cesid            = ""
-        self.r_cesid            = ""                        # For compatbility with base class 
+        self.r_cesid            = ""                        # For compatbility with base class
+        self.negotiated_params  = {}
         self._name              = name
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HTransactionLocal)
@@ -1263,6 +1266,8 @@ class H2HTransactionLocal(H2HTransaction):
             lid, rid        = None, None
             lpip            = self._allocate_proxy_address(self.src_id)
             rpip            = self._allocate_proxy_address(self.dst_id)
+            
+            self._logger.info("Negotiated params: \n ---- \n {} \n ---- ".format(self.negotiated_params))
             
             if (lpip is None) or (rpip is None):
                 self._logger.error("Error assigning proxy addresses: lpip={}, rpip={}".format(lpip, rpip))
