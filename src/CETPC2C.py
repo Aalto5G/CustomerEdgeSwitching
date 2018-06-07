@@ -54,7 +54,7 @@ class CETPC2CLayer:
         self.active_transport_cb        = None
         self._logger                    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPC2CLayer)
-        self._logger.info("Initiating CETPC2CLayer towards cesid='{}'".format(r_cesid) )
+        self._logger.debug("Initiating CETPC2C towards CES='{}'".format(r_cesid) )
         self._read_config()
 
     def _read_config(self):
@@ -82,19 +82,20 @@ class CETPC2CLayer:
                 return
             
             for naptr_rr in naptr_rrs:
-                dst_id, r_cesid, r_ip, r_port, r_proto = naptr_rr
+                order, pref, service, dst_id, rcesid_t, rcesid_v, rloc_type, rloc_value, rproto, rport, alias = naptr_rr
+                #dst_id, rcesid_v, rloc_value, rport, rproto = naptr_rr
                 
                 # Checks that all NAPTRs point to same 'r_cesid'
-                if r_cesid != self.r_cesid:
+                if rcesid_v != self.r_cesid:
                     continue
                 
-                key = (r_ip, r_port, r_proto)
+                key = (rloc_value, rport, rproto)
                 if self._has_processed_rlocs(key):
                     continue
 
-                if not self.is_unreachable_cetp_rloc(r_ip, r_port, r_proto):
+                if not self.is_unreachable_cetp_rloc(rloc_value, rport, rproto):
                     self._add_processed_rlocs(key)
-                    asyncio.ensure_future(self.initiate_transport(r_ip, r_port, r_proto))
+                    asyncio.ensure_future(self.initiate_transport(rloc_value, rport, rproto))
                     allowed_transports -= 1
                     if allowed_transports == 0:
                         return
@@ -298,7 +299,7 @@ class CETPC2CLayer:
         """ Initiates CP-transport towards remote CES at (ip_addr, port) """
         if proto == 'tcp' or proto=="tls":
             triggered_at = time.time()
-            self._logger.info(" Initiating a '{}' transport towards cesid='{}' @({}:{})".format(proto, self.r_cesid, ip_addr, port))
+            self._logger.info(" Initiating a '{}' transport towards CES='{}' @({}:{})".format(proto.upper(), self.r_cesid, ip_addr, port))
             t = CETPTransports.oCESTCPTransport(self, proto, self.r_cesid, self.ces_params, remote_addr=(ip_addr, port), loop=self._loop)
             timeout = self.ces_params["c2c_establishment_t0"]
             
@@ -348,7 +349,7 @@ class CETPC2CLayer:
     def report_connectivity(self, transport, status=True):
         """ Called by transport layer: On connection success (to trigger C2C negotiation); AND on transport failure (for resouce-cleanup) """ 
         if status == True:
-            self._logger.info(" CETP Transport is connected {}".format(transport.get_remotepeer()))
+            self._logger.info(" {} CETP Transport is connected {}".format(transport.proto.upper(), transport.get_remotepeer()))
             self.register_connected_transport(transport)
 
             if self.c2c_transaction is None:

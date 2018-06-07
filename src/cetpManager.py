@@ -231,7 +231,7 @@ class CETPManager:
     def initiate_cetp_service(self, server_ip, server_port, proto):
         """ Creates CETPServer Endpoint for accepting connections from remote CES """
         try:
-            self._logger.info("Initiating CETPServer on {} protocol @ {}.{}".format(proto, server_ip, server_port))
+            self._logger.debug("Initiating CETPServer on {} protocol @ {}.{}".format(proto.upper(), server_ip, server_port))
             if proto == "tcp":
                 server = yield from self._loop.create_server(lambda: CETPTransports.iCESServerTCPTransport(self._loop, self.ces_params, cetp_mgr=self),\
                                                  host=server_ip, port=server_port)
@@ -246,10 +246,10 @@ class CETPManager:
                                                 host=server_ip, port=server_port, ssl=sc)
                 
             self.register_server_endpoint(server)
-            self._logger.info(" CETP Server is listening on '{}' protocol: {}:{}".format(proto.upper(), server_ip, server_port))
+            self._logger.info(" CETP Server is listening on '{}' protocol @ {}:{}".format(proto.upper(), server_ip, server_port))
             
         except Exception as ex:
-            self._logger.warning(" Exception '{}' in creating CETP server on {} protocol @ {}:{}".format(ex, proto, server_ip, server_port))
+            self._logger.warning(" Exception '{}' in creating {} based CETP server @ {}:{}".format(ex, proto.upper(), server_ip, server_port))
 
 
     # Functions to register/unregister the C2CLayer AND handle newly connected remote endpoints.
@@ -429,10 +429,11 @@ class CETPManager:
             
             remove_naptrs =  []
             for n_rr in naptr_rrs:
-                dst_id, r_cesid, r_ip, r_port, r_proto = n_rr                   # Assumption: All NAPTRs point towards one 'r_cesid'.    (Destination domain is reachable via one CES only)
-                key = (r_ip, r_port, r_proto)
+                # Assumption: All NAPTRs point towards one 'r_cesid'.    (Destination domain is reachable via one CES only)
+                order, pref, service, dst_id, rcesid_t, rcesid_v, rloc_type, rloc_value, rproto, rport, alias = n_rr
+                key = (rloc_value, rport, rproto)
                 
-                if self.cetp_security.is_unreachable_cetp(r_ip, r_port, r_proto):
+                if self.cetp_security.is_unreachable_cetp(rloc_value, rport, rproto):
                     remove_naptrs.append(n_rr)
             
             for p in remove_naptrs:

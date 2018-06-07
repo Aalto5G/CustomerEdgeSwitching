@@ -129,7 +129,7 @@ class oCESTCPTransport(CETPTransport):
 
     def connection_made(self, transport):
         self.transport = transport
-        self._logger.info('Connected to {}'.format(self.remotepeer))
+        self._logger.debug('Transport connected to {}'.format(self.remotepeer))
                 
         if self.proto == "tls":
             if not self.verify_identity(self.r_cesid):
@@ -153,10 +153,13 @@ class oCESTCPTransport(CETPTransport):
         for sub in subject_ids:
             for k,v in sub:
                 if k == 'commonName':
-                    remote_id = v
-                    if (remote_id==r_cesid) or (remote_id+'.'==r_cesid):
+                    if not v.endswith('.'):
+                        v += '.'
+                        
+                    if v==r_cesid:
                         self._logger.debug(" Successful TLS connection to '{}'".format(self.r_cesid))
                         return True
+        return False
         
     def report_c2c_negotiation(self, status):
         """ Method used by C2CLayer to report success of C2C-Negotiation """
@@ -269,6 +272,9 @@ class iCESServerTLSTransport(iCESServerTCPTransport):
         for sub in subject_ids:
             for k,v in sub:
                 if k == 'commonName':
-                    remote_id = v+'.'
+                    if not v.endswith('.'):
+                        v += '.'
+
+                    remote_id = v
                     return remote_id
         return None
