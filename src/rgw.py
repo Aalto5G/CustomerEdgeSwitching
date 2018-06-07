@@ -309,11 +309,11 @@ class RealmGateway(object):
                                 datarepository   = self._datarepository,
                                 synproxy         = self._config.synproxy,
                                 pooltable        = self._pooltable,
-                                cetp_service     = self.cetp_service)
+                                cetp_service     = self._cetp_service)
 
     def _read_cetp_params(self):
         self.cetp_config   = self._config.getdefault('cetp_config', None)
-        self.cetp_service = []
+        self._cetp_service = []
         
         if self.cetp_config is not None:
             self.ces_conf = yaml.load( open(self.cetp_config) )
@@ -321,7 +321,7 @@ class RealmGateway(object):
             for s in cetp_servers:
                 srv = self.ces_conf["CETPServers"][s]
                 ip_addr, port, proto = srv["ip"], srv["port"], srv["transport"]
-                self.cetp_service.append( (ip_addr, port, proto) )
+                self._cetp_service.append( (ip_addr, port, proto) )
                     
     @asyncio.coroutine
     def _init_pbra(self):
@@ -352,7 +352,7 @@ class RealmGateway(object):
             self._cetp_policies  = self.ces_conf["cetp_policy_file"]
             self._cetp_mgr       = cetpManager.CETPManager(self._cetp_policies, self.cesid, self.ces_params, self._hosttable, self._connectiontable, \
                                                            self._pooltable, self._network, self.cetpstate_table, self._loop)
-            for s in self.cetp_service:
+            for s in self._cetp_service:
                 (ip_addr, port, proto) = s
                 yield from self._cetp_mgr.initiate_cetp_service(ip_addr, port, proto)
 
@@ -367,7 +367,9 @@ class RealmGateway(object):
                                   pooltable       = self._pooltable,
                                   connectiontable = self._connectiontable,
                                   cetp_mgr        = self._cetp_mgr,
-                                  pbra            = self._pbra)
+                                  pbra            = self._pbra,
+                                  cetp_service    = self._cetp_service,
+                                  cesid           = self.cesid)
 
         # Register defined DNS timeouts
         self.dnscb.dns_register_timeout(self._config.dns_timeout, None)

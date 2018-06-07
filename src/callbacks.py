@@ -2,6 +2,8 @@ import asyncio
 import logging
 import random
 import pprint
+import string
+
 from functools import partial
 from operator import getitem
 
@@ -27,6 +29,7 @@ import connection
 from connection import ConnectionLegacy
 
 import pbra
+from ryu.ofproto.ofproto_parser import msg
 
 DNSRR_TTL_CIRCULARPOOL = 0
 DNSRR_TTL_SERVICEPOOL = 10
@@ -43,7 +46,7 @@ class DNSCallbacks(object):
         self.resolver_list = []
         self.registry = {}
         self.activequeries = {}
-        self._load_naptr_records()
+        self._load_naptr_rrs()
 
     def get_object(self, name=None):
         if name is None:
@@ -148,7 +151,7 @@ class DNSCallbacks(object):
     @asyncio.coroutine
     def ddns_process(self, query, addr, cback):
         """ Process DDNS query from DHCP server """
-        self._logger.debug('process_update')
+        self._logger.info('process_update')
         try:
             #Filter hostname and operation
             for rr in query.authority:
@@ -342,42 +345,19 @@ class DNSCallbacks(object):
             resolver.do_continue(query)
             return
 
-        
-        """ Temporary code insertion by Hammad to get CETP working 
-        # Resolving the NAPTR query.
-        naptr_rrs = self.resolve_naptr(fqdn)
-        
-        if naptr_rrs is not None:
-            cb_args = (query, addr)
-            
-            for naptr_resp in naptr_rrs:
-                dest_id, r_cesid, r_ip, r_port, r_transport = naptr_resp
-                self.cetp_mgr.process_dns_message(cback, cb_args, dest_id, r_cesid, naptr_rrs)
-                return
-        ------------ 
-        """
-        
-
-        # Create factory for NAPTR resolution
-        raddr = self.dns_get_resolver()
-        resolver = uDNSResolver()
-        self.activequeries[key] = resolver
-        
         # Changing the A or AAAA queries to NAPTR queries to check if destination is served by a CES/CETP service
         if rdtype in [dns.rdatatype.A, dns.rdatatype.AAAA, dns.rdatatype.PTR]:
-            
-            self._logger.info("Forwarding the {} query as NAPTR query for domain '{}'".format(rdtype, fqdn))
-            fwd_query   = dns.message.make_query(fqdn, dns.rdatatype.NAPTR)
-            raddr       = self.dns_get_resolver()                           # Create factory for NAPTR resolution
-            resolver    = uDNSResolver()
-            response    = yield from self._forward_naptr_query(fwd_query, resolver, raddr, rdtype, fqdn)
-            
-            if response is not None:
-                self._process_naptr_response(response)
+            self._logger.info("Forwarding the {} query as NAPTR query for domain '{}'".format(dns.rdatatype.to_text(rdtype), fqdn))
+            cb_args = (query, addr)
+            cb      = (cback, cb_args)
+            fwd_query  = dns.message.make_query(fqdn, dns.rdatatype.NAPTR)
+            resp_msg   = yield from self._forward_naptr_query(fwd_query, fqdn, key)
+            if self.is_valid_naptr(resp_msg):
+                self._process_naptr_response(resp_msg, cb)
                 del self.activequeries[key]
                 return
-
-        # Create new factory for actual query resolution
+        
+        # Create a new factory for resolving the actual DNS query
         raddr = self.dns_get_resolver()
         resolver = uDNSResolver()
         self.activequeries[key] = resolver
@@ -398,74 +378,172 @@ class DNSCallbacks(object):
 
     
     @asyncio.coroutine
-    def _forward_naptr_query(self, query, resolver, raddr, rdtype, fqdn):
-        response = None
+    def _forward_naptr_query(self, query, fqdn, key=""):
+        """ Sends DNS (NAPTR) query for destination to a DNS resolver """
+        response    = None
+        raddr       = self.dns_get_resolver()                           # Create factory for NAPTR resolution
+        resolver    = uDNSResolver()
+        self.activequeries[key] = resolver
+        
         try:
             response = yield from resolver.do_resolve(query, raddr, timeouts=[0.5])
         except ConnectionRefusedError:
             # Failed to resolve DNS query - Drop DNS Query
-            self._logger.warning('ConnectionRefusedError: Failed resolving {} query for {} via {}:{}'.format(rdtype, fqdn, raddr[0], raddr[1]))
+            self._logger.warning('ConnectionRefusedError: Failed resolving NAPTR query for {} via {}:{}'.format(fqdn, raddr[0], raddr[1]))
         
         return response
-    
 
-    def _process_naptr_response(self, response):
-        # Need to match DNS key state, and match on arrival of a query's response. 
-        self._logger.info("Encode logic to process NAPTR records")
-        self._logger.info("NAPTR record shall indicate CP-RLOC, port, protocol etc.")
+    
+    def _process_naptr_response(self, msg, cb=None):
+        """ Initiates CETP negotiation based on NAPTR record.
+        @todo: Need to match DNS key state with query's response. 
+        """
+        response = self.extract_answer(msg)
+        naptr_rrs = self.extract_valid_naptrs(response)                         # A list of (order, pref, service, rcesid_t, rcesid_v, rloc_type, rloc_value, proto, port, alias)
+        cback, cb_args = cb
         
+        if len(naptr_rrs)!=0:
+            self._logger.info("Extracted NAPTR record: {}".format(naptr_rrs))
+            order, pref, service, dst_id, rcesid_t, rcesid_v, rloc_type, rloc_value, rproto, rport, alias = naptr_rrs[0]
+            self.cetp_mgr.process_dns_message(cback, cb_args, dst_id, rcesid_v, naptr_rrs)
+            return
+            
+
+    def is_valid_naptr(self, msg):
+        """ Determines if the DNS response carries NAPTR records valid for CES/CETP service """
+        if not msg:
+            return False
+        
+        response = self.extract_answer(msg)
+        if len(response)==0 or not self.NAPTR_OK(response):
+            return False            # Not a NAPTR record
+        return True
+        
+    def NAPTR_OK(self, response):
+        """
+        Check if a DNS response contains NAPTR records that match our specifications.
+        
+        @param response: A list of DNS answers.
+        @return: True if the NAPTR response meets the specifications, False otherwise.
+        """
+        try:
+            naptrs  = self.filter_naptr_rrs(response)
+            naptr   = self.choose_naptr_rr(naptrs)
+            return True
+        except Exception as ex:
+            self._logger.info("Answer record {} does not match our NATPR specification.".format(response))
+            return False
+    
+    def filter_naptr_rrs(self, response_rrs):
+        """
+        Return a list sorted according to the priority and order of NAPTR resource records in a given list of DNS answers.
+
+        @param answer: A list of DNS answers.
+        @return: A sorted list of DNS answers.
+        """
+        # (destination, ttl, anet, type, order, preference, flags, service, RegExp, replacement)
+        res = []
+
+        for ans in response_rrs:
+            if len(ans)==10 and ans[3].lower() == "naptr" and ans[7].lower() == '"CES+cesid"'.lower():
+                res.append(ans)
+        res.sort(key=lambda ans: int(ans[5])) # sort preference field
+        res.sort(key=lambda ans: int(ans[4])) # sort order field
+        return res
+
+    def choose_naptr_rr(self, rlist):
+        """
+        Return a chosen NAPTR resource record from a list of possible NAPTR rrs.
+        @param list: A list of NAPTR resource records.
+        @return: The selected NAPTR resource record, based on policy.
+        """
+        return rlist[0]
+        #return list[random.randint(0, len(list)-1)]
+
+
+    def extract_valid_naptrs(self, response_rrs):
+        """
+        @note: NAPTR example record 
+        'hostb.cesb.cesproto.re2ee.org. 30 IN NAPTR 10 6 "U" "ID+idprotocol" "!^(.*)$!dest:1=hostb.cesproto.re2ee.org.?cetp_eth=08:00:27:ff:aa:03!" .'
+        
+        hostb.cesb.cesproto.re2ee.org. 30 IN NAPTR 10 6 U "CES+cesid" "!^.*$!cesid=1:cesb.cesproto.re2ee.org.?cetp_eth=08:00:27:ff:aa:03?alias=ISP-to-ISP!" .
+        hostb.cesb.cesproto.re2ee.org. 30 IN NAPTR 10 8 U "CES+cesid" "!^.*$!cesid=1:cesb.cesproto.re2ee.org.?cetp_ipv6=fd00:aaaa::172.16.0.3?alias=ISP-to-ISP!" .
+        hostb.cesb.cesproto.re2ee.org. 30 IN NAPTR 10 10 U "CES+cesid" "!^.*$!cesid=1:cesb.cesproto.re2ee.org.?cetp_ipv4=172.16.0.3?alias=ISP-to-ISP!" .        
+        """
+        valid_rrs = []
+        naptr_format = '"!^.*$!cesid={:d}:{}?{}={}?alias={}!"'
+                
+        for r in response_rrs:
+            rcesid_t, rcesid_v, rloc_type, rloc_value, proto, port, alias = None, None, None, None, None, None, None
+            (fqdn,ttl,rdataclass,rdatatype,order,pref,flag,service,url,foo) = r
+            r = r[8]
+            if r[0]  == '"': r=r[1:]
+            if r[-1] == '"': r=r[:-1]
+            delim = r[0]                    # Extract the delimitor in the NAPTR record
+            rcetp_str  = r.split(delim)[2]
+            rcetp_info = rcetp_str.split("?")
+            for r in rcetp_info:
+                k,v = r.split("=")
+                if k=="cesid": 
+                    rcesid_t, rcesid_v = v.split(":")
+                elif k in ["cetp_ipv4", "cetp_ipv6", "cept_eth"]: 
+                    rloc_type = k
+                    rloc_value= v
+                elif k == "alias":
+                    alias = v
+                elif k == "proto":
+                    proto = v
+                elif k == "port":
+                    port = v
+                
+            valid_rrs.append( (order, pref, service, fqdn, rcesid_t, rcesid_v, rloc_type, rloc_value, proto, port, alias) )
+        
+        valid_rrs.sort(key=lambda ans: int(ans[1]))     # sort by preference field
+        valid_rrs.sort(key=lambda ans: int(ans[0]))     # sort by order field
+        return valid_rrs
+        
+    def extract_answer(self, msg):
+        """
+        Return a list of answers in a DNS response.
+        @param msg: A DNS message object.
+        @return: The answers as a list.
         """
         results = []
-        for rrObject in response.answer:
-            for part in rrObject.to_text().split("\n"):
-                results.append(string.splitfields(part, " "))
+        for rr in msg.answer:
+            for p in rr.to_text().split("\n"):
+                results.append(p.split(" "))
         return results
-        """
-        
-        print("response, type(response)")
-        print(response, type(response))
-
-    # ----------------------------- Hammad Additions to run CETPManager (running the CETP policy Engine)
     
-    def resolve_naptr(self, domain):
-        """ Resolves a domain name, and returns a list of NAPTR record parsed in format: ('host-id', 'ces-id', 'ip', 'port', 'protocol') """
-        search_domain = str(domain).lower()
-        #self._logger.info("Resolving DNS NAPTR for domain: {}".format(search_domain))
-        if search_domain in self.naptr_records:
-            naptr_resp = self.naptr_records[search_domain]
-            return naptr_resp
+    def has_record_type(self, answer, rtype):
+        """
+        Return True if a given list of DNS answers has a resource record of a given type.
+
+        @param answer: A list of DNS answers.
+        @param type: The DNS type as a string.
+        @return: True if the given list of DNS answers has a resource record of a given type.
+        """
+        for ans in answer:
+            if ans[3].lower() == rtype.lower():
+                return True
+        return False
+
+    def _load_naptr_rrs(self):
+        """ Pre-creates the NAPTR response record for inbound NAPTR queries """
+        naptr_rr_sample = "!^.*$!cesid=1:{}?cetp_ipv4={}?proto={}?port={}!"
+        cesid = "1:{}".format(self.cesid)
+        self._naptr_response_rrs = []
         
-    def _load_naptr_records(self):
-        """ Simulating availability of NAPTR records from DNS """
-        self.naptr_records = {}
-        #self.naptr_records['dest-id']                       = ("destHost/service-id,         dest-cesid,    dest-ip, dest-port, proto")
-        self.naptr_records['hosta1.cesa.lte.']              = [('hosta1.cesa.lte.',          'cesa.lte.', '10.1.3.101', '48001', 'tls')]
-        self.naptr_records['hosta2.cesa.lte.']              = [('hosta2.cesa.lte.',          'cesa.lte.', '10.1.3.101', '48002', 'tls')]
-        self.naptr_records['srv1.hosta1.cesa.lte.']         = [('srv1.hosta1.cesa.lte.',     'cesa.lte.', '10.1.3.101', '48001', 'tls')]
-        self.naptr_records['srv2.hosta1.cesa.lte.']         = [('srv2.hosta1.cesa.lte.',     'cesa.lte.', '10.1.3.101', '48002', 'tls')]
-        self.naptr_records['hostb1.cesb.lte.']              = [('hostb1.cesb.lte.',          'cesb.lte.', '10.1.3.103', '49001', 'tls')]
-        self.naptr_records['hostb2.cesb.lte.']              = [('hostb2.cesb.lte.',          'cesb.lte.', '10.1.3.103', '49002', 'tls')]
-        self.naptr_records['srv1.hostb1.cesb.lte.']         = [('srv1.hostb1.cesb.lte.',     'cesb.lte.', '10.1.3.103', '49001', 'tls')]
-        self.naptr_records['srv2.hostb1.cesb.lte.']         = [('srv2.hostb1.cesb.lte.',     'cesb.lte.', '10.1.3.103', '49002', 'tls')]
-        self.naptr_records['srv3.hostb1.cesb.lte.']         = [('srv3.hostb1.cesb.lte.',     'cesb.lte.', '10.1.3.103', '49002', 'tls')]
-        self.naptr_records['srv12.hostb1.cesb.lte.']        = [('srv12.hostb1.cesb.lte.',    'cesb.lte.', '10.1.3.103', '49002', 'tls')]
-        self.naptr_records['hostc1.cesc.lte.']              = [('hostc1.cesc.lte.',          'cesc.lte.', '10.0.3.104', '49001', 'tls')]
-        self.naptr_records['hostd1.cesd.lte.']              = [('hostd1.cesd.lte.',          'cesd.lte.', '10.0.3.105', '49001', 'tls')]
-        self.naptr_records['hoste1.cese.lte.']              = [('hoste1.cese.lte.',          'cese.lte.', '10.0.3.106', '49001', 'tls')]
-        self.naptr_records['hostf1.cesf.lte.']              = [('hostf1.cesf.lte.',          'cesf.lte.', '10.0.3.107', '49001', 'tls')]
-        #self.naptr_records['srv2.hostb1.cesb.lte.']         = ('srv2.hostb1.cesb.lte.',     'cesc.lte.', '10.1.3.103', '49001', 'tls')]
-        self.naptr_records['raimo.cesb.lte.']               = [('raimo.cesb.lte.',           'cesb.lte.', '10.1.3.103', '49001', 'tls')]
-        self.naptr_records['raimo2.cesb.lte.']              = [('raimo2.cesb.lte.',          'cesb.lte.', '10.1.3.103', '49002', 'tls')]
-        self.naptr_records['www.google.com.']               = [('www.google.com.',           'cesd.lte.', '10.1.3.103', '49001', 'tls')]
-        self.naptr_records['www.aalto.fi.']                 = [('www.aalto.fi.',             'cese.lte.', '10.1.3.101', '48001', 'tls')]
-        self.naptr_records['test.']                         = [('test.',                     'cesa.lte.', '10.1.3.101', '48001', 'tls')]
-        
-        # Just for the sake of testing
-        #self.naptr_records['hostc1.cesb.lte.']              = ('hostb1.cesb.lte.',          'cesc.lte.', '10.1.3.103', '49001', 'tls')
-        #self.naptr_records['hostd1.cesb.lte.']              = ('hostb1.cesb.lte.',          'cesd.lte.', '10.1.3.103', '49001', 'tls')
-        #self.naptr_records['hoste1.cesb.lte.']              = ('hostb1.cesb.lte.',          'cese.lte.', '10.1.3.103', '49001', 'tls')
-        
-    # -----------------------------
+        for _ in self.cetp_service:
+            cp_rloc, port, proto = _
+            naptr_record = naptr_rr_sample.format(cesid, cp_rloc, proto, port)
+            order, pref, flags, srv, replacement = 100, 10, "U", "CES+cesid", "."
+            naptr_rrset = '{} {} {} {} {} {}'.format(order, pref, flags, srv, naptr_record, replacement)
+            self._naptr_response_rrs.append(naptr_rrset)
+            
+    def get_naptr_response(self, query, fqdn, rdtype, rdclass=1, ttl=3600):
+        response = dnsutils.make_response_answer_rr(query, fqdn, dns.rdatatype.NAPTR, self._naptr_response_rrs, rdclass=1, ttl=ttl)
+        return response
+
 
     @asyncio.coroutine
     def dns_process_rgw_wan_soa(self, query, addr, cback):
@@ -504,9 +582,16 @@ class DNSCallbacks(object):
             cback(query, addr, response)
             return
 
-        #TODO: At this point we have the host object and the service_data.
+        # TODO: At this point we have the host object and the service_data.
         # Maybe it's possible to centralize the PBRA from here instead?
         # Load reputation metadata in DNS query?
+        
+        if rdtype == dns.rdatatype.NAPTR:
+            self._logger.info('Answer with NAPTR records for public domain {}'.format(fqdn))
+            response = self.get_naptr_response(query, fqdn, rdtype, rdclass=1, ttl=24*60*60)
+            cback(query, addr, response)
+            return
+        
         response = self.pbra.pbra_dns_preprocess_rgw_wan_soa(query, addr, host_obj, service_data)
         if response is not None:
             self._logger.debug('Preprocessing DNS response\n{}'.format(response))
@@ -515,13 +600,14 @@ class DNSCallbacks(object):
 
         self._logger.debug('Continue after pre-processing query / {}'.format(service_data))
 
+
         # Process only type A/SRV/TXT queries for servicepool domains
         if rdtype not in (dns.rdatatype.A, dns.rdatatype.SRV, dns.rdatatype.TXT):
             self._logger.debug('Answer with empty records for public domain {} type {}'.format(fqdn, dns.rdatatype.to_text(rdtype)))
             response = dnsutils.make_response_rcode(query, rcode=dns.rcode.NOERROR, recursion_available=False)
             cback(query, addr, response)
             return
-
+            
         # If the service is carriergrade, resolve it first before allocating our own address
         _ipv4, _service_data = host_obj.ipv4, service_data
         if service_data['carriergrade'] is True:
@@ -628,28 +714,6 @@ class DNSCallbacks(object):
         # TODO: Feed this to the algorithm as untrusted events? What about misconfigured DNS servers?
         # Drop DNS Query
         return
-
-        '''
-    def dns_process_ces_lan_soa(self, query, addr, cback):
-        """ Process DNS query from private network of a name in a SOA zone """
-        pass
-
-    def dns_process_ces_lan_nosoa(self, query, addr, cback):
-        """ Process DNS query from private network of a name not in a SOA zone """
-        pass
-
-    def dns_process_ces_wan_soa(self, query, addr, cback):
-        """ Process DNS query from public network of a name in a SOA zone """
-        self._logger.warning('dns_process_ces_wan_soa')
-        # Drop DNS Query
-        return
-
-    def dns_process_ces_wan_nosoa(self, query, addr, cback):
-        """ Process DNS query from public network of a name not in a SOA zone """
-        self._logger.warning('dns_process_ces_wan_nosoa')
-        # Drop DNS Query
-        return
-        '''
 
     @asyncio.coroutine
     def dns_error_response(self, query, addr, cback, rcode=dns.rcode.REFUSED):
