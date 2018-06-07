@@ -66,7 +66,11 @@ def make_response_rcode(query, rcode = dns.rcode.NOERROR, recursion_available=Fa
 def make_response_answer_rr(query, name, rdtype, target, rdclass=1, ttl=60, recursion_available=False):
     response = dns.message.make_response(query, recursion_available=recursion_available)
 #    response.flags |= dns.flags.CD
-    response.answer = [dns.rrset.from_text(name, ttl, rdclass, rdtype, target)]
+    rrs = []
+    for t in target:
+        rrs.append(dns.rrset.from_text(name, ttl, rdclass, rdtype, t))
+    
+    response.answer = rrs
     return response
 
 def get_section_record(section, n):
