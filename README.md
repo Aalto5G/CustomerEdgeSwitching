@@ -1,6 +1,6 @@
 # Customer Edge Switching
 
-## Requirements
+## Introduction
 
 This version of Customer Edge Switching v2.0 has been developed under
 Ubuntu 16.04 and python3 'asyncio' framework for asynchronous calls.

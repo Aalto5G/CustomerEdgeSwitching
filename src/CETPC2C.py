@@ -78,12 +78,11 @@ class CETPC2CLayer:
                 return
             
             # Check if there are enough transport connections pending completion
-            if len(self.processed_rlocs) > allowed_transports:
+            if len(self.processed_rlocs) >= allowed_transports:
                 return
             
             for naptr_rr in naptr_rrs:
                 order, pref, service, dst_id, rcesid_t, rcesid_v, rloc_type, rloc_value, rproto, rport, alias = naptr_rr
-                #dst_id, rcesid_v, rloc_value, rport, rproto = naptr_rr
                 
                 # Checks that all NAPTRs point to same 'r_cesid'
                 if rcesid_v != self.r_cesid:

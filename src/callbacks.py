@@ -543,7 +543,7 @@ class DNSCallbacks(object):
             naptr_rrset = '{} {} {} {} {} {}'.format(order, pref, flags, srv, naptr_record, replacement)
             self._naptr_response_rrs.append(naptr_rrset)
             
-    def get_naptr_response(self, query, fqdn, rdtype, rdclass=1, ttl=3600):
+    def _get_naptr_response(self, query, fqdn, rdtype, rdclass=1, ttl=3600):
         response = dnsutils.make_response_answer_rrs(query, fqdn, dns.rdatatype.NAPTR, self._naptr_response_rrs, rdclass=1, ttl=ttl)
         response.flags = dns.flags.QR
         response.additional = []
@@ -593,7 +593,7 @@ class DNSCallbacks(object):
         
         if rdtype == dns.rdatatype.NAPTR:
             self._logger.info('Answer with NAPTR records for public domain {}'.format(fqdn))
-            response = self.get_naptr_response(query, fqdn, rdtype, rdclass=1, ttl=24*60*60)
+            response = self._get_naptr_response(query, fqdn, rdtype, rdclass=1, ttl=24*60*60)
             cback(query, addr, response)
             return
         
