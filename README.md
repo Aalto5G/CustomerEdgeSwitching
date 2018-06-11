@@ -1,30 +1,12 @@
-# About Asyncio CES/CETP addition 
-
-## Development environment
-The project has been developed in Ubuntu 16.04 environment, using python3, and its 'asyncio' framework for handling asynchronous I/O. The project code has been tested on LXC containers, to similate different network nodes serving corresponding hosts.
-
-## Installing dependencies
-<br> apt-get update </br>
-<br> apt-get install build-essential python3-dev python3-pip </br>
-<br> apt-get install python3-aiohttp python3-yaml python3-dnspython </br>
-
-## How to Run
-A root user (i.e. sudo) running the CES-A code, should run the script 'run_gwa.sh':<br>
-Where <i> rgw.py </i> is the main python3 file instantiating the CES/CETP functionality; and 'config_cesx_ct.yaml' file defines the CES/CETP specific configurations.
-For test purposes, the repo contains two scripts 'run_gwa.sh' and 'run_gwb.sh' to run two CES nodes, i.e. CES-A and CES-B.
-
-## Testing setup
-The project code has been tested on LXC containers, connected via default lxcbr0 bridge. The hosts simulated in network of CES-A and CES-B are merely connected to lxcb0 bridge, but default gateway pointing to 'lxcbr0' address on CES-A and CES-B nodes. 
-The CES nodes are connected to an additional lxcbr1 bridge as well to simulate an additional available interface at CES. The respective address ranges for both bridges are 10.0.3.xxx/24 and 10.1.3.xxx/24. 
-
-
-=======
 # Customer Edge Switching
 
 ## Requirements
 
 This version of Customer Edge Switching v2.0 has been developed under
-Ubuntu 16.04 and python3 for asynchronous calls.
+Ubuntu 16.04 and python3 'asyncio' framework for asynchronous calls.
+
+This particular branch adds the CES/CETP based cooperative firewall functionality to previously developed RGW functionality.
+The project code has been developed and tested on LXC containers, that simulate different network scenarios.
 
 This repository contains a submodule. Clone with ```git clone ssh://git@gitlab.cloud.mobilesdn.org:60022/CES/customer_edge_switching_v2.git --recursive```
 
@@ -33,9 +15,11 @@ This repository contains a submodule. Clone with ```git clone ssh://git@gitlab.c
 The following dependencies are required:
 
 ```
+# apt-get update
 # apt-get install build-essential python3-dev libnetfilter-queue-dev python3-pip
 # apt-get install ipset libipset3 iptables ipset ebtables bridge-utils
 # apt-get install ipsec-tools openvswitch-common openvswitch-ipsec openvswitch-switch python-openvswitch racoon
+# apt-get install python3-aiohttp python3-yaml python3-dnspython
 ```
 
 
@@ -52,7 +36,7 @@ There are two ways of running automated enviroment for CES/RealmGateway, either 
 In both cases, the CES/RealmGateway uses the "router" node as default gateway, which also provides SYNPROXY protection to its stub network. Similarly, the "router" node
 is configured to send all default traffic to 100.64.0.254 IP address, which is installed on the host machine running the virtual environment.
 
-If Internet connectivity is desired on the virtual environment, one can enable NATting via MASQUERADE as follows:
+If Internet connectivity is desired on the virtual environment, one can enable NATting (on hosting-VM) via MASQUERADE as follows:
 
 ```
 iptables -t nat -I POSTROUTING -o interfaceWithInternetAccess -j MASQUERADE
