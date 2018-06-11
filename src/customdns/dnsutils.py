@@ -49,8 +49,7 @@ def sanitize_response(query, response):
     try:
         #assert (response.opcode() == dns.opcode.QUERY)  # Standard QUERY
         #assert (response.rcode() == dns.rcode.NOERROR)  # No Error
-        assert ((response.flags & dns.flags.QR) ==
-                dns.flags.QR)  # Message is response
+        assert ((response.flags & dns.flags.QR) == dns.flags.QR)  # Message is response
         assert (len(response.question) == 1)  # Query contains 1 question
         assert (query.is_response(response))  # Valid response for query
     except Exception as e:
@@ -64,6 +63,12 @@ def make_response_rcode(query, rcode = dns.rcode.NOERROR, recursion_available=Fa
     return response
 
 def make_response_answer_rr(query, name, rdtype, target, rdclass=1, ttl=60, recursion_available=False):
+    response = dns.message.make_response(query, recursion_available=recursion_available)
+#    response.flags |= dns.flags.CD
+    response.answer = [dns.rrset.from_text(name, ttl, rdclass, rdtype, target)]
+    return response
+
+def make_response_answer_rrs(query, name, rdtype, target, rdclass=1, ttl=60, recursion_available=False):
     response = dns.message.make_response(query, recursion_available=recursion_available)
 #    response.flags |= dns.flags.CD
     rrs = []

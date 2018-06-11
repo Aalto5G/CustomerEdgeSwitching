@@ -344,7 +344,7 @@ class DNSCallbacks(object):
             resolver = self.activequeries[key]
             resolver.do_continue(query)
             return
-
+        
         # Changing the A or AAAA queries to NAPTR queries to check if destination is served by a CES/CETP service
         if rdtype in [dns.rdatatype.A, dns.rdatatype.AAAA, dns.rdatatype.PTR]:
             self._logger.info("Forwarding the {} query as NAPTR query for domain '{}'".format(dns.rdatatype.to_text(rdtype), fqdn))
@@ -352,6 +352,7 @@ class DNSCallbacks(object):
             cb      = (cback, cb_args)
             fwd_query  = dns.message.make_query(fqdn, dns.rdatatype.NAPTR)
             resp_msg   = yield from self._forward_naptr_query(fwd_query, fqdn, key)
+            
             if self.is_valid_naptr(resp_msg):
                 self._process_naptr_response(resp_msg, cb)
                 del self.activequeries[key]
@@ -403,7 +404,7 @@ class DNSCallbacks(object):
         cback, cb_args = cb
         
         if len(naptr_rrs)!=0:
-            self._logger.info("Extracted NAPTR record: {}".format(naptr_rrs))
+            #self._logger.info("Extracted NAPTR record: {}".format(naptr_rrs))
             order, pref, service, dst_id, rcesid_t, rcesid_v, rloc_type, rloc_value, rproto, rport, alias = naptr_rrs[0]
             self.cetp_mgr.process_dns_message(cback, cb_args, dst_id, rcesid_v, naptr_rrs)
             return
@@ -529,8 +530,10 @@ class DNSCallbacks(object):
 
     def _load_naptr_rrs(self):
         """ Pre-creates the NAPTR response record for inbound NAPTR queries """
-        naptr_rr_sample = "!^.*$!cesid=1:{}?cetp_ipv4={}?proto={}?port={}!"
-        cesid = "1:{}".format(self.cesid)
+        naptr_rr_sample = "!^.*$!cesid={}?cetp_ipv4={}?proto={}?port={}!"
+        cesid_t = 1
+        cesid_v = self.cesid
+        cesid = "{}:{}".format(cesid_t, cesid_v)
         self._naptr_response_rrs = []
         
         for _ in self.cetp_service:
@@ -541,7 +544,9 @@ class DNSCallbacks(object):
             self._naptr_response_rrs.append(naptr_rrset)
             
     def get_naptr_response(self, query, fqdn, rdtype, rdclass=1, ttl=3600):
-        response = dnsutils.make_response_answer_rr(query, fqdn, dns.rdatatype.NAPTR, self._naptr_response_rrs, rdclass=1, ttl=ttl)
+        response = dnsutils.make_response_answer_rrs(query, fqdn, dns.rdatatype.NAPTR, self._naptr_response_rrs, rdclass=1, ttl=ttl)
+        response.flags = dns.flags.QR
+        response.additional = []
         return response
 
 
@@ -599,7 +604,6 @@ class DNSCallbacks(object):
             return
 
         self._logger.debug('Continue after pre-processing query / {}'.format(service_data))
-
 
         # Process only type A/SRV/TXT queries for servicepool domains
         if rdtype not in (dns.rdatatype.A, dns.rdatatype.SRV, dns.rdatatype.TXT):
