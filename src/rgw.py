@@ -176,6 +176,9 @@ def parse_arguments():
     parser.add_argument('--cetp-config', dest="cetp_config", type=str,
                         metavar=('FILENAME'),
                         help='File containing CETP configurations')
+    parser.add_argument('--cetp-policies', dest="cetp_policies", type=str,
+                        metavar=('FILENAME'),
+                        help='File containing CETP configurations')
 
     ## SYNPROXY information
     parser.add_argument('--synproxy', nargs=2, default=('127.0.0.1', 12345),
@@ -349,7 +352,7 @@ class RealmGateway(object):
             self.cetpstate_table = CETP.CETPStateTable()
             self.ces_params      = self.ces_conf['CESParameters']
             self.cesid           = self.ces_params['cesid']
-            self._cetp_policies  = self.ces_conf["cetp_policy_file"]
+            self._cetp_policies  = self._config.getdefault('cetp_policies', None)
             self._cetp_mgr       = cetpManager.CETPManager(self._cetp_policies, self.cesid, self.ces_params, self._hosttable, self._connectiontable, \
                                                            self._pooltable, self._network, self.cetpstate_table, self._loop)
             for s in self._cetp_service:
