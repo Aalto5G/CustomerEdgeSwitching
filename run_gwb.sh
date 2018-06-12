@@ -34,6 +34,7 @@ cd src
           --network-api-url  http://127.0.0.1:8081/                          \
           --repository-subscriber-folder ../config.d/cesb.lte.subscriber.d/  \
           --repository-policy-folder     ../config.d/cesb.lte.policy.d/      \
-          --cetp-config  		     config_cesb/config_cesb.yaml         \
+          --cetp-config  		     ../config.d/cesb.lte.cetp.policy/config_cesb.yaml   \
+          --cetp-policies  		     ../config.d/cesb.lte.cetp.policy/cetp_policies.json \
           --repository-api-url  http://127.0.0.1:8082/                       \
           --synproxy         10.0.3.151 12345

@@ -35,6 +35,7 @@ cd src
           --network-api-url  http://127.0.0.1:8081/                          \
           --repository-subscriber-folder ../config.d/cesa.lte.subscriber.d/  \
           --repository-policy-folder     ../config.d/cesa.lte.policy.d/      \
-          --cetp-config  		     config_cesa/config_cesa.yaml            \
+          --cetp-config  		     ../config.d/cesa.lte.cetp.policy/config_cesa.yaml   \
+          --cetp-policies  		     ../config.d/cesa.lte.cetp.policy/cetp_policies.json \
           --repository-api-url  http://127.0.0.1:8082/                       \
           --synproxy         127.0.0.1 12345
