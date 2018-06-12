@@ -27,13 +27,13 @@ CESParameters:
     max_host_ratelimit: 10
     min_keepalive_timeout: 10
     rloc_preference:
-        - 100,80,ipv4,10.0.3.103,ISP
-        - 100,60,ipv4,10.1.3.103,IXP
+        - 100,80,ipv4,10.1.3.103,ISP
+        - 100,60,ipv4,10.0.3.103,IXP
         - 100,40,ipv6,11:22:33:44:55:66:77:03,ICP
     payload_preference:
         ipsec:  100
-        geneve: 80
-        gre:    60
+        geneve: 60
+        gre:    80
         vxlan:  40
 
             
@@ -43,16 +43,22 @@ CETPServers:
         - server2
         - server3
     server1:
-        ip: 10.0.3.103
+        ip: 10.1.3.103
         port: 49001
         transport: tls
+        order: 100
+        preference: 10
     server2:
-        ip: 10.0.3.103
+        ip: 10.1.3.103
         port: 49002
         transport: tls
+        order: 300
+        preference: 10
     server3:
-        ip: 10.0.3.103
+        ip: 10.1.3.103
         port: 49003
         transport: tls
+        order: 100
+        preference: 20
 
 cetp_policy_file: config_cesb/cetp_policies.json

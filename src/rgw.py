@@ -320,9 +320,9 @@ class RealmGateway(object):
             cetp_servers  = self.ces_conf["CETPServers"]["serverNames"]
             for s in cetp_servers:
                 srv = self.ces_conf["CETPServers"][s]
-                ip_addr, port, proto = srv["ip"], srv["port"], srv["transport"]
-                self._cetp_service.append( (ip_addr, port, proto) )
-                    
+                ip_addr, port, proto, order, preference = srv["ip"], srv["port"], srv["transport"], srv["order"], srv["preference"]
+                self._cetp_service.append( (ip_addr, port, proto, order, preference) )
+        
     @asyncio.coroutine
     def _init_pbra(self):
         # Create container of Reputation objects
@@ -353,7 +353,7 @@ class RealmGateway(object):
             self._cetp_mgr       = cetpManager.CETPManager(self._cetp_policies, self.cesid, self.ces_params, self._hosttable, self._connectiontable, \
                                                            self._pooltable, self._network, self.cetpstate_table, self._loop)
             for s in self._cetp_service:
-                (ip_addr, port, proto) = s
+                (ip_addr, port, proto, o, p) = s
                 yield from self._cetp_mgr.initiate_cetp_service(ip_addr, port, proto)
 
 

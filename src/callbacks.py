@@ -351,13 +351,14 @@ class DNSCallbacks(object):
             cb_args = (query, addr)
             cb      = (cback, cb_args)
             fwd_query  = dns.message.make_query(fqdn, dns.rdatatype.NAPTR)
-            resp_msg   = yield from self._forward_naptr_query(fwd_query, fqdn, key)
-            
-            if self.is_valid_naptr(resp_msg):
-                self._process_naptr_response(resp_msg, cb)
+            answer     = yield from self._forward_naptr_query(fwd_query, fqdn, key)
+            response   = self._pre_process_naptr(answer)
+
+            if response is not None:
+                self._process_naptr_response(response, cb)
                 del self.activequeries[key]
                 return
-        
+            
         # Create a new factory for resolving the actual DNS query
         raddr = self.dns_get_resolver()
         resolver = uDNSResolver()
@@ -395,30 +396,29 @@ class DNSCallbacks(object):
         return response
 
     
-    def _process_naptr_response(self, msg, cb=None):
+    def _process_naptr_response(self, response, cb=None):
         """ Initiates CETP negotiation based on NAPTR record.
         @todo: Need to match DNS key state with query's response. 
         """
-        response = self.extract_answer(msg)
         naptr_rrs = self.extract_valid_naptrs(response)                         # A list of (order, pref, service, rcesid_t, rcesid_v, rloc_type, rloc_value, proto, port, alias)
         cback, cb_args = cb
         
         if len(naptr_rrs)!=0:
             #self._logger.info("Extracted NAPTR record: {}".format(naptr_rrs))
-            order, pref, service, dst_id, rcesid_t, rcesid_v, rloc_type, rloc_value, rproto, rport, alias = naptr_rrs[0]
+            order, pref, service, dst_id, rcesid_t, rcesid_v, rloc_type, rloc_value, rproto, rport, alias = naptr_rrs[0]        # To extract remote_cesid and destination information.
             self.cetp_mgr.process_dns_message(cback, cb_args, dst_id, rcesid_v, naptr_rrs)
             return
-            
 
-    def is_valid_naptr(self, msg):
+
+    def _pre_process_naptr(self, msg):
         """ Determines if the DNS response carries NAPTR records valid for CES/CETP service """
         if not msg:
-            return False
+            return None
         
         response = self.extract_answer(msg)
         if len(response)==0 or not self.NAPTR_OK(response):
-            return False            # Not a NAPTR record
-        return True
+            return None            # Not a NAPTR record
+        return response
         
     def NAPTR_OK(self, response):
         """
@@ -537,9 +537,9 @@ class DNSCallbacks(object):
         self._naptr_response_rrs = []
         
         for _ in self.cetp_service:
-            cp_rloc, port, proto = _
+            cp_rloc, port, proto, order, pref = _
             naptr_record = naptr_rr_sample.format(cesid, cp_rloc, proto, port)
-            order, pref, flags, srv, replacement = 100, 10, "U", "CES+cesid", "."
+            flags, srv, replacement = "U", "CES+cesid", "."
             naptr_rrset = '{} {} {} {} {} {}'.format(order, pref, flags, srv, naptr_record, replacement)
             self._naptr_response_rrs.append(naptr_rrset)
             

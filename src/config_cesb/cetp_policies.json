@@ -88,13 +88,13 @@
 "policy": {
     "request": [
         { "ope":"query", "group": "id", "code": "fqdn", "value":["hosta1.cesa.lte.", "hosta2.cesa.lte.", "hostc1.cesb.lte."] },
-        { "ope":"info", "group": "control", "code": "idle_ttl", "value":"30" },
+        { "ope":"query", "cmp":"optional", "group": "control", "code": "hard_ttl", "value":"30" },
         { "ope":"query", "group": "control", "code": "caep" }
     ],
     "available": [
         { "ope":"info", "group": "id", "code": "fqdn", "value":"srv1.hostb1.cesb.lte." },
         { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145"  },
-        { "ope":"info", "group": "control", "code": "idle_ttl", "value":"30" },
+        { "ope":"info", "group": "control", "code": "hard_ttl", "value":"30" },
         { "ope":"info", "group": "control", "code": "ack" }
     ]
     }
@@ -111,6 +111,22 @@
     ],
     "available": [
         { "ope":"info", "group": "id", "code": "fqdn", "value":"srv2.hostb1.cesb.lte." },
+        { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145"  }
+    ]
+    }
+},
+{
+"type": "hostpolicy",
+"fqdn": "srv3.hostb1.cesb.lte.",
+"direction": "inbound",
+"policy": {
+    "request": [
+        { "ope":"query", "group": "id", "code": "fqdn" },
+        { "ope":"query", "group": "control", "code": "caep" },
+        { "ope":"query", "group": "control", "code": "ack" }
+    ],
+    "available": [
+        { "ope":"info", "group": "id", "code": "fqdn", "value":"srv3.hostb1.cesb.lte." },
         { "ope":"info", "group": "control", "code": "caep", "value":"195.148.124.145"  }
     ]
     }

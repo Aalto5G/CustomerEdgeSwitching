@@ -45,13 +45,19 @@ CETPServers:
         ip: 10.1.3.101
         port: 48001
         transport: tls
+        order: 100
+        preference: 10
     server2:
         ip: 10.1.3.101
         port: 48002
         transport: tls
+        order: 300
+        preference: 10
     server3:
         ip: 10.1.3.101
         port: 48003
         transport: tls
+        order: 100
+        preference: 20
 
 cetp_policy_file: config_cesa/cetp_policies.json
