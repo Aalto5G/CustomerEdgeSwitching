@@ -389,6 +389,9 @@ class DNSCallbacks(object):
         
         try:
             response = yield from resolver.do_resolve(query, raddr, timeouts=[0.5])
+            if query.id != response.id:
+                return None
+            
         except ConnectionRefusedError:
             # Failed to resolve DNS query - Drop DNS Query
             self._logger.warning('ConnectionRefusedError: Failed resolving NAPTR query for {} via {}:{}'.format(fqdn, raddr[0], raddr[1]))
