@@ -1,0 +1,6 @@
+#A sample server listening at port 8000
+python3 -m http.server
+
+#HTTP test client
+wget 127.0.0.1:8000
+curl 127.0.0.1:8000
