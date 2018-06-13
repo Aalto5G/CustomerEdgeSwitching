@@ -382,21 +382,20 @@ class DNSCallbacks(object):
     @asyncio.coroutine
     def _forward_naptr_query(self, query, fqdn, key=""):
         """ Sends DNS (NAPTR) query for destination to a DNS resolver """
-        response    = None
         raddr       = self.dns_get_resolver()                           # Create factory for NAPTR resolution
         resolver    = uDNSResolver()
         self.activequeries[key] = resolver
         
         try:
             response = yield from resolver.do_resolve(query, raddr, timeouts=[0.5])
-            if query.id != response.id:
-                return None
+            if response is not None:
+                if query.id == response.id:
+                    return response
             
         except ConnectionRefusedError:
             # Failed to resolve DNS query - Drop DNS Query
             self._logger.warning('ConnectionRefusedError: Failed resolving NAPTR query for {} via {}:{}'.format(fqdn, raddr[0], raddr[1]))
-        
-        return response
+        return None
 
     
     def _process_naptr_response(self, response, cb=None):

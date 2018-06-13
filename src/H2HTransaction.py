@@ -752,7 +752,8 @@ class H2HTransactionOutbound(H2HTransaction):
                     cb_f(dns_q, addr)
                         
         except Exception as ex:
-            self._logger.error("Exception in _execute_dns_callback {}".format(ex))
+            self._logger.error("Exception in _execute_dns_callback {} for query: {}".format(ex, q))
+            utils3.trace()
     
     def terminate_session(self):
         """ Sends a terminate TLV towards remote CES """
@@ -1203,8 +1204,6 @@ class H2HTransactionLocal(H2HTransaction):
         
         self._logger.info("Match Outbound-Requirements vs Inbound-Available")
         for rtlv in self.opolicy.get_required():
-            if rtlv["group"] != "id":
-                continue
             
             if self.ipolicy.has_available(rtlv):
                 resp_tlv = self.ipolicy.get_available(tlv=rtlv)
@@ -1212,32 +1211,32 @@ class H2HTransactionLocal(H2HTransaction):
                 if not self._verify_tlv(resp_tlv, policy=self.opolicy):
                     # Absorbs failure in case of 'optional' required policy TLV
                     if self.opolicy.is_mandatory_required(rtlv):
-                        #self._logger.error(" TLV '{}.{}' failed verification".format(rtlv['group'], rtlv['code']))
-                        error=True
+                        self._logger.error(" TLV '{}.{}' failed verification".format(rtlv['group'], rtlv['code']))
+                        error = True
                         break
             else:
-                self._logger.warning("Outbound host Requirement '{}.{}' is not met by destination '{}'".format(rtlv['group'], rtlv['code'], self.dst_id))
-                error = True
-                break
-
+                if self.opolicy.is_mandatory_required(rtlv):
+                    self._logger.warning("Outbound host Requirement '{}.{}' is not met by destination '{}'".format(rtlv['group'], rtlv['code'], self.dst_id))
+                    error = True
+                    break
+                
         if not error:
             self._logger.info("Match Inbound-Requirements vs Outbound-Available")
             for rtlv in self.ipolicy.get_required():
-                if rtlv["group"] != "id":
-                    continue
                 
                 if self.opolicy.has_available(tlv=rtlv):
                     resp_tlv = self.opolicy.get_available(rtlv)
                     if not self._verify_tlv(resp_tlv, policy=self.ipolicy):
                         # Absorbs failure in case of 'optional' required policy TLV
                         if self.opolicy.is_mandatory_required(rtlv):
-                            self._logger.info(" TLV {}.{} failed verification".format(resp_tlv['group'], resp_tlv['code']))
-                            error=True
+                            self._logger.error(" TLV {}.{} failed verification".format(resp_tlv['group'], resp_tlv['code']))
+                            error = True
                             break
                 else:
-                    self._logger.warning("Inbound host requirement '{}.{}' is not met by the sender '{}'".format(rtlv['group'], rtlv['code'], self.src_id))
-                    error = True
-                    break
+                    if self.ipolicy.is_mandatory_required(rtlv):
+                        self._logger.warning("Inbound host requirement '{}.{}' is not met by the sender '{}'".format(rtlv['group'], rtlv['code'], self.src_id))
+                        error = True
+                        break
 
         if error:
             self._logger.warning("Local CETP Policy mismatched! Connection refused {} -> {}".format(self.src_id, self.dst_id))
@@ -1267,13 +1266,19 @@ class H2HTransactionLocal(H2HTransaction):
             lpip            = self._allocate_proxy_address(self.src_id)
             rpip            = self._allocate_proxy_address(self.dst_id)
             
+            hard_ttl, idle_ttl = None, None
+            if 'hard_ttl' in self.negotiated_params:
+                hard_ttl = self.negotiated_params['hard_ttl']
+            if 'idle_ttl' in self.negotiated_params:
+                idle_ttl = self.negotiated_params["idle_ttl"]
+            
             self._logger.info("Negotiated params: \n ---- \n {} \n ---- ".format(self.negotiated_params))
             
             if (lpip is None) or (rpip is None):
                 self._logger.error("Error assigning proxy addresses: lpip={}, rpip={}".format(lpip, rpip))
                 return False
             else:
-                self.conn = connection.LocalConnection(self.network, self.ap, self.host_table, lip=lip, lpip=lpip, rip=rip, rpip=rpip, lfqdn=lfqdn, rfqdn=rfqdn)
+                self.conn = connection.LocalConnection(self.network, self.ap, self.host_table, lip=lip, lpip=lpip, rip=rip, rpip=rpip, lfqdn=lfqdn, rfqdn=rfqdn, hard_ttl=hard_ttl, idle_ttl=idle_ttl)
                 yield from self.conn.insert_dataplane_connection()                
                 self.conn_table.add(self.conn)
                 return lpip
