@@ -11,7 +11,7 @@ CESParameters:
     incomplete_cetp_state_t0: 2
     max_c2c_transports: 3
     max_naptrs_per_dns: 5
-    max_naptrs_per_sec: 4000
+    max_naptrs_per_sec: 200
     host_filtering_t0: 30
     dp_ttl: 3600
     keepalive_idle_t0: 5
