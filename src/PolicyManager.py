@@ -69,58 +69,52 @@ class DPConfigurations(object):
 class PolicyManager(object):
     # Loads policies, and keeps policy elements as CETPTLV objects
     def __init__(self, l_cesid, policy_file=None, name="PolicyManager"):
-        self._cespolicy                     = {}         # key: PolicyCETP()
-        self._hostpolicy                    = {}         # key: PolicyCETP()
-        self.l_cesid                        = l_cesid
-        self._logger                        = logging.getLogger(name)
-        self.config_file                    = policy_file
+        self._cespolicy       = {}         # key: PolicyCETP()
+        self._hostpolicy      = {}         # key: PolicyCETP()
+        self.l_cesid          = l_cesid
+        self._logger          = logging.getLogger(name)
+        self.config_file      = policy_file
         self._logger.setLevel(LOGLEVEL_PolicyManager)             # Within this class, logger will only handle message with this or higher level.    (Otherwise, default value of basicConfig() will apply)
         self.load_policies(self.config_file)
-        self.assign_policy_to_host()
         
     def load_policies(self, config_file):
         try:
             f = open(config_file)
             self._config = json.load(f)
-            self.load_CES_policy()
-            self.load_host_policy()
+            self._load_CES_policy()
+            self._load_host_policy()
         except Exception as ex:
             self._logger.info("Exception in loading policies: {}".format(ex))
             return False
         
+    def _load_CES_policy(self):
+        for policy in self._config:
+            if 'type' in policy:
+                if policy['type'] == "cespolicy":
+                    policy_type, proto, l_cesid, ces_policy = policy['type'], policy['proto'], policy['cesid'], policy['policy']
+                    key = policy_type+":"+proto+":"+l_cesid
+                    #print(key)
+                    p = PolicyCETP(ces_policy)
+                    self._cespolicy[key] = p
+
+
+    def _load_host_policy(self):
+        for policy in self._config:
+            if 'type' in policy:
+                if policy['type'] == "hostpolicy":
+                    policy_type, direction, hostid, host_policy = policy['type'], policy['direction'], policy['fqdn'], policy['policy']
+                    key = policy_type +":"+ direction +":"+ hostid
+                    #print(key)
+                    p = PolicyCETP(host_policy)
+                    self._hostpolicy[key] = p
+        
     def _get_ces_policy(self):
         return self._cespolicy
-
-    def assign_policy_to_host(self):
-        self.fqdn_to_policy = {}
-        self.fqdn_to_policy['hosta1.cesa.lte']   = 1
-        self.fqdn_to_policy['hosta2.cesa.lte']   = 1
-        self.fqdn_to_policy['hosta3.cesa.lte']   = 2
-        self.fqdn_to_policy['hosta4.cesa.lte']   = 0
-        self.fqdn_to_policy['hostb1.cesb.lte']   = 1
-        self.fqdn_to_policy['hostb2.cesb.lte']   = 2
-        self.fqdn_to_policy['hostb3.cesb.lte']   = 0
-        self.fqdn_to_policy['hostb4.cesb.lte']   = 1
-        self.fqdn_to_policy['hostb5.cesb.lte']   = 0
-        self.fqdn_to_policy['hostb6.cesb.lte']   = 1
-        self.fqdn_to_policy['hostc1.cesc.lte']   = 2
-        self.fqdn_to_policy['hostc2.cesc.lte']   = 0
-        self.fqdn_to_policy['www.google.com']    = 1
-        self.fqdn_to_policy['www.aalto.fi']      = 2
-    
-    def mapping_srcId_to_policy(self, host_id):
-        #Return policy corresponding to a source-id 
-        if host_id in self.fqdn_to_policy:
-            return self.fqdn_to_policy[host_id]
-        else:
-            #self._logger.info("No reachability policy exists for this host")
-            self._logger.info("Assgning a random policy for testing sake")
-            return 1
 
     def _get_host_policies(self):
         return self._hostpolicies
     
-    def get_ces_policy(self, proto="tcp"):
+    def get_ces_policy(self, proto="tls"):
         try:
             policy_type = "cespolicy"
             l_cesid = self.l_cesid
@@ -139,29 +133,8 @@ class PolicyManager(object):
             policy = self._hostpolicy[key]
             return policy
         except Exception as ex:
-            #self._logger.error("No '{}' policy exists for host_id: '{}'".format(direction, host_id))
+            self._logger.error("No '{}' policy exists for host_id: '{}'".format(direction, host_id))
             return None
-        
-    def load_CES_policy(self):
-        for policy in self._config:
-            if 'type' in policy:
-                if policy['type'] == "cespolicy":
-                    policy_type, proto, l_cesid, ces_policy = policy['type'], policy['proto'], policy['cesid'], policy['policy']
-                    key = policy_type+":"+proto+":"+l_cesid
-                    #print(key)
-                    p = PolicyCETP(ces_policy)
-                    self._cespolicy[key] = p
-
-
-    def load_host_policy(self):
-        for policy in self._config:
-            if 'type' in policy:
-                if policy['type'] == "hostpolicy":
-                    policy_type, direction, hostid, host_policy = policy['type'], policy['direction'], policy['fqdn'], policy['policy']
-                    key = policy_type +":"+ direction +":"+ hostid
-                    #print(key)
-                    p = PolicyCETP(host_policy)
-                    self._hostpolicy[key] = p
 
     
 
@@ -344,9 +317,6 @@ class PolicyCETP(object):
     def __repr__(self):
         return self.show_policy()
     
-
-
-
 
 
 
