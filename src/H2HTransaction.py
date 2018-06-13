@@ -550,7 +550,6 @@ class H2HTransactionOutbound(H2HTransaction):
             self._logger.info("Continue establishing H2H session towards '{}' ({} -> {})".format(self.dst_id, self.sstag, 0))
             self._logger.info("Host policy: \n {} {} {}".format(15*'-', self.opolicy, 15*'-'))
             self.pprint(cetp_msg, m="Inbound Response")
-            #self.c1 = time.time()
             
             error                       = False
             tlvs_to_send, error_tlvs    = [], []
@@ -636,7 +635,6 @@ class H2HTransactionOutbound(H2HTransaction):
                     
                     if conn_created:
                         self._logger.info(" '{}'\n H2H policy negotiation succeeded in {} RTT".format(30*'#', self.rtt))
-                        #self.test_results.append(time.time()-self.start_time)
                         self._process_negotiation_success()
                         self.h2h_negotiation_status = True
                         return
@@ -677,7 +675,6 @@ class H2HTransactionOutbound(H2HTransaction):
                             cetp_message = self.get_cetp_message(sstag=self.sstag, dstag=self.dstag, tlvs=tlvs_to_send)
                             self.pprint(cetp_message)
                             return cetp_message
-
         except:
             utils3.trace()
             return None
@@ -1111,7 +1108,7 @@ class H2HTransactionInbound(H2HTransaction):
 
 class H2HTransactionLocal(H2HTransaction):
     def __init__(self, loop=None, host_ip="", cb=None, src_id="", dst_id="", dst_ip="", policy_mgr= None, host_table=None, cetpstate_table=None, cetp_h2h=None, \
-                 interfaces=None, conn_table=None, pool_table=None, cetp_security=None, network=None, name="H2HTransactionLocal"):
+                 interfaces=None, conn_table=None, pool_table=None, cetp_security=None, network=None, test_results=[], name="H2HTransactionLocal"):
         self._loop              = loop
         self.cb                 = cb
         self.host_ip            = host_ip                   # IP of the sender host
@@ -1130,6 +1127,7 @@ class H2HTransactionLocal(H2HTransaction):
         self.l_cesid            = ""
         self.r_cesid            = ""                        # For compatbility with base class
         self.negotiated_params  = {}
+        self.test_results       = test_results
         self._name              = name
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HTransactionLocal)
@@ -1216,7 +1214,7 @@ class H2HTransactionLocal(H2HTransaction):
                         break
             else:
                 if self.opolicy.is_mandatory_required(rtlv):
-                    self._logger.warning("Outbound host Requirement '{}.{}' is not met by destination '{}'".format(rtlv['group'], rtlv['code'], self.dst_id))
+                    self._logger.error("Outbound host Requirement '{}.{}' is not met by destination '{}'".format(rtlv['group'], rtlv['code'], self.dst_id))
                     error = True
                     break
                 
@@ -1234,7 +1232,7 @@ class H2HTransactionLocal(H2HTransaction):
                             break
                 else:
                     if self.ipolicy.is_mandatory_required(rtlv):
-                        self._logger.warning("Inbound host requirement '{}.{}' is not met by the sender '{}'".format(rtlv['group'], rtlv['code'], self.src_id))
+                        self._logger.error("Inbound host requirement '{}.{}' is not met by the sender '{}'".format(rtlv['group'], rtlv['code'], self.src_id))
                         error = True
                         break
 
@@ -1247,7 +1245,7 @@ class H2HTransactionLocal(H2HTransaction):
             self._logger.info(" Local CETP Policy matched! Allocate proxy address. {} -> {}".format(self.src_id, self.dst_id))
             lpip = yield from self._create_connection()
             
-            if lpip is not False:
+            if lpip is not None:
                 self._execute_dns_callback(r_addr = lpip)           # Returning CES proxy address for DNS response
                 return True
             else:
@@ -1255,7 +1253,7 @@ class H2HTransactionLocal(H2HTransaction):
                 return False
 
         
-    @asyncio.coroutine        
+    @asyncio.coroutine
     def _create_connection(self):
         try:
             lip             = self.host_ip
@@ -1271,12 +1269,11 @@ class H2HTransactionLocal(H2HTransaction):
                 hard_ttl = self.negotiated_params['hard_ttl']
             if 'idle_ttl' in self.negotiated_params:
                 idle_ttl = self.negotiated_params["idle_ttl"]
-            
-            self._logger.info("Negotiated params: \n ---- \n {} \n ---- ".format(self.negotiated_params))
+            #self._logger.info("Negotiated params: \n ---- \n {} \n ---- ".format(self.negotiated_params))
             
             if (lpip is None) or (rpip is None):
                 self._logger.error("Error assigning proxy addresses: lpip={}, rpip={}".format(lpip, rpip))
-                return False
+                return None
             else:
                 self.conn = connection.LocalConnection(self.network, self.ap, self.host_table, lip=lip, lpip=lpip, rip=rip, rpip=rpip, lfqdn=lfqdn, rfqdn=rfqdn, hard_ttl=hard_ttl, idle_ttl=idle_ttl)
                 yield from self.conn.insert_dataplane_connection()                
@@ -1285,7 +1282,7 @@ class H2HTransactionLocal(H2HTransaction):
         
         except Exception as ex:
             self._logger.error(" Exception '{}' in _create_connection()".format(ex))
-            return False
+            return None
         
     def _execute_dns_callback(self, r_addr=None):
         """ Executes DNS callback towards host """

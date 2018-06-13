@@ -272,6 +272,7 @@ class CETPH2HLocal:
         self.pool_table                 = pool_table
         self.network                    = network
         self.pending_tasks              = []
+        self.testing_results            = {"processingDelay":[], "rest_ryu":[]}     # For experimentation only. Shall be removed in final version.
         self.count                      = 0
         self._logger                    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPH2H)
@@ -302,7 +303,7 @@ class CETPH2HLocal:
         
         h2h = H2HTransaction.H2HTransactionLocal(loop=self._loop, cb=cb, host_ip=ip_addr, src_id=src_id, dst_id=dst_id, policy_mgr=self.policy_mgr, cetp_h2h=self, \
                                                  cetpstate_table=self.cetpstate_table, cetp_security= self.cetp_security, host_table=self.host_table, pool_table=self.pool_table, \
-                                                 conn_table=self.conn_table, network=self.network)
+                                                 conn_table=self.conn_table, network=self.network, test_results=self.testing_results)
         result = yield from h2h.start_cetp_processing()     # Returns True or False
         self.count +=1
         #if result == True:
@@ -310,9 +311,18 @@ class CETPH2HLocal:
         #else:
         #    self._logger.info("NOK")
 
-    def set_closure_signal(self):
+    def close(self):
         self._closure_signal = True
         #print("self.count: ", self.count)
         for t in self.pending_tasks:
             if not t.cancelled():   
                 t.cancel()
+
+    def show_measurment_results(self):
+        for i,k in list(enumerate(self.testing_results)):
+            print("-------\n", k, "\n-------")
+            v = self.testing_results[k]
+            if len(v)>0:
+                v = v[1:]
+                print("Min: ", min(v)*1000,"ms\t", "Max: ", max(v)*1000,"ms")
+                print("Average: ", sum(v)/len(v)*1000,"ms")

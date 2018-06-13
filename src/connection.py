@@ -439,7 +439,6 @@ class LocalConnection(container3.ContainerNode):
 
     def delete(self):
         self._logger.debug("Deleting a {} connection!".format(self.connectiontype))
-        #delete_local_connection(self.lip, self.lpip, self.rip, self.rpip)
         asyncio.ensure_future( self.network.delete_local_connection(self.lip, self.lpip, self.rip, self.rpip) )
 
         # Releasing the CES proxy address        

@@ -107,19 +107,7 @@ class CETPManager:
         for key, ep in self._cetp_endpoints.items():
             end_points.append(ep)
         return end_points
-
-    def close_cetp_endpoint(self, r_cesid):
-        """ Triggers resource cleanup in a CETPEndpoint """
-        for cesid, cetp_ep in self._cetp_endpoints.items():
-            if cesid == r_cesid:
-                cetp_ep.handle_interrupt()
-        
-    def close_all_cetp_endpoints(self):
-        """ Triggers interrupt handler in all CETPEndpoints """
-        for ep in list(self._cetp_endpoints.items()):
-            cesid, cetp_ep = ep
-            cetp_ep.handle_interrupt()
-        
+            
     def set_max_dns_naptr_responses(self):
         self.allowed_dns = copy.copy(self.max_dns_cetp_responses)
             
@@ -135,7 +123,6 @@ class CETPManager:
         return False
     
     def has_connection(self, src_id, dst_id):
-        #return False
         key = (connection.KEY_MAP_HOST_FQDNs, src_id, dst_id) 
         if self.conn_table.has(key):
             return True
@@ -173,7 +160,7 @@ class CETPManager:
                     self.process_cetp(dns_cb, cb_args, src_id, dst_id, r_cesid, naptr_list)
 
         except Exception as ex:
-            self._logger.info("Exception '{}' in process_dns_message()".format(ex))
+            self._logger.info("Exception in process_dns_message(): '{}' ".format(ex))
             return
 
 
@@ -206,9 +193,28 @@ class CETPManager:
                     ep.process_naptrs(src_id, dst_id, sanitized_naptrs, (dns_cb, cb_args))                  # Enqueues the NAPTR response and DNS-callback function.    # put_nowait() on queue will raise exception on a full queue.    - Use try: except:
     
         except Exception as ex:
-            self._logger.info("Exception '{}' in process_outbound_cetp".format(ex))
+            self._logger.info("Exception in process_outbound_cetp(): '{}' ".format(ex))
             return
 
+
+    def terminate(self):
+        """ Terminate the CETP service (and connected endpoints) """
+        self.close_server_endpoints()               # Close CETP listening service
+        self.close_all_cetp_endpoints()             # Close the connected CETP-H2H Endpoints with remote CES nodes
+        self.local_cetp.close()                     # Close the CETP-H2H local instance
+
+    def close_cetp_endpoint(self, r_cesid):
+        """ Triggers resource cleanup in a CETPEndpoint """
+        for cesid, cetp_ep in self._cetp_endpoints.items():
+            if cesid == r_cesid:
+                cetp_ep.handle_interrupt()
+                self.remove_cetp_endpoint(r_cesid)
+        
+    def close_all_cetp_endpoints(self):
+        """ Triggers interrupt handler in all CETPEndpoints """
+        for ep in list(self._cetp_endpoints.items()):
+            cesid, cetp_ep = ep
+            cetp_ep.handle_interrupt()
 
     def register_server_endpoint(self, ep):
         self._serverEndpoints.append(ep)
@@ -225,8 +231,8 @@ class CETPManager:
 
     def close_server_endpoints(self):
         """ Stops the listening CETP service on all server endpoints """
-        for server_ep in self.get_server_endpoints():
-            self.close_server_endpoint(server_ep)
+        for s in self.get_server_endpoints():
+            self.close_server_endpoint(s)
 
     def initiate_cetp_service(self, server_ip, server_port, proto):
         """ Creates CETPServer Endpoint for accepting connections from remote CES """

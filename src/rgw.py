@@ -494,7 +494,8 @@ class RealmGateway(object):
                     self._network._synchronize_conns(self._connectiontable, cp_conns, dp_stats)
                 
         except Exception as ex:
-            self._logger.error("_init_cleanup_ovsH2HConnections {}".format(ex))
+            self._logger.error("Exception in _init_cleanup_ovsH2HConnections: {}".format(ex))
+            #utils3.trace()
 
             
     @asyncio.coroutine
@@ -509,11 +510,7 @@ class RealmGateway(object):
         # Close open aiohttp_client objects
         self._network.rest_api_close()
         self._datarepository.rest_api_close()
-        
-        # Close CETP listening service
-        self._cetp_mgr.close_server_endpoints()
-        # Closing the connected CETPEndpoints with remote CES nodes
-        self._cetp_mgr.close_all_cetp_endpoints()
+        self._cetp_mgr.terminate()
         yield from asyncio.sleep(0.1)
         
         for task_obj, task_name in RUNNING_TASKS:
