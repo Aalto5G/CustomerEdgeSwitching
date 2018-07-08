@@ -62,6 +62,7 @@ OVS_PORT_TUN_GENEVE = 103
 OVS_PORT_TUN_L3_MAC = '00:00:00:12:34:56'
 OVS_PORT_TUN_L3_NET = '172.16.0.0/16'
 OVS_DIFFSERV_MARK   = 10 #DSCP10 AF11 priority traffic & low drop probability / Sets 6 bits field IP.dscp
+OF_PROTOCOL_VERSION = 1.4
 
 API_URL_SWITCHES    = 'stats/switches'
 API_URL_FLOW_ADD    = 'stats/flowentry/add'
@@ -85,13 +86,13 @@ class Network(object):
         # Initialize ipsets
         self.ips_init()
         # Initialize iptables
-        #self.ipt_init()
+        self.ipt_init()
         # Create HTTP REST Client
         self.rest_api_init()
         # Create OpenvSwitch
         self.ovs_create()
         # Create SYNPROXY instance
-        #self.synproxy_create()
+        self.synproxy_create()
 
     def ips_init(self):
         data_d = self.datarepository.get_policy_ces('IPSET', {})
@@ -453,7 +454,13 @@ class Network(object):
     def rest_api_close(self):
         self.rest_api.close()
 
+    def ovs_init(self):
+        """ Selects ovs-functions based on the OpenFlow protocol version """        
+        self.add_tunnel_connection  = self.add_tunnel_connection_OF14 if OF_PROTOCOL_VERSION>1.3 else self.add_tunnel_connection_OF13
+        self.ovs_init_flowtable     = self.ovs_init_flowtable_OF14 if OF_PROTOCOL_VERSION>1.3 else self.ovs_init_flowtable_OF13
+
     def ovs_create(self):
+        self.ovs_init()
         self.ovs_bridge_name = "br-ces0"
         self._logger.info('Create OpenvSwitch for CES data tunnelling')
         ## Create OVS bridge, set datapath-id (16 hex digits) and configure controller
@@ -487,7 +494,57 @@ class Network(object):
 
     
     @asyncio.coroutine
-    def ovs_init_flowtable(self):
+    def ovs_init_flowtable_OF14(self):
+        self._logger.info('Bootstrapping OpenvSwitch flow table')
+
+        # Build URL for add and delete operations
+        url_add    = urllib.parse.urljoin(self.api_url, API_URL_FLOW_ADD)
+        url_delete = urllib.parse.urljoin(self.api_url, API_URL_FLOW_DELETE)
+
+        # Remove all existing flows
+        data = {'dpid': OVS_DATAPATH_ID}
+        yield from self.rest_api.do_post(url_delete, json.dumps(data))
+
+        # Populate TABLE 0
+        ## Install miss flow as DROP
+        data = {'dpid': OVS_DATAPATH_ID, 'table_id':0, 'priority':0, 'match':{}, 'actions':[]}
+        yield from self.rest_api.do_post(url_add, json.dumps(data))
+
+        ## Outgoing CES-Local & CES-CES / Go to table 1
+        data = {'dpid':OVS_DATAPATH_ID, 'table_id':0, 'priority':10,
+                'match':{'in_port':OVS_PORT_TUN_L3, 'eth_type':2048, 'ipv4_dst':OVS_PORT_TUN_L3_NET},
+                'instructions':[{'type':'GOTO_TABLE', 'table_id':1}]}
+        yield from self.rest_api.do_post(url_add, json.dumps(data))
+
+        ## Incoming CES-CES from tunneling ports / Go to table 2
+        data = {'dpid': OVS_DATAPATH_ID, 'table_id':0, 'priority':10,
+                'match':{'in_port':OVS_PORT_TUN_GRE},
+                'instructions':[{'type':'GOTO_TABLE','table_id':2}]}
+        yield from self.rest_api.do_post(url_add, json.dumps(data))
+
+        data = {'dpid': OVS_DATAPATH_ID, 'table_id':0, 'priority':10,
+                'match':{'in_port':OVS_PORT_TUN_VXLAN},
+                'instructions':[{'type':'GOTO_TABLE','table_id':2}]}
+        yield from self.rest_api.do_post(url_add, json.dumps(data))
+
+        data = {'dpid': OVS_DATAPATH_ID, 'table_id':0, 'priority':10,
+                'match':{'in_port':OVS_PORT_TUN_GENEVE},
+                'instructions':[{'type':'GOTO_TABLE','table_id':2}]}
+        yield from self.rest_api.do_post(url_add, json.dumps(data))
+
+        # Populate TABLE 1
+        ## Install miss flow as DROP
+        data = {'dpid': OVS_DATAPATH_ID, 'table_id':1, 'priority':0, 'match':{}, 'instructions':[]}
+        yield from self.rest_api.do_post(url_add, json.dumps(data))
+
+        # Populate TABLE 2
+        ## Install miss flow as DROP
+        data = {'dpid': OVS_DATAPATH_ID, 'table_id':2, 'priority':0, 'match':{}, 'instructions':[]}
+        yield from self.rest_api.do_post(url_add, json.dumps(data))
+        
+        
+    @asyncio.coroutine
+    def ovs_init_flowtable_OF13(self):
         self._logger.info('Bootstrapping OpenvSwitch flow table')
 
         # Build URL for add and delete operations
@@ -672,8 +729,101 @@ class Network(object):
         yield from self.rest_api.do_post(url_delete, json.dumps(data))
 
     @asyncio.coroutine
-    def add_tunnel_connection(self, src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, cookie=0, sstag=0, dstag=0, hard_timeout=None, idle_timeout=None, diffserv=False):
+    def add_tunnel_connection_OF14(self, src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, cookie=0, sstag=0, dstag=0, hard_timeout=None, idle_timeout=None, diffserv=False):
         #self._logger.info('Create CES tunnel connection {}:{} / {}:{}  tun_in={} tun_out={} [{} diffserv={}]'.format(src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, diffserv))
+
+        # Build URL for add operations
+        url_add    = urllib.parse.urljoin(self.api_url, API_URL_FLOW_ADD)
+
+        # This function performs the encapsulation of user data within the supported tunnels, GRE, VXLAN, GENEVE
+        if tun_type == 'gre':
+            tunnel_port = OVS_PORT_TUN_GRE
+        elif tun_type == 'vxlan':
+            tunnel_port = OVS_PORT_TUN_VXLAN
+        elif tun_type == 'geneve':
+            tunnel_port = OVS_PORT_TUN_GENEVE
+        else:
+            raise Exception('Unsupported tunneling type! {}'.format(tun_type))
+
+        # For security, zero IPv4 src and dst fields / TEID <=> tun_id
+        zero_mac  = '00:00:00:00:00:00'
+        zero_ipv4 = '0.0.0.0'
+        src_ip    = zero_ipv4
+        dst_ip    = zero_ipv4
+                
+        if sstag != 0 and dstag != 0:
+            src_ip = Utils.int2ip(sstag)
+            dst_ip = Utils.int2ip(dstag)
+        
+        # Create outgoing unidirectional connection
+        data = {'dpid': OVS_DATAPATH_ID, 'table_id':1, 'priority':10, 'cookie':cookie,
+                'match':{'in_port':OVS_PORT_TUN_L3, 'eth_type':2048,
+                         'ipv4_src':src, 'ipv4_dst':psrc},
+                'instructions':[{"type":"APPLY_ACTIONS", 
+                    'actions':[{'type':'SET_FIELD', 'field':'eth_src', 'value':zero_mac},
+                               {'type':'SET_FIELD', 'field':'eth_dst', 'value':zero_mac},
+                               {'type':'SET_FIELD', 'field':'ipv4_src', 'value':src_ip},
+                               {'type':'SET_FIELD', 'field':'ipv4_dst', 'value':dst_ip},
+                               {'type':'SET_FIELD', 'field':'tun_ipv4_src', 'value':tun_src},
+                               {'type':'SET_FIELD', 'field':'tun_ipv4_dst', 'value':tun_dst},
+                               {'type':'SET_FIELD', 'field':'tunnel_id', 'value':tun_id_out},
+                               {'type':'OUTPUT', 'port':tunnel_port}]
+                             }]
+                }
+        
+        if hard_timeout is not None:
+            data['hard_timeout'] = hard_timeout
+
+        if idle_timeout is not None:
+            data['idle_timeout'] = idle_timeout
+        
+        if diffserv:
+            # Add second to last action for setting IP.dscp field for DiffServ treatment
+            data['actions'].insert(-1, {'type':'SET_FIELD', 'field':'ip_dscp', 'value':OVS_DIFFSERV_MARK})
+        
+        yield from self.rest_api.do_post(url_add, json.dumps(data))
+
+        'ovs-ofctl add-flow -OOpenFlow13 br-ces0 "table=2,priority=10,in_port=tunnel_port,ip,tun_src=tun_dst,tun_dst=tun_src,tun_id=tun_id_in actions=mod_dl_src:OVS_PORT_TUN_L3_MAC,mod_dl_dst:OVS_PORT_TUN_L3_MAC,mod_nw_src:psrc,mod_nw_dst:src,output:OVS_PORT_TUN_L3"'
+        
+        """
+        self._logger.info("Inserting the tunnel_connection via ofctl")
+        ofctl_conn = 'ovs-ofctl add-flow -OOpenFlow13 {} "table={},priority={},in_port={},ip,tun_src={},tun_dst={},tun_id={} actions=mod_dl_src:{},mod_dl_dst:{},mod_nw_src:{},mod_nw_dst:{},output:{}"'
+        ofctl_conn = ofctl_conn.format(self.ovs_bridge_name, 2, 10, tunnel_port, tun_dst, tun_src, tun_id_in, OVS_PORT_TUN_L3_MAC, OVS_PORT_TUN_L3_MAC, psrc, src, OVS_PORT_TUN_L3)
+        print(ofctl_conn)
+        self._do_subprocess_call(ofctl_conn, raise_exc = False, silent = False)        
+        """
+        
+        #"""
+        # Create incoming unidirectional connection
+        data = {'dpid': OVS_DATAPATH_ID, 'table_id':2, 'priority':10, 'cookie':cookie,
+                'match':{'in_port':tunnel_port, 'eth_type':2048,
+                         'ipv4_src': dst_ip,    'ipv4_dst': src_ip,
+                         'tun_ipv4_src':tun_dst, 'tun_ipv4_dst':tun_src, 'tunnel_id':tun_id_in},
+                'instructions':[{"type":"APPLY_ACTIONS",
+                    'actions':[{'type':'SET_FIELD', 'field':'eth_src', 'value':OVS_PORT_TUN_L3_MAC},
+                               {'type':'SET_FIELD', 'field':'eth_dst', 'value':OVS_PORT_TUN_L3_MAC},
+                               {'type':'SET_FIELD', 'field':'ipv4_src', 'value':psrc},
+                               {'type':'SET_FIELD', 'field':'ipv4_dst', 'value':src},
+                               {'type':'OUTPUT', 'port':OVS_PORT_TUN_L3}]
+                             }]
+                }
+        
+        if hard_timeout is not None:
+            data['hard_timeout'] = hard_timeout
+
+        if idle_timeout is not None:
+            data['idle_timeout'] = idle_timeout
+            
+        if diffserv:
+            # Add matching of IP.dscp field for DiffServ treatment   - # if ofctl-connection runs, then also modify template string to include the following
+            data['match']['ip_dscp'] = OVS_DIFFSERV_MARK
+
+        yield from self.rest_api.do_post(url_add, json.dumps(data))
+        #"""
+
+    @asyncio.coroutine
+    def add_tunnel_connection_OF13(self, src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, cookie=0, sstag=0, dstag=0, hard_timeout=None, idle_timeout=None, diffserv=False):
+        self._logger.info('Create CES tunnel connection {}:{} / {}:{}  tun_in={} tun_out={} [{} diffserv={}]'.format(src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, diffserv))
 
         # Build URL for add operations
         url_add    = urllib.parse.urljoin(self.api_url, API_URL_FLOW_ADD)
