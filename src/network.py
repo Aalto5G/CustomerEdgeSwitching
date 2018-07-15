@@ -456,8 +456,9 @@ class Network(object):
 
     def ovs_init(self):
         """ Selects ovs-functions based on the OpenFlow protocol version """        
-        self.add_tunnel_connection  = self.add_tunnel_connection_OF14 if OF_PROTOCOL_VERSION>1.3 else self.add_tunnel_connection_OF13
         self.ovs_init_flowtable     = self.ovs_init_flowtable_OF14 if OF_PROTOCOL_VERSION>1.3 else self.ovs_init_flowtable_OF13
+        self.add_tunnel_connection  = self.add_tunnel_connection_OF14 if OF_PROTOCOL_VERSION>1.3 else self.add_tunnel_connection_OF13
+        self.add_local_connection   = self.add_local_connection_OF14 if OF_PROTOCOL_VERSION>1.3 else self.add_local_connection_OF13
 
     def ovs_create(self):
         self.ovs_init()
@@ -667,7 +668,57 @@ class Network(object):
                     
 
     @asyncio.coroutine
-    def add_local_connection(self, src, psrc, dst, pdst, cookie=0, hard_timeout=None, idle_timeout=None):
+    def add_local_connection_OF14(self, src, psrc, dst, pdst, cookie=0, hard_timeout=None, idle_timeout=None):
+        self._logger.info('Create CES local connection {}:{} <=> {}:{}'.format(src, psrc, dst, pdst))
+
+        # Build URL for add operations
+        url_add    = urllib.parse.urljoin(self.api_url, API_URL_FLOW_ADD)
+
+        # Create first unidirectional connection
+        data =  {'dpid': OVS_DATAPATH_ID, 'table_id':1, 'priority':10, 'cookie':cookie,
+                'match':{'in_port':OVS_PORT_TUN_L3, 'eth_type':2048,
+                         'ipv4_src':src, 'ipv4_dst':psrc},
+                'instructions':[{"type":"APPLY_ACTIONS", 
+                    'actions':[{'type':'SET_FIELD', 'field':'ipv4_src', 'value':pdst},
+                               {'type':'SET_FIELD', 'field':'ipv4_dst', 'value':dst},
+                               {'type':'SET_FIELD', 'field':'eth_src', 'value':OVS_PORT_TUN_L3_MAC},
+                               {'type':'SET_FIELD', 'field':'eth_src', 'value':OVS_PORT_TUN_L3_MAC},
+                               {'type':'OUTPUT', 'port':OVS_PORT_IN}]
+                             }]
+                }
+        
+        if hard_timeout is not None:
+            data['hard_timeout'] = hard_timeout
+
+        if idle_timeout is not None:
+            data['idle_timeout'] = idle_timeout
+        
+        yield from self.rest_api.do_post(url_add, json.dumps(data))
+
+        # Create second unidirectional connection
+        data =  {'dpid': OVS_DATAPATH_ID, 'table_id':1, 'priority':10, 'cookie':cookie,
+                'match':{'in_port':OVS_PORT_TUN_L3, 'eth_type':2048,
+                         'ipv4_src':dst, 'ipv4_dst':pdst},
+                'instructions':[{"type":"APPLY_ACTIONS", 
+                    'actions':[{'type':'SET_FIELD', 'field':'ipv4_src', 'value':psrc},
+                               {'type':'SET_FIELD', 'field':'ipv4_dst', 'value':src},
+                               {'type':'SET_FIELD', 'field':'eth_src', 'value':OVS_PORT_TUN_L3_MAC},
+                               {'type':'SET_FIELD', 'field':'eth_src', 'value':OVS_PORT_TUN_L3_MAC},
+                               {'type':'OUTPUT', 'port':OVS_PORT_IN}]
+                             }]
+                }
+        
+        if hard_timeout is not None:
+            data['hard_timeout'] = hard_timeout
+
+        if idle_timeout is not None:
+            data['idle_timeout'] = idle_timeout
+        
+        yield from self.rest_api.do_post(url_add, json.dumps(data))
+
+        
+    @asyncio.coroutine
+    def add_local_connection_OF13(self, src, psrc, dst, pdst, cookie=0, hard_timeout=None, idle_timeout=None):
         self._logger.info('Create CES local connection {}:{} <=> {}:{}'.format(src, psrc, dst, pdst))
 
         # Build URL for add operations
@@ -756,7 +807,7 @@ class Network(object):
             dst_ip = Utils.int2ip(dstag)
         
         # Create outgoing unidirectional connection
-        data = {'dpid': OVS_DATAPATH_ID, 'table_id':1, 'priority':10, 'cookie':cookie,
+        data =  {'dpid': OVS_DATAPATH_ID, 'table_id':1, 'priority':10, 'cookie':cookie,
                 'match':{'in_port':OVS_PORT_TUN_L3, 'eth_type':2048,
                          'ipv4_src':src, 'ipv4_dst':psrc},
                 'instructions':[{"type":"APPLY_ACTIONS", 
