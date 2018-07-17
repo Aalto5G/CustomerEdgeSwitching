@@ -1,0 +1,91 @@
+########################################################################################
+################ Pre-requisite to testing - Insert on ubuntu terminal	################
+########################################################################################
+
+## Create OVS bridges
+ovs-vsctl --if-exists del-br br-ces0
+ovs-vsctl             add-br br-ces0
+
+## Add ports
+ovs-vsctl add-port br-ces0 tun0         -- set interface tun0         ofport_request=100 -- set interface tun0         type=internal
+ovs-vsctl add-port br-ces0 gre0-ces0    -- set interface gre0-ces0    ofport_request=101 -- set interface gre0-ces0    type=gre       options:key=flow options:remote_ip=flow options:local_ip=flow options:tos=inherit
+ovs-vsctl add-port br-ces0 vxlan0-ces0  -- set interface vxlan0-ces0  ofport_request=102 -- set interface vxlan0-ces0  type=vxlan     options:key=flow options:remote_ip=flow options:local_ip=flow options:tos=inherit
+ovs-vsctl add-port br-ces0 geneve0-ces0 -- set interface geneve0-ces0 ofport_request=103 -- set interface geneve0-ces0 type=geneve    options:key=flow options:remote_ip=flow options:local_ip=flow options:tos=inherit
+
+## Configure tun0 port
+ip link set dev tun0 arp off
+ip link set dev tun0 address 00:00:00:12:34:56
+ip link set dev tun0 mtu 1400
+ip link set dev tun0 up
+ip route add 172.16.0.0/16 dev tun0
+
+======================================================================================
+======================================================================================
+======================================================================================
+
+# Test flows with Ryu and curl
+# Flag=1 - SEND_FLOW_REMOVED
+
+#curl -X GET http://localhost:8081/stats/switches
+#curl -X POST -d '' http://localhost:8081/stats/flowentry/add
+#curl -X POST -d '' http://localhost:8081/stats/flowentry/delete
+#curl -X GET http://localhost:8081/stats/flow/1 | json_pp			# For pretty printing of the json payload
+
+# Initialize flows
+
+# Get all flows
+curl -X GET -d '' http://localhost:8081/stats/flow/1
+
+# Delete all flows
+curl -X POST -d '{"dpid":1,"table_id":255,"priority":10,"flags":0,"match":{},"instructions":[]}' http://localhost:8081/stats/flowentry/delete
+curl -X POST -d '{"dpid":1}' http://localhost:8081/stats/flowentry/delete
+
+
+################ Flows of TABLE-0 / PACKET CLASSIFIER ################
+
+# Miss flow - DROP
+curl -X POST -d '{"dpid":1,"table_id":0,"priority":1,"flags":0,"match":{},"instructions":[]}' http://localhost:8081/stats/flowentry/add
+
+# Flows CES-Local & CES-to-CES Outgoing via port 1 - VTEP Goto table 1
+curl -X POST -d '{"dpid":1,"table_id":0,"priority":10,"flags":0,"match":{"in_port":100,"eth_type":2048,"ipv4_dst":"172.16.0.0/24"},"instructions":[{"type":"GOTO_TABLE","table_id":1}]}' http://localhost:8081/stats/flowentry/add
+
+# Flows CES-to-CES Incoming via tunneling ports - Goto table 2
+curl -X POST -d '{"dpid":1,"table_id":0,"priority":10,"flags":0,"match":{"in_port":101},"instructions":[{"type":"GOTO_TABLE","table_id":2}]}' http://localhost:8081/stats/flowentry/add
+curl -X POST -d '{"dpid":1,"table_id":0,"priority":10,"flags":0,"match":{"in_port":102},"instructions":[{"type":"GOTO_TABLE","table_id":2}]}' http://localhost:8081/stats/flowentry/add
+curl -X POST -d '{"dpid":1,"table_id":0,"priority":10,"flags":0,"match":{"in_port":103},"instructions":[{"type":"GOTO_TABLE","table_id":2}]}' http://localhost:8081/stats/flowentry/add
+
+################  Flows TABLE-1 / Egress CES-Local & CES-to-CES ################
+# Miss flow - DROP
+curl -X POST -d '{"dpid":1,"table_id":1,"priority":1,"flags":0,"match":{},"instructions":[]}' http://localhost:8081/stats/flowentry/add
+
+###### CES-Local scenario
+# Match on source and destination - mangle and forward via OFPP_IN_PORT (4294967288) for CES-Local
+
+# From Host-A (192.168.0.101) to proxy-address of Host-B (172.16.0.1)
+curl -X POST -d '{"dpid":1,"table_id":1,"priority":10,"flags":0,"match":{"eth_type":2048,"ipv4_src":"192.168.0.101","ipv4_dst":"172.16.0.1"},"instructions":[{"type":"APPLY_ACTIONS", "actions":[{"type":"SET_FIELD","field":"eth_src","value":"00:00:00:12:34:56"},{"type":"SET_FIELD","field":"eth_dst","value":"00:00:00:12:34:56"},{"type":"SET_FIELD","field":"ipv4_src","value":"172.16.0.2"},{"type":"SET_FIELD","field":"ipv4_dst","value":"192.168.0.102"},{"type":"OUTPUT","port":4294967288}] }] }' http://localhost:8081/stats/flowentry/add
+
+# For (response) packet from Host-B (192.168.0.102) to proxy address of Host-A (172.16.0.2)
+curl -X POST -d '{"dpid":1,"table_id":1,"priority":10,"flags":0,"match":{"eth_type":2048,"ipv4_src":"192.168.0.102","ipv4_dst":"172.16.0.2"},"instructions":[{"type":"APPLY_ACTIONS", "actions":[{"type":"SET_FIELD","field":"ipv4_src","value":"172.16.0.1"},{"type":"SET_FIELD","field":"ipv4_dst","value":"192.168.0.101"},{"type":"SET_FIELD","field":"eth_src","value":"00:00:00:12:34:56"},{"type":"SET_FIELD","field":"eth_dst","value":"00:00:00:12:34:56"},{"type":"OUTPUT","port":4294967288}]}]}' http://localhost:8081/stats/flowentry/add
+
+===============================================
+###### CES-to-CES tunneled data flow
+# Match on source and destination on tun0 port (100) - mangle and forward via OUTPUT port (101) for tunneling the CES-CES session
+# Note: ## TODO: Verify setting of parameters via OpenFlow of tun_ipv4_src, tun_ipv4_dst (available via ovs-ofctl)
+
+curl -X POST -d '{"dpid":1,"table_id":1,"priority":10,"flags":0,"match":{"eth_type":2048,"ipv4_src":"192.168.0.101","ipv4_dst":"172.16.0.2"},"instructions":[{"type":"APPLY_ACTIONS", "actions":[{"type":"SET_FIELD","field":"eth_src","value":"00:00:00:00:00:00"},{"type":"SET_FIELD","field":"eth_dst","value":"00:00:00:00:00:00"},{"type":"SET_FIELD","field":"ipv4_src","value":"0.0.0.0"},{"type":"SET_FIELD","field":"ipv4_dst","value":"0.0.0.0"},{"type":"SET_FIELD", "field":"tun_ipv4_src", "value":"10.1.3.101"},{"type":"SET_FIELD", "field":"tun_ipv4_dst", "value":"10.1.3.103"},{"type":"SET_FIELD","field":"tunnel_id","value":5},{"type":"OUTPUT", "port":101}] }] }' http://localhost:8081/stats/flowentry/add
+
+
+################  Flows TABLE-2 / Ingress CES-to-CES  ################
+# Miss flow - DROP
+curl -X POST -d '{"dpid":1,"table_id":2,"priority":10,"flags":0,"match":{},"instructions":[]}' http://localhost:8081/stats/flowentry/add
+
+# Match on in_port (101) & tunnel_id - Next, mangle and forward via VTEP for CES-to-CES
+curl -X POST -d '{"dpid":1,"table_id":2,"priority":10,"flags":0,"match":{"in_port":101,"tunnel_id":5,"eth_type":2048,"tun_ipv4_src":"10.1.3.103","tun_ipv4_dst":"10.1.3.101"},"instructions":[{"type":"APPLY_ACTIONS", "actions":[{"type":"SET_FIELD","field":"ipv4_src","value":"172.16.0.2"},{"type":"SET_FIELD","field":"ipv4_dst","value":"192.168.0.101"},{"type":"SET_FIELD","field":"eth_src","value":"00:00:00:12:34:56"},{"type":"SET_FIELD","field":"eth_dst","value":"00:00:00:12:34:56"},{"type":"OUTPUT","port":100}]}]}' http://localhost:8081/stats/flowentry/add
+
+==============================================================================
+################ 	iptables & OVS compatibility testing #######################
+==============================================================================
+### Insert the following rules (and check if packets hit the ovs-switch rules).
+iptables -t mangle -A PREROUTING -m comment --comment "MASK_WAN_INGRESS" -j MARK --set-mark 0xff000003/0xff00000f -i wan0
+iptables -t filter - A INPUT -m comment --comment "CES/CETP OVS Dataplane connection" -p gre -j ACCEPT
+
