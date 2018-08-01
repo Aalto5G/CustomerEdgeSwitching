@@ -8,9 +8,11 @@ hosta2.cesa.lte.:
     CIRCULARPOOL:
         max: 3
     SFQDN:
-        - {fqdn:          'hosta2.cesa.lte.',  proxy_required: false, carriergrade: false                             }
-        - {fqdn:      'www.hosta2.cesa.lte.',  proxy_required: true , carriergrade: false                             }
-        - {fqdn:      'sip.hosta2.cesa.lte.',  proxy_required: true , carriergrade: false                             }
+        - {fqdn:          'hosta2.cesa.lte.',  proxy_required: false, carriergrade: false      }
+        - {fqdn:          'srv1.hosta2.cesa.lte.',  proxy_required: false, carriergrade: false }
+        - {fqdn:          'srv2.hosta2.cesa.lte.',  proxy_required: false, carriergrade: false }
+        - {fqdn:      'www.hosta2.cesa.lte.',  proxy_required: true , carriergrade: false      }
+        - {fqdn:      'sip.hosta2.cesa.lte.',  proxy_required: true , carriergrade: false      }
     FIREWALL:
         FIREWALL_ADMIN:
             - {'priority': 0,   'direction': 'EGRESS',  'protocol': '17', 'udp':{'dport': '53'}, 'target': 'REJECT', 'hashlimit': {'hashlimit-above':'5/sec', 'hashlimit-burst':'50', 'hashlimit-name':'DnsLanHosts', 'hashlimit-mode':'srcip', 'hashlimit-htable-expire':'1001'}, 'comment':{'comment':'Host DNS limit'}}

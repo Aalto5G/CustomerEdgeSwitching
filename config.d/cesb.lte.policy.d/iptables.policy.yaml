@@ -68,7 +68,7 @@ IPTABLES:
             # Enable SNAT for MARK_LOCAL_TO_WAN packets
             - {'table': 'nat', 'chain': 'POSTROUTING',      'rule': {'mark': {'mark': '0xFF011131/0xFFFFFFFF'}, 'comment': {'comment': 'SNAT to public IP address'}, 'target': {'SNAT': {'to-source': '10.1.3.103'}}}}
             # Enable SNAT for MARK_LAN_TO_WAN packets
-            - {'table': 'nat', 'chain': 'POSTROUTING',      'rule': {'mark': {'mark': '0xFF000030/0xFF0000F0'}, 'comment': {'comment': 'SNAT to available pool'}, 'target': {'SNAT': {'to-source': '100.64.1.133-100.64.1.135'}}}}
+            - {'table': 'nat', 'chain': 'POSTROUTING',      'rule': {'mark': {'mark': '0xFF000030/0xFF0000F0'}, 'comment': {'comment': 'SNAT to available pool'}, 'target': {'SNAT': {'to-source': '10.1.3.121-10.1.3.123'}}}}
 
     ADMIN_PREEMPTIVE:
     # This policy installs the basic filtering/droppping/rejecting functionality based on invalid packets and disallowed protocols. In addition, it includes several rules for limiting the number of new connections handled by the node.

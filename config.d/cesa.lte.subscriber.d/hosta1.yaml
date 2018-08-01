@@ -2,15 +2,15 @@ hosta1.cesa.lte.:
     ID:
         fqdn:   ['hosta1.cesa.lte.']
         ipv4:   ['192.168.0.101']
-        msisdn: ['0000000101']
+        msisdn: ['0000000103']
     GROUP:
-        - IPS_GROUP_PREPAID1
+        - IPS_GROUP_PREPAID3
     CIRCULARPOOL:
         max: 3
     SFQDN:
         - {fqdn:          'hosta1.cesa.lte.',  proxy_required: false, carriergrade: false                             }
-        - {fqdn:      'srv1.hosta1.cesa.lte.',  proxy_required: false, carriergrade: false                            }
-        - {fqdn:      'srv2.hosta1.cesa.lte.',  proxy_required: false, carriergrade: false                            }
+        - {fqdn:          'srv1.hosta1.cesa.lte.',  proxy_required: false, carriergrade: false, protocol: 6, port: 55443 }
+        - {fqdn:          'srv2.hosta1.cesa.lte.',  proxy_required: false, carriergrade: false                             }
         - {fqdn:      'www.hosta1.cesa.lte.',  proxy_required: true , carriergrade: false                             }
         - {fqdn:      'sip.hosta1.cesa.lte.',  proxy_required: true , carriergrade: false                             }
     FIREWALL:

@@ -17,9 +17,9 @@ cd src
           --ddns-server      127.0.0.2 53                                    \
           --dns-timeout      0.010 0.100 0.200                               \
           --dns-timeout-naptr  0.100 0.200 0.300                             \
-          --pool-serviceip   100.64.1.130/32                                 \
-          --pool-cpoolip     100.64.1.133/32 100.64.1.134/32 100.64.1.135/32 \
-          --pool-cespoolip   172.16.1.100/31                                 \
+          --pool-serviceip   10.1.3.101/32                                   \
+          --pool-cpoolip     10.1.3.111/32 10.1.3.112/32 10.1.3.113/32       \
+          --pool-cespoolip   172.16.1.100/30                                 \
           --ipt-cpool-queue  1                                               \
           --ipt-cpool-chain  CIRCULAR_POOL                                   \
           --ipt-host-chain   CUSTOMER_POLICY                                 \
