@@ -105,7 +105,7 @@ class DNSCallbacks(object):
         host_obj = HostEntry(name=fqdn, fqdn=fqdn, ipv4=ipaddr, services=user_data)
         self.hosttable.add(host_obj)
         
-        """
+        #"""
         # Create network resources
         hostname = ipaddr
         self.network.ipt_add_user(hostname, ipaddr)
@@ -126,7 +126,7 @@ class DNSCallbacks(object):
             carriergrade_ipt = host_obj.get_service('CARRIERGRADE', [])
             self.network.ipt_add_user_carriergrade(hostname, carriergrade_ipt)
 
-        """
+        #"""
         
     @asyncio.coroutine
     def ddns_deregister_user(self, fqdn, rdtype, ipaddr):
@@ -253,6 +253,81 @@ class DNSCallbacks(object):
 
 
     @asyncio.coroutine
+    def dns_process_rgw_local_soa(self, query, addr, cback):
+        """ Process DNS query from private network of a name in a SOA zone """
+        # Forward or continue to DNS resolver
+        fqdn = format(query.question[0].name)
+        rdtype = query.question[0].rdtype
+
+        self._logger.debug('LAN SOA: {} ({}) from {}/{}'.format(fqdn, dns.rdatatype.to_text(rdtype), addr[0], query.transport))
+
+        if self.hosttable.has((host.KEY_HOST_SERVICE, fqdn)):
+            # The service exists in RGW
+            host_obj = self.hosttable.get((host.KEY_HOST_SERVICE, fqdn))
+            service_data = host_obj.get_service_sfqdn(fqdn)
+            self._logger.debug('Found service: {} / {}'.format(fqdn, service_data))
+        elif self.hosttable.has_carriergrade(fqdn):
+            # There is a host with CarrierGrade service in RGW
+            host_obj, service_data = self.hosttable.get_carriergrade(fqdn)
+            self._logger.debug('Found CarrierGrade service: {} / {}'.format(fqdn, service_data))
+        elif fqdn in self.soa_list:
+            # Querying the RGW domain itself
+            self._logger.debug('Use NS address: {}'.format(fqdn))
+            host_obj = self.hosttable.get((host.KEY_HOST_FQDN, fqdn))
+            # Create DNS Response
+            response = dnsutils.make_response_answer_rr(query, fqdn, dns.rdatatype.A, host_obj.ipv4, rdclass=1, ttl=DNSRR_TTL_DEFAULT, recursion_available=True)
+            self._logger.debug('Send DNS response to {}:{}'.format(addr[0],addr[1]))
+            cback(query, addr, response)
+            return
+        else:
+            # FQDN not found! Answer NXDOMAIN
+            self._logger.debug('Answer {} with NXDOMAIN'.format(fqdn))
+            response = dnsutils.make_response_rcode(query, dns.rcode.NXDOMAIN, recursion_available=True)
+            cback(query, addr, response)
+            return
+
+        # TODO: Modify this to propagate original queries if carriergrade, and only override certain types, e.g. dns.rdatatype.A,
+        
+        if service_data is None:
+            # Answer with empty records or NXDOMAIN if no service_data exists
+            response = dnsutils.make_response_rcode(query, dns.rcode.NXDOMAIN, recursion_available=True)
+            cback(query, addr, response)
+            return
+
+        # Evaluate host and service
+        if service_data['carriergrade'] is True:
+            # Resolve via CarrierGrade
+            self._logger.debug('Process {} with CarrierGrade resolution'.format(fqdn))
+            # Hammad comment:  should there not be a check for 'dns.rdatatype.A' prior to performing the carrier grade resolution?
+            _rcode, _ipv4, _service_data = yield from self._dns_resolve_circularpool_carriergrade(host_obj, fqdn, addr, service_data)
+            if not _ipv4:
+                # Propagate rcode value
+                response = dnsutils.make_response_rcode(query, rcode=_rcode, recursion_available=True)
+                cback(query, addr, response)
+                return
+
+            self._logger.debug('Completed LAN CarrierGrade resolution: {} @ {}'.format(fqdn, _ipv4))
+            # Answer query with A type and answer with IPv4 address of the host
+            response = dnsutils.make_response_answer_rr(query, fqdn, dns.rdatatype.A, _ipv4, rdclass=1, ttl=DNSRR_TTL_DEFAULT, recursion_available=True)
+            cback(query, addr, response)
+
+        elif rdtype == dns.rdatatype.A:
+            # Resolve A type and answer with IPv4 address of the host
+            response = dnsutils.make_response_answer_rr(query, fqdn, rdtype, host_obj.ipv4, rdclass=1, ttl=DNSRR_TTL_DEFAULT, recursion_available=True)
+            cback(query, addr, response)
+
+        elif rdtype == dns.rdatatype.PTR:
+            # Resolve PTR type and answer with FQDN of the host
+            response = dnsutils.make_response_answer_rr(query, fqdn, rdtype, host_obj.fqdn, rdclass=1, ttl=DNSRR_TTL_DEFAULT, recursion_available=True)
+            cback(query, addr, response)
+
+        else:
+            # Answer with empty records for other types
+            response = dnsutils.make_response_rcode(query, dns.rcode.NOERROR, recursion_available=True)
+            cback(query, addr, response)
+
+
+    @asyncio.coroutine
     def dns_process_rgw_lan_soa(self, query, addr, cback):
         """ Process DNS query from private network of a name in a SOA zone """
         # Forward or continue to DNS resolver
@@ -298,6 +373,7 @@ class DNSCallbacks(object):
         if service_data['carriergrade'] is True:
             # Resolve via CarrierGrade
             self._logger.debug('Process {} with CarrierGrade resolution'.format(fqdn))
+            # Hammad comment:  should there not be a check for 'dns.rdatatype.A' prior to performing the carrier grade resolution?
             _rcode, _ipv4, _service_data = yield from self._dns_resolve_circularpool_carriergrade(host_obj, fqdn, addr, service_data)
             if not _ipv4:
                 # Propagate rcode value
@@ -313,7 +389,7 @@ class DNSCallbacks(object):
         elif rdtype == dns.rdatatype.A:
             # Resolve A type and answer with IPv4 address of the host
             cb_args = query, addr
-            self.cetp_mgr.process_dns_message(cback, cb_args, fqdn)
+            self.cetp_mgr.process_dns_message(cback, cb_args, fqdn)             # Should this be irrespective of if clause?
             #response = dnsutils.make_response_answer_rr(query, fqdn, rdtype, host_obj.ipv4, rdclass=1, ttl=DNSRR_TTL_DEFAULT, recursion_available=True)
             #cback(query, addr, response)
 
@@ -767,7 +843,7 @@ class PacketCallbacks(object):
         sport = packet_fields.setdefault('sport', 0)
         dport = packet_fields.setdefault('dport', 0)
         sender = '{}:{}'.format(src, sport)
-        self._logger.debug('Received PacketIn: {}'.format(packet_fields))
+        self._logger.info('Received PacketIn: {}'.format(packet_fields))
 
         # Pre-emptive check with PBRA if the packet is blacklister
         response = self.pbra.pbra_data_preaccept_circularpool(data, packet_fields)
