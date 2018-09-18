@@ -1,6 +1,18 @@
+----------------------------------------------------------------------------------------------
+########## HTTP testing #######################
+----------------------------------------------------------------------------------------------
 #A sample server listening at port 8000
-python3 -m http.server
+python3 -m http.server <port>
 
+# A simple HTTPS server by name 'simple_http_server.py' is part of this directory
+./simple_https_server.py 443 
+
+----------------------------------------------------------------------------------------------
 #HTTP test client
 wget 127.0.0.1:8000
 curl 127.0.0.1:8000
+
+#HTTPS test client
+curl -k https://www.hosta1.gwa.demo:443
+curl -k --key public.key --cert public.crt https://www.hosta1.cesa.lte:443		(if you want to use a client's key and certificate)
+----------------------------------------------------------------------------------------------
