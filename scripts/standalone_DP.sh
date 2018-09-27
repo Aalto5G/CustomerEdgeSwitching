@@ -16,3 +16,4 @@ ip link set dev tun0 address 00:00:00:12:34:56
 ip link set dev tun0 mtu 1400
 ip link set dev tun0 up
 ip route add 172.16.0.0/16 dev tun0
+

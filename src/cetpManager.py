@@ -149,7 +149,7 @@ class CETPManager:
     
                 host_obj  = self.host_table.get(key)
                 src_id    = host_obj.fqdn
-                self._logger.info("Connection from '{}'->'{}'".format(src_id, dst_id))
+                #self._logger.info("Connection from '{}'->'{}'".format(src_id, dst_id))
                 
                 if self.has_connection(src_id, dst_id):
                     conn = self.get_connection(src_id, dst_id)

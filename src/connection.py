@@ -194,9 +194,9 @@ class ConnectionLegacy(container3.ContainerNode):
 
 
 
-LOGLEVEL_C2CConnectionTemplate  = logging.DEBUG
-LOGLEVEL_H2HConnection          = logging.INFO
-LOGLEVEL_LocalConnection        = logging.DEBUG
+LOGLEVEL_CETP_DPConnection_Template = logging.DEBUG
+LOGLEVEL_H2HConnection              = logging.INFO
+LOGLEVEL_LocalConnection            = logging.DEBUG
 
 # Keys for indexing connections
 KEY_MAP_CETP_CONN           = 1
@@ -215,10 +215,10 @@ KEY_MAP_RCESID_C2C          = 11    # Indexes C2C connection against a remote CE
 
 
 
-class C2CConnectionTemplate(container3.ContainerNode):
-    def __init__(self, l_cesid, r_cesid, lrlocs, rrlocs, lpayloads, rpayloads, name="C2CConnectionTemplate"):
+class CETP_DPConnection_Template(container3.ContainerNode):
+    def __init__(self, payloadID_table, l_cesid, r_cesid, lrlocs, rrlocs, lpayloads, rpayloads, name="C2CConnectionTemplate"):
         """
-        Initialize a C2CConnectionTemplate object.
+        Initialize a CETP_DPConnection_Template object.
         
         @param l_cesid:     Local CES-ID
         @param r_cesid:     Remote CES-ID
@@ -228,17 +228,18 @@ class C2CConnectionTemplate(container3.ContainerNode):
         @param rpayloads:   List of negotiated dataplane payloads of remote CES-- Each payload represented as [(str:type, int:preference, int:tunnel_id_in)]
         """
         super().__init__(name)
+        self.payloadID_table            = payloadID_table
         self.l_cesid, self.r_cesid      = l_cesid, r_cesid
         self.lrlocs, self.rrlocs        = lrlocs, rrlocs
-        self.lpayloads, self.rpayloads  = lpayloads, rpayloads
+        self.lpayloads, self.rpayloads  = lpayloads, rpayloads          # (typ, pref, tun_id)
         self._select_conn_params()
         self.connectiontype = "CONNECTION_C2C"
         self._logger = logging.getLogger(name)
-        self._logger.setLevel(LOGLEVEL_C2CConnectionTemplate)
+        self._logger.setLevel(LOGLEVEL_CETP_DPConnection_Template)
         self._build_lookupkeys()
 
     def _select_conn_params(self):
-        # Picking the most preferred entry out of a list of negotiated RLOC and payloads
+        # Selects the most preferred entry out of a list of negotiated RLOC and payloads
         lrloc      = self.lrlocs[0]
         rrloc      = self.rrlocs[0]
         lpayload   = self.lpayloads[0]
@@ -265,18 +266,17 @@ class C2CConnectionTemplate(container3.ContainerNode):
 
     def delete(self):
         self._logger.debug("Deleting a '{}' connection!".format(self.connectiontype))
-        # Release the cached DNS responses, allocated proxy addresses and whatnot.
+        for pld in self.lpayloads:
+            p = pld[0]                      # Payload type
+            k = (self.r_cesid, p)
+            n = self.payloadID_table.lookup(k)
+            if n is not None:
+                self.payloadID_table.remove(n)
+            
         """
-        if self.local_af == AF_INET:
-            .address_pool.get(AP_PROXY4_HOST_ALLOCATION).release(self.lip, self.lpip)
-        elif self.local_af == AF_INET6:
-            .address_pool.get(AP_PROXY6_HOST_ALLOCATION).release(self.lip, self.lpip)
-        #Delete the DNS cached information
-        if .cache_table.has(KEY_CACHEDNS_HOST_LPIP, (self.lip, self.lpip)):
-            cached_entry = .cache_table.get(KEY_CACHEDNS_HOST_LPIP, (self.lip, self.lpip))
-            .cache_table.delete(cached_entry)
+        # Manage the DP identifiers, negotiated with a remote CES, using a state table.
+        # And delete/release the identifier upon termination of C2C relation.
         """
-
 
 
 class H2HConnection(container3.ContainerNode):

@@ -972,6 +972,7 @@ class PolicyBasedResourceAllocation(container3.Container):
         1. Minimum reputation1 is required for allocating new IP address regardless of the service
         2. Minimum reputation2 is required for allocating new IP address only if service can be overloaded, i.e. port and protocol are not zero
         #3. Minimum reputation3 is required for allocating new IP address only if service can be overloaded, supposed there are multiple overloadable IP addresses.
+
         Note: reputation1 > reputation2 > reputation3
         """
         self._logger.debug('SYSTEM_LOAD_HIGH')
@@ -1098,15 +1099,16 @@ class PolicyBasedResourceAllocation(container3.Container):
         self.connectiontable.add(conn)
         # Log
         self._logger.info('Allocated IP address from Circular Pool: {} @ {} for {:.3f} msec'.format(fqdn, allocated_ipv4, conn.timeout*1000))
-        self._logger.debug('New Circular Pool connection: {}'.format(conn))
+        self._logger.info('New Circular Pool connection: {}'.format(conn))
 
         # Synchronize connection with SYNPROXY module
         ## TODO: Get TCP options policy from host
+        """
         if service_data['protocol'] in [0, 6]:
             # TODO: Test performance and consider optimizations / Do this in parallel or yield from it?
             tcpmss, tcpsack, tcpwscale = 1460, 1, 7
             asyncio.ensure_future(self.network.synproxy_add_connection(conn.outbound_ip, conn.outbound_port, conn.protocol, tcpmss, tcpsack, tcpwscale))
-
+        """
         # Return the allocated address
         return allocated_ipv4
 

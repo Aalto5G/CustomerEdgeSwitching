@@ -671,7 +671,7 @@ class oC2CTransaction(C2CTransaction):
             
             key = (connection.KEY_MAP_RCESID_C2C, self.r_cesid)
             if not self.conn_table.has(key):
-                self.conn = connection.C2CConnectionTemplate(self.l_cesid, self.r_cesid, self.lrloc, self.rrloc, self.lpayload, self.rpayload)
+                self.conn = connection.CETP_DPConnection_Template(self.payloadID_table, self.l_cesid, self.r_cesid, self.lrloc, self.rrloc, self.lpayload, self.rpayload)
                 self.conn_table.add(self.conn)                
             
             return True
@@ -1214,7 +1214,7 @@ class iC2CTransaction(C2CTransaction):
             
             key = (connection.KEY_MAP_RCESID_C2C, self.r_cesid)
             if not self.conn_table.has(key):
-                self.conn = connection.C2CConnectionTemplate(self.l_cesid, self.r_cesid, self.lrloc, self.rrloc, self.lpayload, self.rpayload)
+                self.conn = connection.CETP_DPConnection_Template(self.payloadID_table, self.l_cesid, self.r_cesid, self.lrloc, self.rrloc, self.lpayload, self.rpayload)
                 self.conn_table.add(self.conn)
                 
             return True

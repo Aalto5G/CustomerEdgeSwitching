@@ -413,7 +413,7 @@ class DNSCallbacks(object):
         fqdn = q.name
         rdtype = q.rdtype
         
-        self._logger.info('LAN !SOA: {} ({}) from {}/{}'.format(fqdn, dns.rdatatype.to_text(rdtype), addr[0], query.transport))
+        #self._logger.info('LAN !SOA: {} ({}) from {}/{}'.format(fqdn, dns.rdatatype.to_text(rdtype), addr[0], query.transport))
 
         if key in self.activequeries:
             # Continue ongoing resolution
@@ -423,7 +423,7 @@ class DNSCallbacks(object):
         
         # Changing the A or AAAA queries to NAPTR queries to check if destination is served by a CES/CETP service
         if rdtype in [dns.rdatatype.A, dns.rdatatype.AAAA, dns.rdatatype.PTR]:
-            self._logger.info("Forwarding the {} query as NAPTR query for domain '{}'".format(dns.rdatatype.to_text(rdtype), fqdn))
+            #self._logger.info("Forwarding the {} query as NAPTR query for domain '{}'".format(dns.rdatatype.to_text(rdtype), fqdn))
             cb_args = (query, addr)
             cb      = (cback, cb_args)
             fwd_query  = dns.message.make_query(fqdn, dns.rdatatype.NAPTR)

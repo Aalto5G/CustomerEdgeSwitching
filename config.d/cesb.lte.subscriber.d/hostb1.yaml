@@ -11,6 +11,7 @@ hostb1.cesb.lte.:
         - {fqdn:          'hostb1.cesb.lte.',  proxy_required: false, carriergrade: false                             }
         - {fqdn:      'srv1.hostb1.cesb.lte.',  proxy_required: false, carriergrade: false                            }
         - {fqdn:      'srv2.hostb1.cesb.lte.',  proxy_required: false, carriergrade: false                            }
+        - {fqdn:      'srv3.hostb1.cesb.lte.',  proxy_required: false, carriergrade: false                            }
         - {fqdn:      'www.hostb1.cesb.lte.',  proxy_required: true , carriergrade: false                             }
         - {fqdn:      'sip.hostb1.cesb.lte.',  proxy_required: true , carriergrade: false                             }
     FIREWALL:

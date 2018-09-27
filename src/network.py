@@ -92,7 +92,7 @@ class Network(object):
         # Create OpenvSwitch
         self.ovs_create()
         # Create SYNPROXY instance
-        self.synproxy_create()
+        #self.synproxy_create()
 
     def ips_init(self):
         data_d = self.datarepository.get_policy_ces('IPSET', {})
@@ -462,6 +462,7 @@ class Network(object):
 
     def ovs_create(self):
         self.ovs_init()
+        #"""
         self.ovs_bridge_name = "br-ces0"
         self._logger.info('Create OpenvSwitch for CES data tunnelling')
         ## Create OVS bridge, set datapath-id (16 hex digits) and configure controller
@@ -492,6 +493,7 @@ class Network(object):
         # Schedule task to wait for SDN Controller
         _t = asyncio.ensure_future(self.wait_up())
         RUNNING_TASKS.append((_t, 'network.wait_up'))
+        #"""
 
     
     @asyncio.coroutine
@@ -1045,7 +1047,7 @@ class Network(object):
         # Flush all connections from SYNPROXY
         yield from self._synproxy_sendrecv('flush', '0.0.0.0', 0, 0, 0, 0, 0)
         # Set default connection
-        yield from self._synproxy_sendrecv('mod', '0.0.0.0', 0, 0, 536, 0, 1)                       # Hammad Comment: This could be commented for stricter synproxy appöication (scaling to individual ports)
+        yield from self._synproxy_sendrecv('mod', '0.0.0.0', 0, 0, 536, 0, 1)                       # Hammad Comment: This could be commented for stricter synproxy application (scaling to individual ports)
         # Initialize IP address of the CircularPool and ServicePool pool with default TCP options
         ap_cpool = self.pooltable.get('circularpool')
         ap_spool = self.pooltable.get('servicepool')
@@ -1062,6 +1064,7 @@ class Network(object):
         
     @asyncio.coroutine
     def synproxy_add_connection(self, ipaddr, port, proto, tcpmss, tcpsack, tcpwscale):
+        return
         _t = self.loop.time()
         success = yield from self._synproxy_sendrecv('mod', ipaddr, port, proto, tcpmss, tcpsack, tcpwscale)
         _tdelay = (self.loop.time() - _t) * 1000
@@ -1076,6 +1079,7 @@ class Network(object):
 
     @asyncio.coroutine
     def synproxy_del_connection(self, ipaddr, port, proto):
+        return
         _t = self.loop.time()
         tcpmss, tcpsack, tcpwscale = 0, 0, 0
         success = yield from self._synproxy_sendrecv('del', ipaddr, port, proto, tcpmss, tcpsack, tcpwscale)

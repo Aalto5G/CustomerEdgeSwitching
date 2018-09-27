@@ -8,9 +8,9 @@ hosta1.cesa.lte.:
     CIRCULARPOOL:
         max: 3
     SFQDN:
-        - {fqdn:          'hosta1.cesa.lte.',  proxy_required: false, carriergrade: false                             }
-        - {fqdn:          'srv1.hosta1.cesa.lte.',  proxy_required: false, carriergrade: false, protocol: 6, port: 55443 }
-        - {fqdn:          'srv2.hosta1.cesa.lte.',  proxy_required: false, carriergrade: false                             }
+        - {fqdn:      'hosta1.cesa.lte.',  proxy_required: false, carriergrade: false                             }
+        - {fqdn:      'srv1.hosta1.cesa.lte.',  proxy_required: false, carriergrade: false, protocol: 6, port: 55443 }
+        - {fqdn:      'srv2.hosta1.cesa.lte.',  proxy_required: false, carriergrade: false                             }
         - {fqdn:      'www.hosta1.cesa.lte.',  proxy_required: true , carriergrade: false                             }
         - {fqdn:      'sip.hosta1.cesa.lte.',  proxy_required: true , carriergrade: false                             }
     FIREWALL:
