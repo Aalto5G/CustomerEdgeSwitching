@@ -411,13 +411,14 @@ class LocalConnection(container3.ContainerNode):
     def _build_lookupkeys(self):
         self._built_lookupkeys = []
         self._built_lookupkeys += [ (KEY_MAP_CETP_CONN, False) ]
+        """
         self._built_lookupkeys += [ ((KEY_MAP_LOCAL_HOST, self.lip), False),        ((KEY_MAP_CETP_PRIVATE_NW, self.lip, self.lpip), True) ]
         self._built_lookupkeys += [ ((KEY_MAP_LOCAL_FQDN, self.localFQDN), False),  ((KEY_MAP_LOCAL_FQDN, self.remoteFQDN), False) ]
         self._built_lookupkeys += [ ((KEY_MAP_LOCAL_FQDNs, self.localFQDN, self.remoteFQDN), True)]
         self._built_lookupkeys += [ ((KEY_MAP_HOST_FQDNs, self.localFQDN, self.remoteFQDN), True)]
         if self.lip != self.rip:
             self._built_lookupkeys += [ ((KEY_MAP_LOCAL_HOST, self.rip), False),    ((KEY_MAP_CETP_PRIVATE_NW, self.rip, self.rpip), True)]
-
+        """
         
     def lookupkeys(self):
         """ Keys for indexing Local Connection object """

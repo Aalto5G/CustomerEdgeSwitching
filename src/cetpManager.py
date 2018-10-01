@@ -39,7 +39,8 @@ class CETPManager:
     It also aggregates different CETPTransport endpoints from a remote CES-ID under one C2C-Layer.
     """
     
-    def __init__(self, cetpPolicyFile, cesid, ces_params, hosttable, conn_table, pool_table, network, cetpstate_table, loop=None, name="CETPManager"):
+    def __init__(self, executors, cetpPolicyFile, cesid, ces_params, hosttable, conn_table, pool_table, network, cetpstate_table, loop=None, name="CETPManager"):
+        self.executors              = executors
         self._cetp_endpoints        = {}                           # Dictionary of endpoints towards remote CES nodes.
         self._serverEndpoints       = []                           # List of server endpoint offering CETP listening service.
         self.c2c_register           = {}
@@ -61,7 +62,7 @@ class CETPManager:
         self._load_cetp_params()
         self._logger                = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPManager)
-        self.local_cetp             = CETPH2H.CETPH2HLocal(l_cesid=self.cesid, cetpstate_table=self.cetpstate_table, policy_mgr=self.policy_mgr, cetp_mgr=self, \
+        self.local_cetp             = CETPH2H.CETPH2HLocal(executors=executors, loop=self._loop, l_cesid=self.cesid, cetpstate_table=self.cetpstate_table, policy_mgr=self.policy_mgr, cetp_mgr=self, \
                                                            cetp_security=self.cetp_security, host_table=self.host_table, conn_table=self.conn_table, \
                                                            network=network, pool_table=self.pool_table)
 
@@ -123,6 +124,7 @@ class CETPManager:
         return False
     
     def has_connection(self, src_id, dst_id):
+        return False
         key = (connection.KEY_MAP_HOST_FQDNs, src_id, dst_id) 
         if self.conn_table.has(key):
             return True

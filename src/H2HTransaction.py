@@ -1186,15 +1186,15 @@ class H2HTransactionLocal(H2HTransaction):
             self._logger.error("Exception '{}' in pre-processing the packet".format(ex))
             return False
         
-    @asyncio.coroutine
     def start_cetp_processing(self):
+        s=0
+        for x in range(0,10**5):
+            s+= x
+        
+        return s
+        
         """ Starts the CETPLocal policy negotiation """
         error = False
-        pre_processed = yield from self._pre_process()
-        
-        if not pre_processed:
-            self._logger.error(" Failure in initiating the local H2H session towards '{}'.".format(self.dst_id))
-            return False
         
         # If a host is reaching its ownself or own services, we shall return its own IP address in DNS callback.
         if self.dst_id.endswith(self.src_id):
@@ -1247,7 +1247,7 @@ class H2HTransactionLocal(H2HTransaction):
             return False
         else:
             #self._logger.info(" Local CETP Policy matched! Allocate proxy address. {} -> {}".format(self.src_id, self.dst_id))
-            lpip = yield from self._create_connection()
+            lpip = self._create_connection()
             
             if lpip is not None:
                 self._execute_dns_callback(r_addr = lpip)           # Returning CES proxy address for DNS response
@@ -1257,7 +1257,7 @@ class H2HTransactionLocal(H2HTransaction):
                 return False
 
         
-    @asyncio.coroutine
+    #@asyncio.coroutine
     def _create_connection(self):
         try:
             lip             = self.host_ip
@@ -1280,7 +1280,7 @@ class H2HTransactionLocal(H2HTransaction):
                 return None
             else:
                 self.conn = connection.LocalConnection(self.network, self.ap, self.host_table, lip=lip, lpip=lpip, rip=rip, rpip=rpip, lfqdn=lfqdn, rfqdn=rfqdn, hard_ttl=hard_ttl, idle_ttl=idle_ttl)
-                yield from self.conn.insert_dataplane_connection()                
+                #yield from self.conn.insert_dataplane_connection()                
                 self.conn_table.add(self.conn)
                 return lpip
         

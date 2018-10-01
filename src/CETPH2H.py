@@ -10,6 +10,8 @@ import time
 import traceback
 import json
 import ssl
+import concurrent.futures
+from concurrent.futures import ProcessPoolExecutor
 
 import cetpManager
 import H2HTransaction
@@ -255,10 +257,20 @@ class CETPH2H:
                 print("Min: ", min(v)*1000,"ms\t", "Max: ", max(v)*1000,"ms")
                 print("Average: ", sum(v)/len(v)*1000,"ms")
                 
+
+def test_start_cetp_processing():
+    result =0
+    for x in range(0,10**5):
+        result+= x
+    
+    print(result)
+    return result
+    
             
 class CETPH2HLocal:
-    def __init__(self, loop=None, l_cesid="", cetpstate_table= None, policy_mgr=None, cetp_mgr=None, ces_params=None, cetp_security=None, host_table= None, \
+    def __init__(self, executors=None, loop=None, l_cesid="", cetpstate_table= None, policy_mgr=None, cetp_mgr=None, ces_params=None, cetp_security=None, host_table= None, \
                  conn_table=None, pool_table=None, network=None, name="CETPH2H"):
+        self.executors                  = executors
         self._loop                      = loop
         self.l_cesid                    = l_cesid
         self.cetpstate_table            = cetpstate_table
@@ -271,18 +283,51 @@ class CETPH2HLocal:
         self._closure_signal            = False
         self.pool_table                 = pool_table
         self.network                    = network
-        self.pending_tasks              = []
+        self._tasks                     = [] 
         self.testing_results            = {"processingDelay":[], "rest_ryu":[]}     # For experimentation only. Shall be removed in final version.
         self.count                      = 0
         self._logger                    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPH2H)
         self._logger.info("Initiated CETPH2HLocal for localCETP resolution")
+
+    def start_cetp_processing(self):
+        result =0
+        for x in range(0,10**5):
+            result+= x
         
+        print(result)
+        return result
+    
+    @asyncio.coroutine
+    def optimize_performance(self, h2h):
+        if self.count % 2 == 1:
+            result = self.start_cetp_processing()     # Returns True or False
+        else:
+            loop = asyncio.get_event_loop()
+            executor = ProcessPoolExecutor( max_workers=1 )
+            #t=asyncio.ensure_future( loop.run_in_executor(self.executors, test_start_cetp_processing) )
+            #t=asyncio.ensure_future( loop.run_in_executor(self.executors, self.start_cetp_processing) )
+            #t=asyncio.ensure_future( loop.run_in_executor(executor, test_start_cetp_processing) )
+            t = loop.run_in_executor(executor, h2h.start_cetp_processing)
+            r = yield from t
+            print("After awaiting", r)
+            self._tasks.append(t)
+    
+    
     def resolve_cetp(self, dst_id, cb):
         """ To consume NAPTR-response triggered by the private hosts """
         try:
             if not self._closure_signal:
                 t = asyncio.ensure_future(self._start_cetp_negotiation(cb, dst_id))     # Enable "try, except" within task to locally consume a task-raised exception
+                #self.pending_tasks.append(t)
+        except Exception as ex:
+            self._logger.error(" Exception '{}' in triggering LocalH2HTransaction ".format(ex))
+
+    def resolve_cetp_new(self, dst_id, cb):
+        """ To consume NAPTR-response triggered by the private hosts """
+        try:
+            if not self._closure_signal:
+                self._start_cetp_negotiation(cb, dst_id)     # Enable "try, except" within task to locally consume a task-raised exception
                 #self.pending_tasks.append(t)
         except Exception as ex:
             self._logger.error(" Exception '{}' in triggering LocalH2HTransaction ".format(ex))
@@ -298,14 +343,22 @@ class CETPH2HLocal:
             self._logger.info("Sender IP '{}' is not a registered host".format(ip_addr))
             return
         
-        host_obj = self.host_table.get(key)
-        src_id   = host_obj.fqdn
+        host_obj    = self.host_table.get(key)
+        src_id      = host_obj.fqdn
+        self.count  += 1
         
         h2h = H2HTransaction.H2HTransactionLocal(loop=self._loop, cb=cb, host_ip=ip_addr, src_id=src_id, dst_id=dst_id, policy_mgr=self.policy_mgr, cetp_h2h=self, \
                                                  cetpstate_table=self.cetpstate_table, cetp_security= self.cetp_security, host_table=self.host_table, pool_table=self.pool_table, \
                                                  conn_table=self.conn_table, network=self.network, test_results=self.testing_results)
-        result = yield from h2h.start_cetp_processing()     # Returns True or False
-        self.count +=1
+        
+        #pre_processed = yield from h2h._pre_process()
+        #if not pre_processed:
+        #    self._logger.error(" Failure in initiating the local H2H session towards '{}'.".format(self.dst_id))
+        #    return
+        
+        print("Fine till this point")
+        yield from self.optimize_performance(h2h)
+        #self.optimize_performance(h2h)
         #if result == True:
         #    self._logger.info("OK")
         #else:
@@ -314,7 +367,7 @@ class CETPH2HLocal:
     def close(self):
         self._closure_signal = True
         #print("self.count: ", self.count)
-        for t in self.pending_tasks:
+        for t in self._tasks:
             if not t.cancelled():   
                 t.cancel()
 

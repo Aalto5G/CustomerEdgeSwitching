@@ -45,6 +45,8 @@ import logging.config
 import os
 import time
 import yaml
+import concurrent.futures
+from concurrent.futures import ProcessPoolExecutor
 
 import cetpManager
 import connection
@@ -235,6 +237,8 @@ class RealmGateway(object):
         # Ready!
         self._logger.warning('RealmGateway_v2 is ready!')
 
+    def set_executors(self, e):
+        self.executors = e
 
     @asyncio.coroutine
     def _init_datarepository(self):
@@ -353,7 +357,7 @@ class RealmGateway(object):
             self.ces_params      = self.ces_conf['CESParameters']
             self.cesid           = self.ces_params['cesid']
             self._cetp_policies  = self._config.getdefault('cetp_policies', None)
-            self._cetp_mgr       = cetpManager.CETPManager(self._cetp_policies, self.cesid, self.ces_params, self._hosttable, self._connectiontable, \
+            self._cetp_mgr       = cetpManager.CETPManager(self.executors, self._cetp_policies, self.cesid, self.ces_params, self._hosttable, self._connectiontable, \
                                                            self._pooltable, self._network, self.cetpstate_table, self._loop)
             for s in self._cetp_service:
                 (ip_addr, port, proto, o, p) = s
@@ -532,10 +536,13 @@ if __name__ == '__main__':
     logger = logging.getLogger(__name__)
     # Get event loop
     loop = asyncio.get_event_loop()
+    executor = ProcessPoolExecutor( max_workers=1 )
+
     loop.set_debug(False)
     try:
         # Create object instance
         obj = RealmGateway(args)
+        obj.set_executors(executor)
         loop.run_until_complete(obj.run())
         loop.run_forever()
     except KeyboardInterrupt:
