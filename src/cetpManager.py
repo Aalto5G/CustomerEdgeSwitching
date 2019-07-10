@@ -26,6 +26,8 @@ import CETPSecurity
 import connection
 import host
 import customdns
+#from PolicyManager import PolicyManager
+#from PolicyManager import RESTPolicyClient
 from customdns import dnsutils 
 
 LOGLEVEL_CETPManager    = logging.DEBUG            # Any message above this level will be printed.    WARNING > INFO > DEBUG
@@ -39,7 +41,7 @@ class CETPManager:
     It also aggregates different CETPTransport endpoints from a remote CES-ID under one C2C-Layer.
     """
     
-    def __init__(self, executors, cetpPolicyFile, cesid, ces_params, hosttable, conn_table, pool_table, network, cetpstate_table, loop=None, name="CETPManager"):
+    def __init__(self, executors, cetpPolicyFile, cesid, ces_params, hosttable, conn_table, pool_table, network, cetpstate_table, spm_url, loop=None, name="CETPManager"):
         self.executors              = executors
         self._cetp_endpoints        = {}                           # Dictionary of endpoints towards remote CES nodes.
         self._serverEndpoints       = []                           # List of server endpoint offering CETP listening service.
@@ -53,8 +55,8 @@ class CETPManager:
         self.payloadID_table        = CETP.PayloadIDTable()
         self.cetp_security          = CETPSecurity.CETPSecurity(loop, self.conn_table, ces_params)
         self.interfaces             = PolicyManager.DPConfigurations(cesid, ces_params = ces_params)
+        self.policy_mgr2            = PolicyManager.RESTPolicyClient(loop, spm_url, tcp_conn_limit=10)                 # Fetches cetp policies from the Policy Management System.
         self.policy_mgr             = PolicyManager.PolicyManager(self.cesid, policy_file = cetpPolicyFile)     # Gets cetp policies from a local configuration file.
-        #self.policy_mgr             = PolicyManager.RESTPolicyClient(loop, tcp_conn_limit=100)                 # Fetches cetp policies from the Policy Management System.
         self.network                = network
         self._loop                  = loop
         self.name                   = name
@@ -80,7 +82,7 @@ class CETPManager:
 
     def create_cetp_endpoint(self, r_cesid, c2c_layer=None, c2c_negotiated=False):
         """ Creates the CETP-H2H layer towards remote CES-ID """
-        cetp_ep = CETPH2H.CETPH2H(l_cesid = self.cesid, r_cesid = r_cesid, cetpstate_table= self.cetpstate_table, policy_mgr=self.policy_mgr, policy_client=None, \
+        cetp_ep = CETPH2H.CETPH2H(l_cesid = self.cesid, r_cesid = r_cesid, cetpstate_table= self.cetpstate_table, policy_mgr=self.policy_mgr2, policy_client=None, \
                                   loop=self._loop, cetp_mgr=self, ces_params=self.ces_params, cetp_security=self.cetp_security, host_table=self.host_table, network=self.network, \
                                   interfaces=self.interfaces, c2c_layer=c2c_layer, c2c_negotiated=c2c_negotiated, conn_table=self.conn_table, pool_table=self.pool_table)
         self.add_cetp_endpoint(r_cesid, cetp_ep)
@@ -124,7 +126,7 @@ class CETPManager:
         return False
     
     def has_connection(self, src_id, dst_id):
-        return False
+        return False                                # For load testing only
         key = (connection.KEY_MAP_HOST_FQDNs, src_id, dst_id) 
         if self.conn_table.has(key):
             return True

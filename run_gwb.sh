@@ -16,9 +16,10 @@ cd src
           --dns-resolver     10.1.3.181 53                                   \
           --ddns-server      127.0.0.2 53                                    \
           --dns-timeout      0.010 0.100 0.200                               \
+          --dns-timeout-naptr  0.100 0.200 0.300                             \
           --pool-serviceip   10.1.3.103/32                                   \
           --pool-cpoolip     10.1.3.121/32 10.1.3.122/32 10.1.3.123/32       \
-          --pool-cespoolip   172.16.2.100/30                                 \
+          --pool-cespoolip   172.16.2.100/19                                 \
           --ipt-cpool-queue  1                                               \
           --ipt-cpool-chain  CIRCULAR_POOL                                   \
           --ipt-host-chain   CUSTOMER_POLICY                                 \
@@ -36,5 +37,5 @@ cd src
           --repository-policy-folder     ../config.d/cesb.lte.policy.d/      \
           --cetp-config  		     ../config.d/cesb.lte.cetp.policy/config_cesb.yaml   \
           --cetp-policies  		     ../config.d/cesb.lte.cetp.policy/cetp_policies.json \
-          --repository-api-url  http://127.0.0.1:8082/                       \
+          --repository-api-url  http://10.0.3.201/API/cetp_policy_node?                  \
           --synproxy         10.0.3.151 12345

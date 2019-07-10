@@ -19,6 +19,7 @@ import host
 import connection
 import customdns
 import helpers_n_wrappers
+import PolicyManager
 
 from customdns import dnsutils
 from helpers_n_wrappers import utils3
@@ -371,13 +372,24 @@ class H2HTransactionOutbound(H2HTransaction):
         return self.policy
 
     @asyncio.coroutine
-    def load_policies2(self, host_id=""):
+    def load_policies_from_spm(self, host_id=""):
         """ Downloads the host policy from Policy Management System """
         timeout     = 2
         direction   = "EGRESS"
-        url         = "http://100.64.254.24/API/host_cetp_user?"
         params      = {'lfqdn': host_id, 'direction': direction}
+        #start_time = time.time()
+        response    = yield from self.policy_mgr.get_host_policy(params=params, timeout=timeout)
+        #print("Policy retrieval delay:", time.time()-start_time)
+        
+        """
+        start_time = time.time()
         response    = yield from self.policy_mgr.get(url, params=params, timeout=timeout)
+        print("Policy retrieval delay:", time.time()-start_time)
+
+        start_time = time.time()
+        response    = yield from self.policy_mgr.get(url, params=params, timeout=timeout)
+        print("Policy retrieval delay:", time.time()-start_time)
+        """
         
         if response is not None:
             host_policy      = json.loads(response)
@@ -418,7 +430,8 @@ class H2HTransactionOutbound(H2HTransaction):
                 self._logger.error(" Proxypool of the sender '{}' is depleted.".format(self.src_id))
                 return False
             
-            host_policy = yield from self.load_policies(host_id = self.src_id)
+            host_policy = yield from self.load_policies_from_spm(host_id = self.src_id)
+            #print("host_policy:", host_policy)
             
             if host_policy is None:
                 self._logger.error("Failure to load policies for host-ID '{}'".format(self.src_id))
@@ -428,6 +441,7 @@ class H2HTransactionOutbound(H2HTransaction):
         
         except Exception as ex:
             self._logger.error(" Exception '{}' in initiating the H2H session: ".format(ex))
+            traceback.print_exc(file=sys.stdout)
             return False
     
     def _schedule_completion_check(self):
@@ -459,6 +473,7 @@ class H2HTransactionOutbound(H2HTransaction):
     def start_cetp_processing(self):
         """ Returns CETP message containing Policy Offers & Request towards remote-host """
         try:
+            self.start_time = time.time()
             initialized = yield from self._initialize()
             
             if not initialized:
@@ -489,6 +504,7 @@ class H2HTransactionOutbound(H2HTransaction):
             self.cetp_negotiation_history.append(cetp_msg)
             #self.cetp_h2h.update_H2H_transaction_count()
             self._schedule_completion_check()
+            self.current_delay = time.time() - self.start_time
             return cetp_msg
         
         except:
@@ -555,7 +571,7 @@ class H2HTransactionOutbound(H2HTransaction):
             #self._logger.info("Continue establishing H2H session towards '{}' ({} -> {})".format(self.dst_id, self.sstag, 0))
             #self._logger.info("Host policy: \n {} {} {}".format(15*'-', self.opolicy, 15*'-'))
             #self.pprint(cetp_msg, m="Inbound Response")
-            
+            start_time = time.time()
             error                       = False
             tlvs_to_send, error_tlvs    = [], []
             self.rtt += 1
@@ -636,6 +652,7 @@ class H2HTransactionOutbound(H2HTransaction):
                     return cetp_message
             else:
                 if self._is_ready():
+                    self.test_results["policy_negotiation"].append(time.time()-self.start_time)
                     conn_created = yield from self._create_connection()
                     
                     if conn_created:
@@ -726,6 +743,7 @@ class H2HTransactionOutbound(H2HTransaction):
             
             yield from self.conn.insert_dataplane_connection()
             self.conn_table.add(self.conn)
+            self.test_results["cetp_mgmt_delay"].append(time.time()-self.start_time)
             self._execute_dns_callback(r_addr = self.lpip)
             return True
     
@@ -793,12 +811,22 @@ class H2HTransactionOutbound(H2HTransaction):
         return True
     
     def lookupkeys(self):
+        """
         if self.is_negotiated():
             keys = [((KEY_ESTABLISHED_TAGS, self.sstag, self.dstag), True), ((KEY_HOST_IDS, self.src_id, self.dst_id), True), ((KEY_RCESID, self.r_cesid), False)]
         else:
             keys = [((KEY_INITIATED_TAGS, self.sstag, 0), True), ((KEY_HOST_IDS, self.src_id, self.dst_id), True), ((KEY_RCESID, self.r_cesid), False)]
         return keys
-
+        """
+        
+        #"""
+        # For load testing
+        if self.is_negotiated():
+            keys = [((KEY_ESTABLISHED_TAGS, self.sstag, self.dstag), True), ((KEY_RCESID, self.r_cesid), False)]
+        else:
+            keys = [((KEY_INITIATED_TAGS, self.sstag, 0), True), ((KEY_RCESID, self.r_cesid), False)]
+        return keys
+        #"""
         
     def post_h2h_negotiation(self, cetp_message):
         """  Processes a CETP packet received on a negotiated H2H session.  e.g. a 'terminate' TLV, or change in ratelimit of data connection. 
@@ -865,13 +893,12 @@ class H2HTransactionInbound(H2HTransaction):
         return self.policy
 
     @asyncio.coroutine
-    def load_policies2(self, host_id):
+    def load_policies_from_spm(self, host_id):
         """ Download the host policy from Policy management System """         
-        url         = "http://100.64.254.24/API/host_cetp_user?"
+        timeout     = 2
         direction   = "INGRESS"
         params      = {'lfqdn': host_id, 'direction': direction}
-        timeout     = 2
-        response    = yield from self.policy_mgr.get(url, params=params, timeout=timeout)
+        response    = yield from self.policy_mgr.get_host_policy(params=params, timeout=timeout)
         
         if response is not None:             
             host_policy      = json.loads(response)
@@ -924,7 +951,9 @@ class H2HTransactionInbound(H2HTransaction):
                 self._logger.error(" Proxypool of the destination host running '{}' is depleted.".format(self.dst_id))
                 return False
             
-            host_policy = yield from self.load_policies(self.dst_id)
+            #start_time = time.time()
+            host_policy = yield from self.load_policies_from_spm(self.dst_id)
+            #print("_load_policies_from_spm: ", time.time()-start_time)
             
             if host_policy is None:
                 self._logger.error(" Failure to load inbound CETP policy of Local Destination '{}'".format(self.dst_id))
@@ -934,6 +963,7 @@ class H2HTransactionInbound(H2HTransaction):
         
         except Exception as ex:
             self._logger.error(" Exception '{}' in pre-processing the inbound packet.".format(ex))
+            traceback.print_exc(file=sys.stdout)
             return False
 
 
@@ -1143,12 +1173,11 @@ class H2HTransactionLocal(H2HTransaction):
         return policy
 
     @asyncio.coroutine
-    def load_policies2(self, host_id="", direction=""):
-        """ Downloads the host policy from Policy Management System """
+    def load_policies_from_spm(self, host_id="", direction=""):
+        """ Downloads the host policy from SPM """
         timeout     = 2
-        url         = "http://100.64.254.24/API/host_cetp_user?"
         params      = {'lfqdn': host_id, 'direction': direction}
-        response    = yield from self.policy_mgr.get(url, params=params, timeout=timeout)
+        response    = yield from self.policy_mgr.get_host_policy(params=params, timeout=timeout)
         
         if response is not None:
             policy      = json.loads(response)
@@ -1174,8 +1203,8 @@ class H2HTransactionLocal(H2HTransaction):
                 self._logger.error(" Proxypool of the destination host running '{}' is depleted.".format(self.dst_id))
                 return False
             
-            self.opolicy = yield from self.load_policies(host_id = self.src_id, direction = "outbound")
-            self.ipolicy = yield from self.load_policies(host_id = self.dst_id, direction = "inbound")
+            self.opolicy = yield from self.load_policies_from_spm(host_id = self.src_id, direction = "outbound")
+            self.ipolicy = yield from self.load_policies_from_spm(host_id = self.dst_id, direction = "inbound")
             
             if self.opolicy is None or (self.ipolicy is None):
                 return False
@@ -1185,15 +1214,24 @@ class H2HTransactionLocal(H2HTransaction):
         except Exception as ex:
             self._logger.error("Exception '{}' in pre-processing the packet".format(ex))
             return False
-        
+    
+    @asyncio.coroutine
     def start_cetp_processing(self):
-        s=0
+        """
+        "s=0
         for x in range(0,10**5):
             s+= x
         
         return s
-        
+        """
         """ Starts the CETPLocal policy negotiation """
+        self.start_time = time.time()
+        pre_processed = yield from self._pre_process()
+        if not pre_processed:
+            self._logger.error(" Failure in initiating the local H2H session towards '{}'.".format(self.dst_id))
+            return
+        
+
         error = False
         
         # If a host is reaching its ownself or own services, we shall return its own IP address in DNS callback.
@@ -1241,13 +1279,13 @@ class H2HTransactionLocal(H2HTransaction):
                         break
 
         if error:
-            self._logger.warning("Local CETP Policy mismatched! Connection refused {} -> {}".format(self.src_id, self.dst_id))
+            #self._logger.warning("Local CETP Policy mismatched! Connection refused {} -> {}".format(self.src_id, self.dst_id))
             self._execute_dns_callback()
             #self.dns_state.delete(stateobj)
             return False
         else:
             #self._logger.info(" Local CETP Policy matched! Allocate proxy address. {} -> {}".format(self.src_id, self.dst_id))
-            lpip = self._create_connection()
+            lpip = yield from self._create_connection()
             
             if lpip is not None:
                 self._execute_dns_callback(r_addr = lpip)           # Returning CES proxy address for DNS response
@@ -1257,7 +1295,7 @@ class H2HTransactionLocal(H2HTransaction):
                 return False
 
         
-    #@asyncio.coroutine
+    @asyncio.coroutine
     def _create_connection(self):
         try:
             lip             = self.host_ip
@@ -1280,8 +1318,9 @@ class H2HTransactionLocal(H2HTransaction):
                 return None
             else:
                 self.conn = connection.LocalConnection(self.network, self.ap, self.host_table, lip=lip, lpip=lpip, rip=rip, rpip=rpip, lfqdn=lfqdn, rfqdn=rfqdn, hard_ttl=hard_ttl, idle_ttl=idle_ttl)
-                #yield from self.conn.insert_dataplane_connection()                
+                yield from self.conn.insert_dataplane_connection()
                 self.conn_table.add(self.conn)
+                self.test_results["cetp_mgmt_delay"].append(time.time()-self.start_time)          
                 return lpip
         
         except Exception as ex:

@@ -11,7 +11,7 @@ cd src
 ./rgw.py  --name cesa.lte                                                    \
           --dns-soa cesa.lte. 0.168.192.in-addr.arpa. 1.64.100.in-addr.arpa. \
           --dns-server-local 127.0.0.1 53                                    \
-          --dns-server-lan   192.168.0.1 53                                  \
+          --dns-server-lan   192.168.1.1 53                                  \
           --dns-server-wan   10.1.3.101 53                                   \
           --dns-resolver     10.1.3.181 53                                   \
           --ddns-server      127.0.0.2 53                                    \
@@ -19,7 +19,7 @@ cd src
           --dns-timeout-naptr  0.100 0.200 0.300                             \
           --pool-serviceip   10.1.3.101/32                                   \
           --pool-cpoolip     10.1.3.111/32 10.1.3.112/32 10.1.3.113/32       \
-          --pool-cespoolip   172.16.1.100/30                                 \
+          --pool-cespoolip   172.16.1.100/19                                 \
           --ipt-cpool-queue  1                                               \
           --ipt-cpool-chain  CIRCULAR_POOL                                   \
           --ipt-host-chain   CUSTOMER_POLICY                                 \
@@ -37,5 +37,5 @@ cd src
           --repository-policy-folder     ../config.d/cesa.lte.policy.d/      \
           --cetp-config  		     ../config.d/cesa.lte.cetp.policy/config_cesa.yaml   \
           --cetp-policies  		     ../config.d/cesa.lte.cetp.policy/cetp_policies.json \
-          --repository-api-url  http://127.0.0.1:8082/                       \
+          --repository-api-url  http://10.0.3.200/API/cetp_policy_node?                  \
           --synproxy         127.0.0.1 12345

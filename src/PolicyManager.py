@@ -327,12 +327,14 @@ LOGLEVEL_RESTPolicyClient = logging.INFO
 
 
 class RESTPolicyClient(object):
-    def __init__(self, loop, tcp_conn_limit, verify_ssl=False, name="RESTPolicyClient"):
+    def __init__(self, loop, spm_url=None, tcp_conn_limit=1, verify_ssl=False, name="RESTPolicyClient"):
         self._loop              = loop
         self.tcp_conn_limit     = tcp_conn_limit
         self.verify_ssl         = verify_ssl
+        self.spm_url            = spm_url
         self.policy_cache       = {}
         self._timeout           = 2.0
+        self.name               = name
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_RESTPolicyClient)
         self._logger.info("Initiating RESTPolicyClient towards Policy Management System ")
@@ -351,6 +353,15 @@ class RESTPolicyClient(object):
 
     def cache_policy(self, key, policy):
         self.policy_cache[key] = policy
+
+    @asyncio.coroutine
+    def get_host_policy(self, params=None, timeout=None):
+        """ Initiates host-policy query towards SPM """
+        if self.spm_url is not None:
+            resp = yield from self.get(self.spm_url, params=params, timeout=timeout)
+            return resp
+        
+        return None
 
     @asyncio.coroutine
     def get(self, url, params=None, timeout=None):

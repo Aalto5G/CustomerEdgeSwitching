@@ -227,7 +227,7 @@ class RealmGateway(object):
         _t = asyncio.ensure_future(self._init_cleanup_pbra_timers(10.0))
         RUNNING_TASKS.append((_t, 'cleanup_pbra_timers'))
         # Create task for cleaning & synchronizing the CETP-H2H conns.
-        _t = asyncio.ensure_future(self._init_cleanup_ovsConnections(20.0))
+        _t = asyncio.ensure_future(self._init_cleanup_ovsConnections(500.0))
         RUNNING_TASKS.append((_t, 'H2H_conn_timers'))
         # Create task: Show DNS groups
         _t = asyncio.ensure_future(self._init_show_dnsgroups(60.0))
@@ -357,8 +357,9 @@ class RealmGateway(object):
             self.ces_params      = self.ces_conf['CESParameters']
             self.cesid           = self.ces_params['cesid']
             self._cetp_policies  = self._config.getdefault('cetp_policies', None)
+            api_url              = self._config.getdefault('repository_api_url', None)
             self._cetp_mgr       = cetpManager.CETPManager(self.executors, self._cetp_policies, self.cesid, self.ces_params, self._hosttable, self._connectiontable, \
-                                                           self._pooltable, self._network, self.cetpstate_table, self._loop)
+                                                           self._pooltable, self._network, self.cetpstate_table, api_url, self._loop)
             for s in self._cetp_service:
                 (ip_addr, port, proto, o, p) = s
                 yield from self._cetp_mgr.initiate_cetp_service(ip_addr, port, proto)
@@ -474,7 +475,7 @@ class RealmGateway(object):
         while True:
             yield from asyncio.sleep(delay)
             # Update table and remove expired elements
-            self._pbra.cleanup_timers()
+            #self._pbra.cleanup_timers()
 
     @asyncio.coroutine
     def _init_show_dnsgroups(self, delay):
@@ -536,7 +537,9 @@ if __name__ == '__main__':
     logger = logging.getLogger(__name__)
     # Get event loop
     loop = asyncio.get_event_loop()
-    executor = ProcessPoolExecutor( max_workers=1 )
+    max_workers = 2
+    executor = ProcessPoolExecutor( max_workers = max_workers )
+    print("Process Executors", max_workers)
 
     loop.set_debug(False)
     try:
