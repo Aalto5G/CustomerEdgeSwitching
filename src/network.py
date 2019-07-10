@@ -671,7 +671,7 @@ class Network(object):
 
     @asyncio.coroutine
     def add_local_connection_OF14(self, src, psrc, dst, pdst, cookie=0, hard_timeout=None, idle_timeout=None):
-        self._logger.info('Create CES local connection {}:{} <=> {}:{}'.format(src, psrc, dst, pdst))
+        #self._logger.info('Create CES local connection {}:{} <=> {}:{}'.format(src, psrc, dst, pdst))
 
         # Build URL for add operations
         url_add    = urllib.parse.urljoin(self.api_url, API_URL_FLOW_ADD)

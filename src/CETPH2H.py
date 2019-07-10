@@ -10,11 +10,16 @@ import time
 import traceback
 import json
 import ssl
+import dns
 import concurrent.futures
+import customdns
+
 from concurrent.futures import ProcessPoolExecutor
+from customdns import dnsutils
 
 import cetpManager
 import H2HTransaction
+import H2HTransaction_m
 import host
 
 LOGLEVEL_CETPH2H             = logging.INFO
@@ -48,7 +53,8 @@ class CETPH2H:
         self.h2h_queue_task             = None
         self.pending_tasks              = []
         self.testing_results            = {}                        # For experimentation only. Shall be removed in final version.
-        self.testing_results            = {"rtt":[], "rest_ryu":[]}
+        self.testing_results            = {"policy_negotiation":[], "cetp_mgmt_delay":[], "rest_ryu":[]}
+        self.results_file               = open("results_file", 'w')
         self._logger                    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPH2H)
         self._logger.info("CETPH2H layer created for cesid '{}'".format(r_cesid))
@@ -216,7 +222,7 @@ class CETPH2H:
         self.resource_cleanup()
         self._close_pending_tasks()
         self.cetp_mgr.remove_cetp_endpoint(self.r_cesid)        # Remove the endpoint after cleanup.
-        #self.show_measuremnt_results()
+        self.show_measuremnt_results()
         del(self)
     
     def resource_cleanup(self):
@@ -252,20 +258,32 @@ class CETPH2H:
         for i,k in list(enumerate(self.testing_results)):
             print("-------\n", k, "\n-------")
             v = self.testing_results[k]
+            
             if len(v)>1:
                 v = v[1:]
-                print("Min: ", min(v)*1000,"ms\t", "Max: ", max(v)*1000,"ms")
-                print("Average: ", sum(v)/len(v)*1000,"ms")
+                self.results_file.write(":\n"+k+":\n")
+                v = [x * 1000 for x in v]               # Multiply each with 1000
+                save_results = str(v)
+                self.results_file.write(save_results)
+                print("Min: ", min(v),"ms\t", "Max: ", max(v),"ms")
+                print("Average: ", sum(v)/len(v),"ms")
                 
 
 def test_start_cetp_processing():
+    #print("test_processing")
+    time.sleep(0.000)
+    #time.sleep(0.0025)
+    """
     result =0
-    for x in range(0,10**5):
+    for x in range(0, 30000):
         result+= x
     
-    print(result)
+    #print(result)
     return result
-    
+    """
+
+class SomeClass:
+    pass    
             
 class CETPH2HLocal:
     def __init__(self, executors=None, loop=None, l_cesid="", cetpstate_table= None, policy_mgr=None, cetp_mgr=None, ces_params=None, cetp_security=None, host_table= None, \
@@ -283,9 +301,12 @@ class CETPH2HLocal:
         self._closure_signal            = False
         self.pool_table                 = pool_table
         self.network                    = network
-        self._tasks                     = [] 
-        self.testing_results            = {"processingDelay":[], "rest_ryu":[]}     # For experimentation only. Shall be removed in final version.
+        self._tasks                     = []
+        self.testing_results            = {"policy_negotiation":[], "cetp_mgmt_delay":[], "rest_ryu":[]}
+        self.results_file               = open("results_file_local", 'w')
         self.count                      = 0
+        max_workers                     = 1
+        self.executor2                  = ProcessPoolExecutor( max_workers = max_workers )
         self._logger                    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPH2H)
         self._logger.info("Initiated CETPH2HLocal for localCETP resolution")
@@ -295,23 +316,69 @@ class CETPH2HLocal:
         for x in range(0,10**5):
             result+= x
         
-        print(result)
+        #print(result)
         return result
+
     
     @asyncio.coroutine
     def optimize_performance(self, h2h):
-        if self.count % 2 == 1:
-            result = self.start_cetp_processing()     # Returns True or False
+        loop = asyncio.get_event_loop()
+        if 0 % 2 == 1:
+            #t=asyncio.ensure_future( loop.run_in_executor(self.executor2, test_start_cetp_processing) )
+            #r 0 yield from t
+            yield from asyncio.sleep(0)
+            #self._execute_dns_callback(h2h, r_addr="192.168.1.10")
+            #result = self.start_cetp_processing()     # Returns True or False
         else:
-            loop = asyncio.get_event_loop()
-            executor = ProcessPoolExecutor( max_workers=1 )
-            #t=asyncio.ensure_future( loop.run_in_executor(self.executors, test_start_cetp_processing) )
+            """
+            print(self.executors)
+            print(type(self.executors))
+            print(len(self.executors))
+            print("------------")
+            """
+            #executor = ProcessPoolExecutor( max_workers=2 )
+            t=asyncio.ensure_future( loop.run_in_executor(self.executors, test_start_cetp_processing) )
             #t=asyncio.ensure_future( loop.run_in_executor(self.executors, self.start_cetp_processing) )
             #t=asyncio.ensure_future( loop.run_in_executor(executor, test_start_cetp_processing) )
-            t = loop.run_in_executor(executor, h2h.start_cetp_processing)
+            #t = loop.run_in_executor(executor, self.start_cetp_processing)
             r = yield from t
-            print("After awaiting", r)
-            self._tasks.append(t)
+            #print("After awaiting", r)
+            self._execute_dns_callback2(h2h, r_addr="192.168.1.10")
+            
+            
+    def _execute_dns_callback(self, cb, dst_id, r_addr=None):
+        """ Executes DNS callback towards host """
+        try:
+            (cb_f, cb_args) = cb
+            dns_q, addr = cb_args
+            #print("Executing DNS cb")
+            
+            if r_addr is None:
+                cb_f(dns_q, addr)
+            else:
+                #print("Executing DNS cb now")
+                response = dnsutils.make_response_answer_rr(dns_q, dst_id, dns.rdatatype.A, r_addr, rdclass=1, ttl=120, recursion_available=True)
+                cb_f(dns_q, addr, response)
+            
+        except Exception as ex:
+            self._logger.error("Exception in _execute_dns_callback {}".format(ex))
+
+    def _execute_dns_callback2(self, h2h, r_addr=None):
+        """ Executes DNS callback towards host """
+        try:
+            (cb_f, cb_args) = h2h.cb
+            dns_q, addr = cb_args
+            #print("Executing DNS cb")
+            
+            if r_addr is None:
+                cb_f(dns_q, addr)
+            else:
+                #print("Executing DNS cb now")
+                response = dnsutils.make_response_answer_rr(dns_q, h2h.dst_id, dns.rdatatype.A, r_addr, rdclass=1, ttl=120, recursion_available=True)
+                cb_f(dns_q, addr, response)
+            
+        except Exception as ex:
+            self._logger.error("Exception in _execute_dns_callback {}".format(ex))
     
     
     def resolve_cetp(self, dst_id, cb):
@@ -323,7 +390,7 @@ class CETPH2HLocal:
         except Exception as ex:
             self._logger.error(" Exception '{}' in triggering LocalH2HTransaction ".format(ex))
 
-    def resolve_cetp_new(self, dst_id, cb):
+    def resolve_cetp_old_new(self, dst_id, cb):
         """ To consume NAPTR-response triggered by the private hosts """
         try:
             if not self._closure_signal:
@@ -338,6 +405,9 @@ class CETPH2HLocal:
         dns_q, addr   = cb_args
         ip_addr, port = addr
         key           = (host.KEY_HOST_IPV4, ip_addr)
+        
+        #self._execute_dns_callback(cb, dst_id, r_addr="192.168.1.10")
+        #return
 
         if not self.host_table.has(key):
             self._logger.info("Sender IP '{}' is not a registered host".format(ip_addr))
@@ -351,13 +421,12 @@ class CETPH2HLocal:
                                                  cetpstate_table=self.cetpstate_table, cetp_security= self.cetp_security, host_table=self.host_table, pool_table=self.pool_table, \
                                                  conn_table=self.conn_table, network=self.network, test_results=self.testing_results)
         
-        #pre_processed = yield from h2h._pre_process()
-        #if not pre_processed:
-        #    self._logger.error(" Failure in initiating the local H2H session towards '{}'.".format(self.dst_id))
-        #    return
+        yield from h2h.start_cetp_processing()
+
+        #print("Fine till this point")
         
-        print("Fine till this point")
-        yield from self.optimize_performance(h2h)
+        #yield from self.optimize_performance(h2h)
+        
         #self.optimize_performance(h2h)
         #if result == True:
         #    self._logger.info("OK")
@@ -366,6 +435,7 @@ class CETPH2HLocal:
 
     def close(self):
         self._closure_signal = True
+        self.show_measurment_results()
         #print("self.count: ", self.count)
         for t in self._tasks:
             if not t.cancelled():   
@@ -375,7 +445,12 @@ class CETPH2HLocal:
         for i,k in list(enumerate(self.testing_results)):
             print("-------\n", k, "\n-------")
             v = self.testing_results[k]
+            
             if len(v)>0:
-                v = v[1:]
+                self.results_file.write(":\n"+k+":\n")
+                v = [x * 1000 for x in v]               # Multiply each with 1000
+                save_results = str(v)
+                self.results_file.write(save_results)
                 print("Min: ", min(v)*1000,"ms\t", "Max: ", max(v)*1000,"ms")
                 print("Average: ", sum(v)/len(v)*1000,"ms")
+
