@@ -42,7 +42,6 @@ class CETPManager:
     """
     
     def __init__(self, cetpPolicyFile, cesid, ces_params, hosttable, conn_table, pool_table, network, cetpstate_table, spm_host_policy_url, spm_network_policy_url, loop=None, name="CETPManager"):
-        self.executors              = executors
         self._cetp_endpoints        = {}                           # Dictionary of endpoints towards remote CES nodes.
         self._serverEndpoints       = []                           # List of server endpoint offering CETP listening service.
         self.c2c_register           = {}

@@ -1136,7 +1136,6 @@ class H2HTransactionLocal(H2HTransaction):
         self.dst_id             = dst_id
         self.dst_ip             = dst_ip
         self.policy_mgr         = policy_mgr
-        self.cetp_h2h           = cetp_h2h
         self.host_table         = host_table
         self.conn_table         = conn_table
         self.cetp_security      = cetp_security
@@ -1200,13 +1199,6 @@ class H2HTransactionLocal(H2HTransaction):
     
     @asyncio.coroutine
     def start_cetp_processing(self):
-        """
-        "s=0
-        for x in range(0,10**5):
-            s+= x
-        
-        return s
-        """
         """ Starts the CETPLocal policy negotiation """
         self.start_time = time.time()
         pre_processed = yield from self._pre_process()

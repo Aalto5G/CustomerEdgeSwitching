@@ -11,10 +11,7 @@ import traceback
 import json
 import ssl
 import dns
-import concurrent.futures
 import customdns
-
-from concurrent.futures import ProcessPoolExecutor
 from customdns import dnsutils
 
 import cetpManager
@@ -265,7 +262,7 @@ class CETPH2HLocal:
         self._tasks                     = []
         self._logger                    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPH2H)
-        self._logger.info("Initiated CETPH2HLocal for localCETP resolution")
+        self._logger.info("Initiated CETPH2HLocal module for local-CETP policy negotiations")
 
 
     def resolve_cetp(self, src_id, dst_id, cb):
@@ -280,6 +277,7 @@ class CETPH2HLocal:
 
     @asyncio.coroutine
     def _start_cetp_negotiation(self, src_id, dst_id, cb):
+        """ Initiates local policy negotiation process """
         (cb_func, cb_args) = cb
         dns_q, addr   = cb_args
         ip_addr, port = addr
