@@ -41,7 +41,7 @@ class CETPManager:
     It also aggregates different CETPTransport endpoints from a remote CES-ID under one C2C-Layer.
     """
     
-    def __init__(self, executors, cetpPolicyFile, cesid, ces_params, hosttable, conn_table, pool_table, network, cetpstate_table, spm_url, loop=None, name="CETPManager"):
+    def __init__(self, cetpPolicyFile, cesid, ces_params, hosttable, conn_table, pool_table, network, cetpstate_table, spm_host_policy_url, spm_network_policy_url, loop=None, name="CETPManager"):
         self.executors              = executors
         self._cetp_endpoints        = {}                           # Dictionary of endpoints towards remote CES nodes.
         self._serverEndpoints       = []                           # List of server endpoint offering CETP listening service.
@@ -51,12 +51,12 @@ class CETPManager:
         self.host_table             = hosttable
         self.conn_table             = conn_table
         self.pool_table             = pool_table
-        self.cetpstate_table        = cetpstate_table                                                           # Records the established CETP transactions (both H2H & C2C). Required for preventing the re-allocation already in-use SST & DST (in CETP transaction).
+        self.cetpstate_table        = cetpstate_table                                                               # Records the established CETP transactions (both H2H & C2C). Required for preventing the re-allocation already in-use SST & DST (in CETP transaction).
         self.payloadID_table        = CETP.PayloadIDTable()
         self.cetp_security          = CETPSecurity.CETPSecurity(loop, self.conn_table, ces_params)
         self.interfaces             = PolicyManager.DPConfigurations(cesid, ces_params = ces_params)
-        self.policy_mgr2            = PolicyManager.RESTPolicyClient(loop, spm_url, tcp_conn_limit=10)                 # Fetches cetp policies from the Policy Management System.
-        self.policy_mgr             = PolicyManager.PolicyManager(self.cesid, policy_file = cetpPolicyFile)     # Gets cetp policies from a local configuration file.
+        self.policy_mgr2            = PolicyManager.RESTPolicyClient(loop, spm_network_policy_url, spm_host_policy_url, tcp_conn_limit=10)  # Fetches cetp policies from the Policy Management System.
+        self.policy_mgr             = PolicyManager.PolicyManager(self.cesid, policy_file = cetpPolicyFile)         # Gets cetp policies from a local configuration file.
         self.network                = network
         self._loop                  = loop
         self.name                   = name
@@ -64,7 +64,7 @@ class CETPManager:
         self._load_cetp_params()
         self._logger                = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPManager)
-        self.local_cetp             = CETPH2H.CETPH2HLocal(executors=executors, loop=self._loop, l_cesid=self.cesid, cetpstate_table=self.cetpstate_table, policy_mgr=self.policy_mgr, cetp_mgr=self, \
+        self.local_cetp             = CETPH2H.CETPH2HLocal(loop=self._loop, l_cesid=self.cesid, cetpstate_table=self.cetpstate_table, policy_mgr=self.policy_mgr, cetp_mgr=self, \
                                                            cetp_security=self.cetp_security, host_table=self.host_table, conn_table=self.conn_table, \
                                                            network=network, pool_table=self.pool_table)
 

@@ -267,28 +267,12 @@ class CETPH2H:
                 self.results_file.write(save_results)
                 print("Min: ", min(v),"ms\t", "Max: ", max(v),"ms")
                 print("Average: ", sum(v)/len(v),"ms")
-                
 
-def test_start_cetp_processing():
-    #print("test_processing")
-    time.sleep(0.000)
-    #time.sleep(0.0025)
-    """
-    result =0
-    for x in range(0, 30000):
-        result+= x
-    
-    #print(result)
-    return result
-    """
 
-class SomeClass:
-    pass    
             
 class CETPH2HLocal:
-    def __init__(self, executors=None, loop=None, l_cesid="", cetpstate_table= None, policy_mgr=None, cetp_mgr=None, ces_params=None, cetp_security=None, host_table= None, \
+    def __init__(self, loop=None, l_cesid="", cetpstate_table= None, policy_mgr=None, cetp_mgr=None, ces_params=None, cetp_security=None, host_table= None, \
                  conn_table=None, pool_table=None, network=None, name="CETPH2H"):
-        self.executors                  = executors
         self._loop                      = loop
         self.l_cesid                    = l_cesid
         self.cetpstate_table            = cetpstate_table
@@ -305,82 +289,11 @@ class CETPH2HLocal:
         self.testing_results            = {"policy_negotiation":[], "cetp_mgmt_delay":[], "rest_ryu":[]}
         self.results_file               = open("results_file_local", 'w')
         self.count                      = 0
-        max_workers                     = 1
-        self.executor2                  = ProcessPoolExecutor( max_workers = max_workers )
         self._logger                    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPH2H)
         self._logger.info("Initiated CETPH2HLocal for localCETP resolution")
 
-    def start_cetp_processing(self):
-        result =0
-        for x in range(0,10**5):
-            result+= x
-        
-        #print(result)
-        return result
 
-    
-    @asyncio.coroutine
-    def optimize_performance(self, h2h):
-        loop = asyncio.get_event_loop()
-        if 0 % 2 == 1:
-            #t=asyncio.ensure_future( loop.run_in_executor(self.executor2, test_start_cetp_processing) )
-            #r 0 yield from t
-            yield from asyncio.sleep(0)
-            #self._execute_dns_callback(h2h, r_addr="192.168.1.10")
-            #result = self.start_cetp_processing()     # Returns True or False
-        else:
-            """
-            print(self.executors)
-            print(type(self.executors))
-            print(len(self.executors))
-            print("------------")
-            """
-            #executor = ProcessPoolExecutor( max_workers=2 )
-            t=asyncio.ensure_future( loop.run_in_executor(self.executors, test_start_cetp_processing) )
-            #t=asyncio.ensure_future( loop.run_in_executor(self.executors, self.start_cetp_processing) )
-            #t=asyncio.ensure_future( loop.run_in_executor(executor, test_start_cetp_processing) )
-            #t = loop.run_in_executor(executor, self.start_cetp_processing)
-            r = yield from t
-            #print("After awaiting", r)
-            self._execute_dns_callback2(h2h, r_addr="192.168.1.10")
-            
-            
-    def _execute_dns_callback(self, cb, dst_id, r_addr=None):
-        """ Executes DNS callback towards host """
-        try:
-            (cb_f, cb_args) = cb
-            dns_q, addr = cb_args
-            #print("Executing DNS cb")
-            
-            if r_addr is None:
-                cb_f(dns_q, addr)
-            else:
-                #print("Executing DNS cb now")
-                response = dnsutils.make_response_answer_rr(dns_q, dst_id, dns.rdatatype.A, r_addr, rdclass=1, ttl=120, recursion_available=True)
-                cb_f(dns_q, addr, response)
-            
-        except Exception as ex:
-            self._logger.error("Exception in _execute_dns_callback {}".format(ex))
-
-    def _execute_dns_callback2(self, h2h, r_addr=None):
-        """ Executes DNS callback towards host """
-        try:
-            (cb_f, cb_args) = h2h.cb
-            dns_q, addr = cb_args
-            #print("Executing DNS cb")
-            
-            if r_addr is None:
-                cb_f(dns_q, addr)
-            else:
-                #print("Executing DNS cb now")
-                response = dnsutils.make_response_answer_rr(dns_q, h2h.dst_id, dns.rdatatype.A, r_addr, rdclass=1, ttl=120, recursion_available=True)
-                cb_f(dns_q, addr, response)
-            
-        except Exception as ex:
-            self._logger.error("Exception in _execute_dns_callback {}".format(ex))
-    
-    
     def resolve_cetp(self, dst_id, cb):
         """ To consume NAPTR-response triggered by the private hosts """
         try:
@@ -390,15 +303,7 @@ class CETPH2HLocal:
         except Exception as ex:
             self._logger.error(" Exception '{}' in triggering LocalH2HTransaction ".format(ex))
 
-    def resolve_cetp_old_new(self, dst_id, cb):
-        """ To consume NAPTR-response triggered by the private hosts """
-        try:
-            if not self._closure_signal:
-                self._start_cetp_negotiation(cb, dst_id)     # Enable "try, except" within task to locally consume a task-raised exception
-                #self.pending_tasks.append(t)
-        except Exception as ex:
-            self._logger.error(" Exception '{}' in triggering LocalH2HTransaction ".format(ex))
-        
+
     @asyncio.coroutine
     def _start_cetp_negotiation(self, cb, dst_id):
         (cb_func, cb_args) = cb
@@ -422,16 +327,11 @@ class CETPH2HLocal:
                                                  conn_table=self.conn_table, network=self.network, test_results=self.testing_results)
         
         yield from h2h.start_cetp_processing()
-
-        #print("Fine till this point")
-        
-        #yield from self.optimize_performance(h2h)
-        
-        #self.optimize_performance(h2h)
         #if result == True:
         #    self._logger.info("OK")
         #else:
         #    self._logger.info("NOK")
+
 
     def close(self):
         self._closure_signal = True

@@ -45,8 +45,6 @@ import logging.config
 import os
 import time
 import yaml
-import concurrent.futures
-from concurrent.futures import ProcessPoolExecutor
 
 import cetpManager
 import connection
@@ -161,6 +159,13 @@ def parse_arguments():
     parser.add_argument('--repository-api-url', type=str,
                         metavar=('URL'),
                         help='URL of the repository API')
+    ## SPM API URL information
+    parser.add_argument('--spm-url-cetp-host', type=str,
+                        metavar=('URL'),
+                        help='URL of the repository API')
+    parser.add_argument('--spm-url-cetp-network', type=str,
+                        metavar=('URL'),
+                        help='URL of the repository API')
     ## Subscriber information
     parser.add_argument('--repository-subscriber-file', type=str,
                         metavar=('FILENAME'),
@@ -237,18 +242,17 @@ class RealmGateway(object):
         # Ready!
         self._logger.warning('RealmGateway_v2 is ready!')
 
-    def set_executors(self, e):
-        self.executors = e
-
     @asyncio.coroutine
     def _init_datarepository(self):
         # Initialize Data Repository
         self._logger.warning('Initializing Data Repository')
-        configfile   = self._config.getdefault('repository_subscriber_file', None)
-        configfolder = self._config.getdefault('repository_subscriber_folder', None)
-        policyfile   = self._config.getdefault('repository_policy_file', None)
-        policyfolder = self._config.getdefault('repository_policy_folder', None)
-        api_url      = self._config.getdefault('repository_api_url', None)
+        configfile                      = self._config.getdefault('repository_subscriber_file', None)
+        configfolder                    = self._config.getdefault('repository_subscriber_folder', None)
+        policyfile                      = self._config.getdefault('repository_policy_file', None)
+        policyfolder                    = self._config.getdefault('repository_policy_folder', None)
+        api_url                         = self._config.getdefault('repository_api_url', None)
+        spm_host_cetp_policy_url        = self._config.getdefault('spm-url-cetp-host', None)
+        spm_network_cetp_policy_url     = self._config.getdefault('spm-url-cetp-network', None)
         
         print(configfile, configfolder, policyfile, policyfolder, api_url)
         
@@ -353,13 +357,14 @@ class RealmGateway(object):
     @asyncio.coroutine
     def _init_cetp(self):
         if self.cetp_config is not None:
-            self.cetpstate_table = CETP.CETPStateTable()
-            self.ces_params      = self.ces_conf['CESParameters']
-            self.cesid           = self.ces_params['cesid']
-            self._cetp_policies  = self._config.getdefault('cetp_policies', None)
-            api_url              = self._config.getdefault('repository_api_url', None)
-            self._cetp_mgr       = cetpManager.CETPManager(self.executors, self._cetp_policies, self.cesid, self.ces_params, self._hosttable, self._connectiontable, \
-                                                           self._pooltable, self._network, self.cetpstate_table, api_url, self._loop)
+            self.cetpstate_table            = CETP.CETPStateTable()
+            self.ces_params                 = self.ces_conf['CESParameters']
+            self.cesid                      = self.ces_params['cesid']
+            self._cetp_policies             = self._config.getdefault('cetp_policies', None)
+            spm_host_cetp_policy_url        = self._config.getdefault('spm-url-cetp-host', None)
+            spm_network_cetp_policy_url     = self._config.getdefault('spm-url-cetp-network', None)
+            self._cetp_mgr       = cetpManager.CETPManager(self._cetp_policies, self.cesid, self.ces_params, self._hosttable, self._connectiontable, self._pooltable, \
+                                                           self._network, self.cetpstate_table, spm_host_cetp_policy_url, spm_network_cetp_policy_url, self._loop)
             for s in self._cetp_service:
                 (ip_addr, port, proto, o, p) = s
                 yield from self._cetp_mgr.initiate_cetp_service(ip_addr, port, proto)
@@ -537,15 +542,11 @@ if __name__ == '__main__':
     logger = logging.getLogger(__name__)
     # Get event loop
     loop = asyncio.get_event_loop()
-    max_workers = 2
-    executor = ProcessPoolExecutor( max_workers = max_workers )
-    print("Process Executors", max_workers)
-
     loop.set_debug(False)
+    
     try:
         # Create object instance
         obj = RealmGateway(args)
-        obj.set_executors(executor)
         loop.run_until_complete(obj.run())
         loop.run_forever()
     except KeyboardInterrupt:
