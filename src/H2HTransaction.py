@@ -208,7 +208,7 @@ class CETPTransaction(container3.ContainerNode):
         print(s, "\n")   
 
     def add_negotiated_param(self, k, v):
-        self.negotiated_params[k]=v
+        self.h2h_negotiated_params[k]=v
 
 
 
@@ -219,7 +219,7 @@ class H2HTransaction(CETPTransaction):
             group, code = tlv['group'], tlv['code']
             if group in ["id", "control"]:
                 func = CETP.SEND_TLV_GROUP[group][code]
-                tlv = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True, interfaces=self.interfaces, query=False)
+                tlv = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True, query=False)
             return tlv
         
         except Exception as ex:
@@ -232,7 +232,7 @@ class H2HTransaction(CETPTransaction):
             #print(self.policy)
             if group in ["id", "control"]:
                 func = CETP.SEND_TLV_GROUP[group][code]
-                tlv  = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True, interfaces=self.interfaces, query=True)
+                tlv  = func(tlv=tlv, code=code, cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True, query=True)
                 return tlv
 
         except Exception as ex:
@@ -244,7 +244,7 @@ class H2HTransaction(CETPTransaction):
             group, code = tlv['group'], tlv['code']
             if group in ["id", "control"]:
                 func = CETP.RESPONSE_TLV_GROUP[group][code]
-                tlv  = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True,interfaces=self.interfaces)
+                tlv  = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True)
             return tlv
 
         except Exception as ex:
@@ -257,9 +257,9 @@ class H2HTransaction(CETPTransaction):
             if group in ["id", "control"]:
                 func   = CETP.VERIFY_TLV_GROUP[group][code]
                 if policy!=None:
-                    result = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=policy, transaction=self, h2h_session=True, interfaces=self.interfaces)
+                    result = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=policy, transaction=self, h2h_session=True)
                 else:
-                    result = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True, interfaces=self.interfaces)
+                    result = func(tlv=tlv, code=code, l_cesid=self.l_cesid, r_cesid=self.r_cesid, policy=self.policy, transaction=self, h2h_session=True)
                 return result
         
         except Exception as ex:
@@ -326,7 +326,7 @@ class H2HTransaction(CETPTransaction):
 
 class H2HTransactionOutbound(H2HTransaction):
     def __init__(self, loop=None, sstag=0, dstag=0, cb=None, host_ip="", src_id="", dst_id="", l_cesid="", r_cesid="", policy_mgr= None, host_table=None, cetp_security=None, \
-                 cetpstate_table=None, cetp_h2h=None, ces_params=None, interfaces=None, conn_table=None, pool_table=None, network = None, \
+                 cetpstate_table=None, cetp_h2h=None, ces_params=None, conn_table=None, pool_table=None, network = None, \
                  direction="outbound", name="H2HTransactionOutbound", negotiated_params={}):
         self.sstag, self.dstag  = sstag, dstag
         self.cb                 = cb
@@ -343,11 +343,10 @@ class H2HTransactionOutbound(H2HTransaction):
         self.direction          = direction
         self.host_table         = host_table
         self.pool_table         = pool_table
-        self.interfaces         = interfaces
         self.conn_table         = conn_table
         self.cetp_security      = cetp_security
         self.network            = network
-        self.negotiated_params  = negotiated_params
+        self.h2h_negotiated_params  = negotiated_params
         self.rtt                = 0
         self.terminated         = False
         self._name              = name
@@ -429,7 +428,7 @@ class H2HTransactionOutbound(H2HTransaction):
                 self._logger.error(" Proxypool of the sender '{}' is depleted.".format(self.src_id))
                 return False
             
-            host_policy = yield from self.load_policies_from_spm(host_id = self.src_id)
+            host_policy = yield from self.load_policies(host_id = self.src_id)
             #print("host_policy:", host_policy)
             
             if host_policy is None:
@@ -728,13 +727,13 @@ class H2HTransactionOutbound(H2HTransaction):
                 return False
             
             self._record_negotiated_params()
-            #self._logger.info("Negotiated params: {}".format(self.negotiated_params))
+            #self._logger.info("Negotiated params: {}".format(self.h2h_negotiated_params))
             
             hard_ttl, idle_ttl = None, None
-            if 'hard_ttl' in self.negotiated_params:
-                hard_ttl = self.negotiated_params['hard_ttl']
-            if 'idle_ttl' in self.negotiated_params:
-                idle_ttl = self.negotiated_params["idle_ttl"]
+            if 'hard_ttl' in self.h2h_negotiated_params:
+                hard_ttl = self.h2h_negotiated_params['hard_ttl']
+            if 'idle_ttl' in self.h2h_negotiated_params:
+                idle_ttl = self.h2h_negotiated_params["idle_ttl"]
             
             self.conn = connection.H2HConnection(self.network, self.cetpstate_table, self.ap, self.host_table, self.conn_table, self.lid, self.lip, self.lpip, \
                                                  self.rid, self.lfqdn, self.rfqdn, self.sstag, self.dstag, self.r_cesid, hard_ttl=hard_ttl, idle_ttl=idle_ttl)
@@ -847,7 +846,7 @@ class H2HTransactionOutbound(H2HTransaction):
 
 
 class H2HTransactionInbound(H2HTransaction):
-    def __init__(self, sstag=None, dstag=None, l_cesid="", r_cesid="", policy_mgr= None, cetpstate_table= None, interfaces=None, conn_table=None, cetp_h2h=None, \
+    def __init__(self, sstag=None, dstag=None, l_cesid="", r_cesid="", policy_mgr= None, cetpstate_table= None, conn_table=None, cetp_h2h=None, \
                  cetp_security=None, ces_params=None, host_table=None, pool_table=None, network=None, name="H2HTransactionInbound"):
         self.sstag              = sstag
         self.dstag              = dstag
@@ -855,8 +854,7 @@ class H2HTransactionInbound(H2HTransaction):
         self.r_cesid            = r_cesid
         self.policy_mgr         = policy_mgr                # This could be policy client in future use.
         self.cetpstate_table    = cetpstate_table
-        self.interfaces         = interfaces
-        self.direction          = "inbound"
+        self.direction          = "INGRESS"
         self.conn_table         = conn_table
         self.cetp_h2h           = cetp_h2h
         self.cetp_security      = cetp_security
@@ -864,7 +862,7 @@ class H2HTransactionInbound(H2HTransaction):
         self.ces_params         = ces_params
         self.host_table         = host_table
         self.pool_table         = pool_table
-        self.negotiated_params  = {}
+        self.h2h_negotiated_params  = {}
         self._name              = name
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HTransactionInbound)
@@ -872,9 +870,7 @@ class H2HTransactionInbound(H2HTransaction):
     @asyncio.coroutine
     def load_policies(self, host_id):
         """ Returns None OR host policy """
-        #index = self.policy_mgr.mapping_srcId_to_policy(host_id)
-        yield from asyncio.sleep(0.000)
-        self.ipolicy     = self.policy_mgr.get_host_policy(self.direction, host_id=host_id)
+        self.ipolicy     = self.policy_mgr.get_host_policy("inbound", host_id=host_id)
         self.ipolicy_tmp = self.get_policy_copy(self.ipolicy)
         self.policy      = self.ipolicy
         return self.policy
@@ -883,8 +879,7 @@ class H2HTransactionInbound(H2HTransaction):
     def load_policies_from_spm(self, host_id):
         """ Download the host policy from Policy management System """         
         timeout     = 2
-        direction   = "INGRESS"
-        params      = {'lfqdn': host_id, 'direction': direction}
+        params      = {'lfqdn': host_id, 'direction': self.direction}
         response    = yield from self.policy_mgr.get_host_policy(params=params, timeout=timeout)
         
         if response is not None:             
@@ -939,7 +934,7 @@ class H2HTransactionInbound(H2HTransaction):
                 return False
             
             #start_time = time.time()
-            host_policy = yield from self.load_policies_from_spm(self.dst_id)
+            host_policy = yield from self.load_policies(self.dst_id)
             #print("_load_policies_from_spm: ", time.time()-start_time)
             
             if host_policy is None:
@@ -1091,13 +1086,13 @@ class H2HTransactionInbound(H2HTransaction):
                 return False
             
             self._record_negotiated_params()
-            #self._logger.info("Negotiated params: \n ---- \n {} \n ---- ".format(self.negotiated_params))
+            #self._logger.info("Negotiated params: \n ---- \n {} \n ---- ".format(self.h2h_negotiated_params))
             
             hard_ttl, idle_ttl = None, None
-            if 'hard_ttl' in self.negotiated_params:
-                hard_ttl = self.negotiated_params['hard_ttl']
-            if 'idle_ttl' in self.negotiated_params:
-                idle_ttl = self.negotiated_params["idle_ttl"]
+            if 'hard_ttl' in self.h2h_negotiated_params:
+                hard_ttl = self.h2h_negotiated_params['hard_ttl']
+            if 'idle_ttl' in self.h2h_negotiated_params:
+                idle_ttl = self.h2h_negotiated_params["idle_ttl"]
             
             self.conn = connection.H2HConnection(self.network, self.cetpstate_table, self.ap, self.host_table, self.conn_table, self.lid, self.lip, self.lpip, \
                                                  self.rid, self.lfqdn, self.rfqdn, self.sstag, self.dstag, self.r_cesid, hard_ttl=hard_ttl, idle_ttl=idle_ttl)
@@ -1128,7 +1123,7 @@ class H2HTransactionInbound(H2HTransaction):
 
 
 class H2HTransactionLocal(H2HTransaction):
-    def __init__(self, host_ip="", cb=None, src_id="", dst_id="", dst_ip="", policy_mgr= None, host_table=None, \
+    def __init__(self, cesid="", cb=None, host_ip="", src_id="", dst_id="", dst_ip="", policy_mgr= None, host_table=None, \
                  conn_table=None, pool_table=None, cetp_security=None, network=None, name="H2HTransactionLocal"):
         self.host_ip            = host_ip                   # IP of the sender host
         self.src_id             = src_id                    # FQDN
@@ -1141,9 +1136,9 @@ class H2HTransactionLocal(H2HTransaction):
         self.cetp_security      = cetp_security
         self.pool_table         = pool_table
         self.network            = network
-        self.l_cesid            = ""
-        self.r_cesid            = ""                        # For compatbility with base class
-        self.negotiated_params  = {}
+        self.l_cesid            = cesid
+        self.r_cesid            = cesid                        # CES-IDs are maintained for compatbility (reasons) with the base class
+        self.h2h_negotiated_params  = {}
         self._name              = name
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HTransactionLocal)
@@ -1185,8 +1180,8 @@ class H2HTransactionLocal(H2HTransaction):
                 self._logger.error(" Proxypool of the destination host running '{}' is depleted.".format(self.dst_id))
                 return False
             
-            self.opolicy = yield from self.load_policies_from_spm(host_id = self.src_id, direction = "outbound")
-            self.ipolicy = yield from self.load_policies_from_spm(host_id = self.dst_id, direction = "inbound")
+            self.opolicy = yield from self.load_policies(host_id = self.src_id, direction = "outbound")
+            self.ipolicy = yield from self.load_policies(host_id = self.dst_id, direction = "inbound")
             
             if self.opolicy is None or (self.ipolicy is None):
                 return False
@@ -1282,11 +1277,11 @@ class H2HTransactionLocal(H2HTransaction):
             rpip            = self._allocate_proxy_address(self.dst_id)
             
             hard_ttl, idle_ttl = None, None
-            if 'hard_ttl' in self.negotiated_params:
-                hard_ttl = self.negotiated_params['hard_ttl']
-            if 'idle_ttl' in self.negotiated_params:
-                idle_ttl = self.negotiated_params["idle_ttl"]
-            ##self._logger.info("Negotiated params: \n ---- \n {} \n ---- ".format(self.negotiated_params))
+            if 'hard_ttl' in self.h2h_negotiated_params:
+                hard_ttl = self.h2h_negotiated_params['hard_ttl']
+            if 'idle_ttl' in self.h2h_negotiated_params:
+                idle_ttl = self.h2h_negotiated_params["idle_ttl"]
+            ##self._logger.info("Negotiated params: \n ---- \n {} \n ---- ".format(self.h2h_negotiated_params))
             
             if (lpip is None) or (rpip is None):
                 self._logger.error("Error assigning proxy addresses: lpip={}, rpip={}".format(lpip, rpip))
