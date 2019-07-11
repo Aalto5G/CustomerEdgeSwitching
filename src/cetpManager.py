@@ -159,23 +159,23 @@ class CETPManager:
                     response = dnsutils.make_response_answer_rr(dns_q, dst_id, dns.rdatatype.A, lpip, rdclass=1, ttl=120, recursion_available=True)
                     dns_cb(dns_q, addr, response)
                 else:
-                    self.process_cetp(dns_cb, cb_args, src_id, dst_id, r_cesid, naptr_list)
+                    self._execute_cetp_policies(dns_cb, cb_args, src_id, dst_id, r_cesid, naptr_list)
 
         except Exception as ex:
             self._logger.info("Exception in process_dns_message(): '{}' ".format(ex))
             return
 
 
-    def process_cetp(self, dns_cb, cb_args, src_id, dst_id, r_cesid="", naptr_list=[]):
+    def _execute_cetp_policies(self, dns_cb, cb_args, src_id, dst_id, r_cesid="", naptr_list=[]):
         """ Enforce rate limit on DNS NAPTRs served by CETP Engine """
         if len(naptr_list)!=0:
             self.process_outbound_cetp(dns_cb, cb_args, src_id, dst_id, r_cesid, naptr_list)
         else:
-            self.process_local_cetp(dns_cb, cb_args, dst_id)
+            self.process_local_cetp(dns_cb, cb_args, src_id, dst_id)
     
-    def process_local_cetp(self, dns_cb, cb_args, dst_id):
+    def process_local_cetp(self, dns_cb, cb_args, src_id, dst_id):
         cb = (dns_cb, cb_args)
-        self.local_cetp.resolve_cetp(dst_id, cb)
+        self.local_cetp.resolve_cetp(src_id, dst_id, cb)
 
     def process_outbound_cetp(self, dns_cb, cb_args, src_id, dst_id, r_cesid, naptr_list):
         """ Gets/Creates the CETPH2H instance AND enqueues the NAPTR response for handling the H2H transactions """

@@ -219,7 +219,6 @@ class CETPH2H:
         self.resource_cleanup()
         self._close_pending_tasks()
         self.cetp_mgr.remove_cetp_endpoint(self.r_cesid)        # Remove the endpoint after cleanup.
-        self.show_measuremnt_results()
         del(self)
     
     def resource_cleanup(self):
@@ -264,39 +263,26 @@ class CETPH2HLocal:
         self.pool_table                 = pool_table
         self.network                    = network
         self._tasks                     = []
-        self.count                      = 0
         self._logger                    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPH2H)
         self._logger.info("Initiated CETPH2HLocal for localCETP resolution")
 
 
-    def resolve_cetp(self, dst_id, cb):
+    def resolve_cetp(self, src_id, dst_id, cb):
         """ To consume NAPTR-response triggered by the private hosts """
         try:
             if not self._closure_signal:
-                t = asyncio.ensure_future(self._start_cetp_negotiation(cb, dst_id))     # Enable "try, except" within task to locally consume a task-raised exception
+                t = asyncio.ensure_future(self._start_cetp_negotiation(src_id, dst_id, cb))     # Enable "try, except" within task to locally consume a task-raised exception
                 #self.pending_tasks.append(t)
         except Exception as ex:
             self._logger.error(" Exception '{}' in triggering LocalH2HTransaction ".format(ex))
 
 
     @asyncio.coroutine
-    def _start_cetp_negotiation(self, cb, dst_id):
+    def _start_cetp_negotiation(self, src_id, dst_id, cb):
         (cb_func, cb_args) = cb
         dns_q, addr   = cb_args
         ip_addr, port = addr
-        key           = (host.KEY_HOST_IPV4, ip_addr)
-        
-        #self._execute_dns_callback(cb, dst_id, r_addr="192.168.1.10")
-        #return
-
-        if not self.host_table.has(key):
-            self._logger.info("Sender IP '{}' is not a registered host".format(ip_addr))
-            return
-        
-        host_obj    = self.host_table.get(key)
-        src_id      = host_obj.fqdn
-        self.count  += 1
         
         h2h = H2HTransaction.H2HTransactionLocal(cb=cb, host_ip=ip_addr, src_id=src_id, dst_id=dst_id, policy_mgr=self.policy_mgr, \
                                                  cetp_security= self.cetp_security, host_table=self.host_table, pool_table=self.pool_table, \
@@ -311,8 +297,6 @@ class CETPH2HLocal:
 
     def close(self):
         self._closure_signal = True
-        self.show_measurment_results()
-        #print("self.count: ", self.count)
         for t in self._tasks:
             if not t.cancelled():   
                 t.cancel()
