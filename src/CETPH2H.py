@@ -52,9 +52,6 @@ class CETPH2H:
         self._closure_signal            = False
         self.h2h_queue_task             = None
         self.pending_tasks              = []
-        self.testing_results            = {}                        # For experimentation only. Shall be removed in final version.
-        self.testing_results            = {"policy_negotiation":[], "cetp_mgmt_delay":[], "rest_ryu":[]}
-        self.results_file               = open("results_file", 'w')
         self._logger                    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPH2H)
         self._logger.info("CETPH2H layer created for cesid '{}'".format(r_cesid))
@@ -150,7 +147,7 @@ class CETPH2H:
         h2h = H2HTransaction.H2HTransactionOutbound(loop=self._loop, cb=cb, host_ip=ip_addr, src_id=src_id, dst_id=dst_id, l_cesid=self.l_cesid, r_cesid=self.r_cesid, cetp_h2h=self, \
                                                     ces_params=self.ces_params, policy_mgr=self.policy_mgr, cetpstate_table=self.cetpstate_table, host_table=self.host_table, \
                                                     conn_table=self.conn_table, interfaces=self.interfaces, cetp_security=self.cetp_security, pool_table=self.pool_table, 
-                                                    network=self.network, rtt_time=self.testing_results)
+                                                    network=self.network)
         cetp_message = yield from h2h.start_cetp_processing()
         if cetp_message != None:
             self.send(cetp_message)
@@ -253,22 +250,6 @@ class CETPH2H:
         else:
             self.ongoing_h2h_transactions -= 1
 
-    def show_measuremnt_results(self):
-        """ Function displaying results of benchmarking or testing -- To be Removed finally """
-        for i,k in list(enumerate(self.testing_results)):
-            print("-------\n", k, "\n-------")
-            v = self.testing_results[k]
-            
-            if len(v)>1:
-                v = v[1:]
-                self.results_file.write(":\n"+k+":\n")
-                v = [x * 1000 for x in v]               # Multiply each with 1000
-                save_results = str(v)
-                self.results_file.write(save_results)
-                print("Min: ", min(v),"ms\t", "Max: ", max(v),"ms")
-                print("Average: ", sum(v)/len(v),"ms")
-
-
             
 class CETPH2HLocal:
     def __init__(self, loop=None, l_cesid="", cetpstate_table= None, policy_mgr=None, cetp_mgr=None, ces_params=None, cetp_security=None, host_table= None, \
@@ -286,8 +267,6 @@ class CETPH2HLocal:
         self.pool_table                 = pool_table
         self.network                    = network
         self._tasks                     = []
-        self.testing_results            = {"policy_negotiation":[], "cetp_mgmt_delay":[], "rest_ryu":[]}
-        self.results_file               = open("results_file_local", 'w')
         self.count                      = 0
         self._logger                    = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPH2H)
@@ -324,7 +303,7 @@ class CETPH2HLocal:
         
         h2h = H2HTransaction.H2HTransactionLocal(loop=self._loop, cb=cb, host_ip=ip_addr, src_id=src_id, dst_id=dst_id, policy_mgr=self.policy_mgr, cetp_h2h=self, \
                                                  cetpstate_table=self.cetpstate_table, cetp_security= self.cetp_security, host_table=self.host_table, pool_table=self.pool_table, \
-                                                 conn_table=self.conn_table, network=self.network, test_results=self.testing_results)
+                                                 conn_table=self.conn_table, network=self.network)
         
         yield from h2h.start_cetp_processing()
         #if result == True:
@@ -340,17 +319,4 @@ class CETPH2HLocal:
         for t in self._tasks:
             if not t.cancelled():   
                 t.cancel()
-
-    def show_measurment_results(self):
-        for i,k in list(enumerate(self.testing_results)):
-            print("-------\n", k, "\n-------")
-            v = self.testing_results[k]
-            
-            if len(v)>0:
-                self.results_file.write(":\n"+k+":\n")
-                v = [x * 1000 for x in v]               # Multiply each with 1000
-                save_results = str(v)
-                self.results_file.write(save_results)
-                print("Min: ", min(v)*1000,"ms\t", "Max: ", max(v)*1000,"ms")
-                print("Average: ", sum(v)/len(v)*1000,"ms")
 

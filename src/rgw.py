@@ -254,8 +254,6 @@ class RealmGateway(object):
         spm_host_cetp_policy_url        = self._config.getdefault('spm-url-cetp-host', None)
         spm_network_cetp_policy_url     = self._config.getdefault('spm-url-cetp-network', None)
         
-        print(configfile, configfolder, policyfile, policyfolder, api_url)
-        
         self._datarepository = DataRepository(configfile = configfile, configfolder = configfolder,
                                               policyfile = policyfile, policyfolder = policyfolder,
                                               api_url = api_url)

@@ -327,7 +327,7 @@ class H2HTransaction(CETPTransaction):
 class H2HTransactionOutbound(H2HTransaction):
     def __init__(self, loop=None, sstag=0, dstag=0, cb=None, host_ip="", src_id="", dst_id="", l_cesid="", r_cesid="", policy_mgr= None, host_table=None, cetp_security=None, \
                  cetpstate_table=None, cetp_h2h=None, ces_params=None, interfaces=None, conn_table=None, pool_table=None, network = None, \
-                 direction="outbound", name="H2HTransactionOutbound", rtt_time=[], negotiated_params={}):
+                 direction="outbound", name="H2HTransactionOutbound", negotiated_params={}):
         self.sstag, self.dstag  = sstag, dstag
         self.cb                 = cb
         self.host_ip            = host_ip                   # IP of the sender host
@@ -356,7 +356,6 @@ class H2HTransactionOutbound(H2HTransaction):
         self._logger.setLevel(LOGLEVEL_H2HTransactionOutbound)
         self.h2h_negotiation_status = False
         self.cetp_negotiation_history   = []
-        self.test_results           = rtt_time
         self.cb_list            = [cb]
 
     def load_parameters(self):
@@ -652,7 +651,6 @@ class H2HTransactionOutbound(H2HTransaction):
                     return cetp_message
             else:
                 if self._is_ready():
-                    self.test_results["policy_negotiation"].append(time.time()-self.start_time)
                     conn_created = yield from self._create_connection()
                     
                     if conn_created:
@@ -743,7 +741,6 @@ class H2HTransactionOutbound(H2HTransaction):
             
             yield from self.conn.insert_dataplane_connection()
             self.conn_table.add(self.conn)
-            self.test_results["cetp_mgmt_delay"].append(time.time()-self.start_time)
             self._execute_dns_callback(r_addr = self.lpip)
             return True
     
@@ -1132,7 +1129,7 @@ class H2HTransactionInbound(H2HTransaction):
 
 class H2HTransactionLocal(H2HTransaction):
     def __init__(self, loop=None, host_ip="", cb=None, src_id="", dst_id="", dst_ip="", policy_mgr= None, host_table=None, cetpstate_table=None, cetp_h2h=None, \
-                 interfaces=None, conn_table=None, pool_table=None, cetp_security=None, network=None, test_results=[], name="H2HTransactionLocal"):
+                 interfaces=None, conn_table=None, pool_table=None, cetp_security=None, network=None, name="H2HTransactionLocal"):
         self._loop              = loop
         self.cb                 = cb
         self.host_ip            = host_ip                   # IP of the sender host
@@ -1151,7 +1148,6 @@ class H2HTransactionLocal(H2HTransaction):
         self.l_cesid            = ""
         self.r_cesid            = ""                        # For compatbility with base class
         self.negotiated_params  = {}
-        self.test_results       = test_results
         self._name              = name
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HTransactionLocal)
@@ -1310,7 +1306,6 @@ class H2HTransactionLocal(H2HTransaction):
                 self.conn = connection.LocalConnection(self.network, self.ap, self.host_table, lip=lip, lpip=lpip, rip=rip, rpip=rpip, lfqdn=lfqdn, rfqdn=rfqdn, hard_ttl=hard_ttl, idle_ttl=idle_ttl)
                 yield from self.conn.insert_dataplane_connection()
                 self.conn_table.add(self.conn)
-                self.test_results["cetp_mgmt_delay"].append(time.time()-self.start_time)          
                 return lpip
         
         except Exception as ex:
