@@ -811,22 +811,12 @@ class H2HTransactionOutbound(H2HTransaction):
         return True
     
     def lookupkeys(self):
-        """
         if self.is_negotiated():
             keys = [((KEY_ESTABLISHED_TAGS, self.sstag, self.dstag), True), ((KEY_HOST_IDS, self.src_id, self.dst_id), True), ((KEY_RCESID, self.r_cesid), False)]
         else:
             keys = [((KEY_INITIATED_TAGS, self.sstag, 0), True), ((KEY_HOST_IDS, self.src_id, self.dst_id), True), ((KEY_RCESID, self.r_cesid), False)]
         return keys
-        """
-        
-        #"""
-        # For load testing
-        if self.is_negotiated():
-            keys = [((KEY_ESTABLISHED_TAGS, self.sstag, self.dstag), True), ((KEY_RCESID, self.r_cesid), False)]
-        else:
-            keys = [((KEY_INITIATED_TAGS, self.sstag, 0), True), ((KEY_RCESID, self.r_cesid), False)]
-        return keys
-        #"""
+
         
     def post_h2h_negotiation(self, cetp_message):
         """  Processes a CETP packet received on a negotiated H2H session.  e.g. a 'terminate' TLV, or change in ratelimit of data connection. 

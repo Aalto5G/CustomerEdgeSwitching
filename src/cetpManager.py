@@ -126,7 +126,6 @@ class CETPManager:
         return False
     
     def has_connection(self, src_id, dst_id):
-        return False                                # For load testing only
         key = (connection.KEY_MAP_HOST_FQDNs, src_id, dst_id) 
         if self.conn_table.has(key):
             return True

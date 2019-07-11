@@ -1,0 +1,12 @@
+
+in H2HTransaction.py:
+	Function: 	lookupkeys() 
+	Remove 		((KEY_HOST_IDS, self.src_id, self.dst_id), True)
+	
+In connection.py:
+	Function: _build_lookupkeys()
+	Remove    most keys that equate to True, as they prevent repeated registration of same object in CES-App.
+	
+In CETPManager
+	Function: 	has_connection()
+	Insert		return False, for repeated connections to take place.

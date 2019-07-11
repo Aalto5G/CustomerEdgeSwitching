@@ -325,7 +325,6 @@ class H2HConnection(container3.ContainerNode):
         self.tunnel_id_out              = self.rpayload[1]
         
     def _build_lookupkeys(self):
-        """
         self._built_lookupkeys = []
         self._built_lookupkeys +=[ (KEY_MAP_CETP_CONN, False)]
         self._built_lookupkeys +=[ ((KEY_MAP_LOCAL_HOST, self.lip), False),         ((KEY_MAP_CETP_PRIVATE_NW, self.lip, self.lpip), True) ]
@@ -338,20 +337,6 @@ class H2HConnection(container3.ContainerNode):
             
         if (self.sstag is not None) and (self.dstag is not None):
             self._built_lookupkeys += [ ((KEY_MAP_CES_TO_CES, self.sstag, self.dstag), True) ]
-        """
-        
-        #"""
-        # For load testing
-        self._built_lookupkeys = []
-        self._built_lookupkeys +=[ (KEY_MAP_CETP_CONN, False)]
-        self._built_lookupkeys +=[ ((KEY_MAP_LOCAL_HOST, self.lip), False),         ((KEY_MAP_CETP_PRIVATE_NW, self.lip, self.lpip), True) ]
-        self._built_lookupkeys +=[ ((KEY_MAP_LOCAL_FQDN, self.localFQDN), False),   ((KEY_MAP_REMOTE_FQDN, self.remoteFQDN), False) ]
-        self._built_lookupkeys +=[ ((KEY_MAP_REMOTE_CESID, self.r_cesid), False) ]
-        
-         
-        if (self.sstag is not None) and (self.dstag is not None):
-            self._built_lookupkeys += [ ((KEY_MAP_CES_TO_CES, self.sstag, self.dstag), True) ]
-        #"""
         
         
     def _set_cookie(self):
@@ -426,14 +411,12 @@ class LocalConnection(container3.ContainerNode):
     def _build_lookupkeys(self):
         self._built_lookupkeys = []
         self._built_lookupkeys += [ (KEY_MAP_CETP_CONN, False) ]
-        """
         self._built_lookupkeys += [ ((KEY_MAP_LOCAL_HOST, self.lip), False),        ((KEY_MAP_CETP_PRIVATE_NW, self.lip, self.lpip), True) ]
         self._built_lookupkeys += [ ((KEY_MAP_LOCAL_FQDN, self.localFQDN), False),  ((KEY_MAP_LOCAL_FQDN, self.remoteFQDN), False) ]
         self._built_lookupkeys += [ ((KEY_MAP_LOCAL_FQDNs, self.localFQDN, self.remoteFQDN), True)]
         self._built_lookupkeys += [ ((KEY_MAP_HOST_FQDNs, self.localFQDN, self.remoteFQDN), True)]
         if self.lip != self.rip:
             self._built_lookupkeys += [ ((KEY_MAP_LOCAL_HOST, self.rip), False),    ((KEY_MAP_CETP_PRIVATE_NW, self.rip, self.rpip), True)]
-        """
         
     def lookupkeys(self):
         """ Keys for indexing Local Connection object """
