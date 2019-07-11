@@ -37,5 +37,7 @@ cd src
           --repository-policy-folder     ../config.d/cesa.lte.policy.d/      \
           --cetp-config  		     ../config.d/cesa.lte.cetp.policy/config_cesa.yaml   \
           --cetp-policies  		     ../config.d/cesa.lte.cetp.policy/cetp_policies.json \
-          --repository-api-url  http://10.0.3.200/API/cetp_policy_node?                  \
-          --synproxy         127.0.0.1 12345
+          --spm-url-cetp-host   	http://10.0.3.200/API/cetp_policy_node?                  \
+          --spm-url-cetp-network  	http://10.0.3.200/API/cetp_policy_node?                  \
+          --repository-api-url  	http://10.0.3.200:8001                   \
+          --synproxy         		127.0.0.1 12345

@@ -1128,19 +1128,16 @@ class H2HTransactionInbound(H2HTransaction):
 
 
 class H2HTransactionLocal(H2HTransaction):
-    def __init__(self, loop=None, host_ip="", cb=None, src_id="", dst_id="", dst_ip="", policy_mgr= None, host_table=None, cetpstate_table=None, cetp_h2h=None, \
-                 interfaces=None, conn_table=None, pool_table=None, cetp_security=None, network=None, name="H2HTransactionLocal"):
-        self._loop              = loop
-        self.cb                 = cb
+    def __init__(self, host_ip="", cb=None, src_id="", dst_id="", dst_ip="", policy_mgr= None, host_table=None, \
+                 conn_table=None, pool_table=None, cetp_security=None, network=None, name="H2HTransactionLocal"):
         self.host_ip            = host_ip                   # IP of the sender host
         self.src_id             = src_id                    # FQDN
+        self.cb                 = cb
         self.dst_id             = dst_id
         self.dst_ip             = dst_ip
         self.policy_mgr         = policy_mgr
-        self.cetpstate_table    = cetpstate_table
         self.cetp_h2h           = cetp_h2h
         self.host_table         = host_table
-        self.interfaces         = interfaces
         self.conn_table         = conn_table
         self.cetp_security      = cetp_security
         self.pool_table         = pool_table

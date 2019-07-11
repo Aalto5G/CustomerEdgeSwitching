@@ -252,14 +252,11 @@ class CETPH2H:
 
             
 class CETPH2HLocal:
-    def __init__(self, loop=None, l_cesid="", cetpstate_table= None, policy_mgr=None, cetp_mgr=None, ces_params=None, cetp_security=None, host_table= None, \
-                 conn_table=None, pool_table=None, network=None, name="CETPH2H"):
-        self._loop                      = loop
+    def __init__(self, l_cesid="", policy_mgr=None, ces_params=None, cetp_security=None, host_table= None, \
+                 conn_table=None, pool_table=None, network=None, name="CETPH2HLocal"):
         self.l_cesid                    = l_cesid
-        self.cetpstate_table            = cetpstate_table
         self.policy_mgr                 = policy_mgr
         self.ces_params                 = ces_params
-        self.cetp_mgr                   = cetp_mgr
         self.cetp_security              = cetp_security
         self.host_table                 = host_table
         self.conn_table                 = conn_table
@@ -301,8 +298,8 @@ class CETPH2HLocal:
         src_id      = host_obj.fqdn
         self.count  += 1
         
-        h2h = H2HTransaction.H2HTransactionLocal(loop=self._loop, cb=cb, host_ip=ip_addr, src_id=src_id, dst_id=dst_id, policy_mgr=self.policy_mgr, cetp_h2h=self, \
-                                                 cetpstate_table=self.cetpstate_table, cetp_security= self.cetp_security, host_table=self.host_table, pool_table=self.pool_table, \
+        h2h = H2HTransaction.H2HTransactionLocal(cb=cb, host_ip=ip_addr, src_id=src_id, dst_id=dst_id, policy_mgr=self.policy_mgr, \
+                                                 cetp_security= self.cetp_security, host_table=self.host_table, pool_table=self.pool_table, \
                                                  conn_table=self.conn_table, network=self.network)
         
         yield from h2h.start_cetp_processing()

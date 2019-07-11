@@ -64,9 +64,8 @@ class CETPManager:
         self._load_cetp_params()
         self._logger                = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPManager)
-        self.local_cetp             = CETPH2H.CETPH2HLocal(loop=self._loop, l_cesid=self.cesid, cetpstate_table=self.cetpstate_table, policy_mgr=self.policy_mgr, cetp_mgr=self, \
-                                                           cetp_security=self.cetp_security, host_table=self.host_table, conn_table=self.conn_table, \
-                                                           network=network, pool_table=self.pool_table)
+        self.local_cetp             = CETPH2H.CETPH2HLocal(l_cesid=self.cesid, policy_mgr=self.policy_mgr, cetp_security=self.cetp_security, \
+                                                           host_table=self.host_table, conn_table=self.conn_table, network=network, pool_table=self.pool_table)
 
     def _load_cetp_params(self):
         try:
