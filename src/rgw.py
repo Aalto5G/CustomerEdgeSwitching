@@ -161,6 +161,9 @@ def parse_arguments():
                         help='URL of the repository API')
     
     ## SPM API URL information
+    parser.add_argument('--spm-policy-services', type=str,
+                        metavar=('Boolean (True/False)'),
+                        help='(True) Activates the SPM policy service')
     parser.add_argument('--spm-url-cetp-host', type=str,
                         metavar=('URL'),
                         help='URL of the SPM for loading host policy')
@@ -353,9 +356,17 @@ class RealmGateway(object):
         # Register NFQUEUE(s) callback
         self._network.ipt_register_nfqueues(self.packetcb.packet_in_circularpool)
 
-    
     @asyncio.coroutine
     def _init_cetp(self):
+        def get_spm_services_parameter():
+            """ Returns boolean of 'spm_policy_services' parameter """
+            spm_policy_services = self._config.getdefault('spm_policy_services', False)
+            if type(spm_policy_services) == type(str()):
+                if spm_policy_services.lower()=="true":
+                    return True
+            return False
+
+        
         if self.cetp_config is not None:
             self.cetpstate_table            = CETP.CETPStateTable()
             self.ces_params                 = self.ces_conf['CESParameters']
@@ -363,6 +374,7 @@ class RealmGateway(object):
             self._cetp_policies             = self._config.getdefault('cetp_policies', None)
             spm_host_cetp_policy_url        = self._config.getdefault('spm_url_cetp_host', None)
             spm_network_cetp_policy_url     = self._config.getdefault('spm_url_cetp_network', None)
+            spm_policy_services             = get_spm_services_parameter()
             self._cetp_mgr                  = cetpManager.CETPManager(self._cetp_policies, self.cesid, self.ces_params, self._hosttable, self._connectiontable, self._pooltable, \
                                                                       self._network, self.cetpstate_table, spm_host_cetp_policy_url, spm_network_cetp_policy_url, self._loop)
             for s in self._cetp_service:
