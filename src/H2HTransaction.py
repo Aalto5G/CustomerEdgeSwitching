@@ -326,8 +326,8 @@ class H2HTransaction(CETPTransaction):
 
 class H2HTransactionOutbound(H2HTransaction):
     def __init__(self, loop=None, sstag=0, dstag=0, cb=None, host_ip="", src_id="", dst_id="", l_cesid="", r_cesid="", policy_mgr= None, host_table=None, cetp_security=None, \
-                 cetpstate_table=None, cetp_h2h=None, ces_params=None, conn_table=None, pool_table=None, network = None, \
-                 direction="outbound", name="H2HTransactionOutbound", negotiated_params={}):
+                 cetpstate_table=None, cetp_h2h=None, ces_params=None, conn_table=None, pool_table=None, network = None, direction= "outbound", \
+                 name="H2HTransactionOutbound", negotiated_params={}):
         self.sstag, self.dstag  = sstag, dstag
         self.cb                 = cb
         self.host_ip            = host_ip                   # IP of the sender host
@@ -375,19 +375,7 @@ class H2HTransactionOutbound(H2HTransaction):
         timeout     = 2
         direction   = "EGRESS"
         params      = {'lfqdn': host_id, 'direction': direction}
-        #start_time = time.time()
         response    = yield from self.policy_mgr.get_host_policy(params=params, timeout=timeout)
-        #print("Policy retrieval delay:", time.time()-start_time)
-        
-        """
-        start_time = time.time()
-        response    = yield from self.policy_mgr.get(url, params=params, timeout=timeout)
-        print("Policy retrieval delay:", time.time()-start_time)
-
-        start_time = time.time()
-        response    = yield from self.policy_mgr.get(url, params=params, timeout=timeout)
-        print("Policy retrieval delay:", time.time()-start_time)
-        """
         
         if response is not None:
             host_policy      = json.loads(response)
@@ -409,7 +397,7 @@ class H2HTransactionOutbound(H2HTransaction):
     def _initialize(self):
         """ Loads policies, generates session tags, and initiates event handlers """
         try:
-            if self.has_ongoing_h2h_negotiation(self.src_id, self.dst_id):
+            if self.has_ongoing_h2h_negotiation(self.src_id, self.dst_id):              # TBD: Should not this check be outside the H2HTransaction?? That would be more ideal, and best.
                 return False
             
             self.load_parameters()
@@ -428,7 +416,7 @@ class H2HTransactionOutbound(H2HTransaction):
                 self._logger.error(" Proxypool of the sender '{}' is depleted.".format(self.src_id))
                 return False
             
-            host_policy = yield from self.load_policies(host_id = self.src_id)
+            host_policy = yield from self.load_policies_from_spm(host_id = self.src_id)
             #print("host_policy:", host_policy)
             
             if host_policy is None:
@@ -934,7 +922,7 @@ class H2HTransactionInbound(H2HTransaction):
                 return False
             
             #start_time = time.time()
-            host_policy = yield from self.load_policies(self.dst_id)
+            host_policy = yield from self.load_policies_from_spm(self.dst_id)
             #print("_load_policies_from_spm: ", time.time()-start_time)
             
             if host_policy is None:

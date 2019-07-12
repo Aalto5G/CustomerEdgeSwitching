@@ -159,13 +159,15 @@ def parse_arguments():
     parser.add_argument('--repository-api-url', type=str,
                         metavar=('URL'),
                         help='URL of the repository API')
+    
     ## SPM API URL information
     parser.add_argument('--spm-url-cetp-host', type=str,
                         metavar=('URL'),
-                        help='URL of the repository API')
+                        help='URL of the SPM for loading host policy')
     parser.add_argument('--spm-url-cetp-network', type=str,
                         metavar=('URL'),
-                        help='URL of the repository API')
+                        help='URL of the SPM for loading network policy')
+    
     ## Subscriber information
     parser.add_argument('--repository-subscriber-file', type=str,
                         metavar=('FILENAME'),
@@ -251,8 +253,8 @@ class RealmGateway(object):
         policyfile                      = self._config.getdefault('repository_policy_file', None)
         policyfolder                    = self._config.getdefault('repository_policy_folder', None)
         api_url                         = self._config.getdefault('repository_api_url', None)
-        spm_host_cetp_policy_url        = self._config.getdefault('spm-url-cetp-host', None)
-        spm_network_cetp_policy_url     = self._config.getdefault('spm-url-cetp-network', None)
+        spm_host_cetp_policy_url        = self._config.getdefault('spm_url_cetp_host', None)
+        spm_network_cetp_policy_url     = self._config.getdefault('spm_url_cetp_network', None)
         
         self._datarepository = DataRepository(configfile = configfile, configfolder = configfolder,
                                               policyfile = policyfile, policyfolder = policyfolder,
@@ -359,10 +361,10 @@ class RealmGateway(object):
             self.ces_params                 = self.ces_conf['CESParameters']
             self.cesid                      = self.ces_params['cesid']
             self._cetp_policies             = self._config.getdefault('cetp_policies', None)
-            spm_host_cetp_policy_url        = self._config.getdefault('spm-url-cetp-host', None)
-            spm_network_cetp_policy_url     = self._config.getdefault('spm-url-cetp-network', None)
-            self._cetp_mgr       = cetpManager.CETPManager(self._cetp_policies, self.cesid, self.ces_params, self._hosttable, self._connectiontable, self._pooltable, \
-                                                           self._network, self.cetpstate_table, spm_host_cetp_policy_url, spm_network_cetp_policy_url, self._loop)
+            spm_host_cetp_policy_url        = self._config.getdefault('spm_url_cetp_host', None)
+            spm_network_cetp_policy_url     = self._config.getdefault('spm_url_cetp_network', None)
+            self._cetp_mgr                  = cetpManager.CETPManager(self._cetp_policies, self.cesid, self.ces_params, self._hosttable, self._connectiontable, self._pooltable, \
+                                                                      self._network, self.cetpstate_table, spm_host_cetp_policy_url, spm_network_cetp_policy_url, self._loop)
             for s in self._cetp_service:
                 (ip_addr, port, proto, o, p) = s
                 yield from self._cetp_mgr.initiate_cetp_service(ip_addr, port, proto)
