@@ -105,7 +105,7 @@ class PolicyManager(object):
                 if policy['type'] == "hostpolicy":
                     policy_type, direction, hostid, host_policy = policy['type'], policy['direction'], policy['fqdn'], policy['policy']
                     key = policy_type +":"+ direction +":"+ hostid
-                    #print(key)
+                    #print("\n\n", key)
                     p = PolicyCETP(host_policy)
                     self._hostpolicy[key] = p
         
@@ -131,8 +131,10 @@ class PolicyManager(object):
         try:
             policy_type = "hostpolicy"
             key = policy_type +":"+ direction +":"+ host_id
-            policy = self._hostpolicy[key]
-            return policy
+            
+            if key in self._hostpolicy:
+                policy = self._hostpolicy[key]
+                return policy
         except Exception as ex:
             self._logger.error("No '{}' policy exists for host_id: '{}'".format(direction, host_id))
             return None
@@ -344,7 +346,7 @@ class RESTPolicyClient(object):
         
     def _connect(self):
         try:
-            tcp_conn            = aiohttp.TCPConnector(limit=self.tcp_conn_limit, loop=self._loop, verify_ssl=self.verify_ssl)
+            tcp_conn            = aiohttp.TCPConnector(limit=self.tcp_conn_limit, loop=self._loop, verify_ssl=self.verify_ssl, keepalive_timeout=30)
             self.client_session = aiohttp.ClientSession(connector=tcp_conn)
         except Exception as ex:
             self._logger.error("Failure initiating the rest policy client")
