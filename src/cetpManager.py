@@ -41,7 +41,7 @@ class CETPManager:
     It also aggregates different CETPTransport endpoints from a remote CES-ID under one C2C-Layer.
     """
     
-    def __init__(self, cetpPolicyFile, cesid, ces_params, hosttable, conn_table, pool_table, network, cetpstate_table, spm_host_policy_url, spm_network_policy_url, loop=None, name="CETPManager"):
+    def __init__(self, cetpPolicyFile, cesid, ces_params, hosttable, conn_table, pool_table, network, cetpstate_table, spm_services_boolean, spm_host_policy_url, spm_network_policy_url, loop=None, name="CETPManager"):
         self._cetp_endpoints        = {}                           # Dictionary of endpoints towards remote CES nodes.
         self._serverEndpoints       = []                           # List of server endpoint offering CETP listening service.
         self.c2c_register           = {}
@@ -52,12 +52,15 @@ class CETPManager:
         self.pool_table             = pool_table
         self.cetpstate_table        = cetpstate_table                                                               # Records the established CETP transactions (both H2H & C2C). Required for preventing the re-allocation already in-use SST & DST (in CETP transaction).
         self.payloadID_table        = CETP.PayloadIDTable()
+        self.spm_services_boolean   = spm_services_boolean
         self.cetp_security          = CETPSecurity.CETPSecurity(loop, self.conn_table, ces_params)
         self.interfaces             = PolicyManager.DPConfigurations(cesid, ces_params = ces_params)
-        self.policy_mgr2            = PolicyManager.RESTPolicyClient(loop, spm_network_policy_url = spm_network_policy_url, spm_host_policy_url=spm_host_policy_url, tcp_conn_limit=10)  # Fetches cetp policies from the Policy Management System.
-        self.policy_mgr             = PolicyManager.PolicyManager(self.cesid, policy_file = cetpPolicyFile)         # Gets cetp policies from a local configuration file.
-        self.network                = network
         self._loop                  = loop
+        self.policy_mgr             = self._launch_policy_manager(cetpPolicyFile, spm_network_policy_url, spm_host_policy_url)
+        
+        #self.policy_mgr2            = PolicyManager.RESTPolicyClient(loop, spm_network_policy_url = spm_network_policy_url, spm_host_policy_url=spm_host_policy_url, tcp_conn_limit=10)  # Fetches cetp policies from the Policy Management System.
+        self.policy_mgr_old         = PolicyManager.PolicyManager(self.cesid, policy_file = cetpPolicyFile)         # Gets cetp policies from a local configuration file.
+        self.network                = network
         self.name                   = name
         self._inbound_transports    = {}                        # {'cesid': [transports]} - Temporary record of list of transports connected against a cesid
         self._load_cetp_params()
@@ -65,6 +68,16 @@ class CETPManager:
         self._logger.setLevel(LOGLEVEL_CETPManager)
         self.local_cetp             = CETPH2H.CETPH2HLocal(l_cesid=self.cesid, policy_mgr=self.policy_mgr, cetp_security=self.cetp_security, \
                                                            host_table=self.host_table, conn_table=self.conn_table, network=network, pool_table=self.pool_table)
+
+    def _launch_policy_manager(self, cetpPolicyFile, spm_network_policy_url, spm_host_policy_url):
+        if self.spm_services_boolean is True:
+            policy_mgr = PolicyManager.RESTPolicyClient(self._loop, spm_network_policy_url = spm_network_policy_url, spm_host_policy_url=spm_host_policy_url, tcp_conn_limit=10)  # Fetches cetp policies from the Policy Management System.
+            print("Retuning a REST policy client")
+        else:
+            policy_mgr = PolicyManager.PolicyManager(self.cesid, policy_file = cetpPolicyFile)         # Gets cetp policies from a local configuration file.
+            print("Retuning Policy Manager to read policies from local file")
+            
+        return policy_mgr
 
     def _load_cetp_params(self):
         try:
@@ -80,7 +93,7 @@ class CETPManager:
 
     def create_cetp_endpoint(self, r_cesid, c2c_layer=None, c2c_negotiated=False):
         """ Creates the CETP-H2H layer towards remote CES-ID """
-        cetp_ep = CETPH2H.CETPH2H(l_cesid = self.cesid, r_cesid = r_cesid, cetpstate_table= self.cetpstate_table, policy_mgr=self.policy_mgr2, policy_client=None, \
+        cetp_ep = CETPH2H.CETPH2H(l_cesid = self.cesid, r_cesid = r_cesid, cetpstate_table= self.cetpstate_table, policy_mgr=self.policy_mgr, policy_client=None, \
                                   loop=self._loop, cetp_mgr=self, ces_params=self.ces_params, cetp_security=self.cetp_security, host_table=self.host_table, network=self.network, \
                                   c2c_layer=c2c_layer, c2c_negotiated=c2c_negotiated, conn_table=self.conn_table, pool_table=self.pool_table)
         self.add_cetp_endpoint(r_cesid, cetp_ep)
@@ -268,7 +281,7 @@ class CETPManager:
 
     def create_c2c_layer(self, r_cesid="", cetp_h2h=None):
         """ Creates a C2CLayer for a remote CES-ID """
-        cetp_c2c = CETPC2C.CETPC2CLayer(self._loop, l_cesid=self.cesid, r_cesid=r_cesid, cetpstate_table= self.cetpstate_table, policy_mgr=self.policy_mgr, conn_table=self.conn_table, \
+        cetp_c2c = CETPC2C.CETPC2CLayer(self._loop, l_cesid=self.cesid, r_cesid=r_cesid, cetpstate_table= self.cetpstate_table, policy_mgr=self.policy_mgr_old, conn_table=self.conn_table, \
                                         ces_params=self.ces_params, cetp_security=self.cetp_security, cetp_mgr=self, cetp_h2h=cetp_h2h, interfaces=self.interfaces, \
                                         payloadID_table=self.payloadID_table)
         
@@ -385,7 +398,7 @@ class CETPManager:
         r_cesid         = transport.get_remote_cesid()
         self._logger.info("No C2CTransaction (SST={} -> DST={}) exists -> Initiating inbound C2CTransaction".format(inbound_sstag, inbound_dstag))
         
-        ic2c_transaction = C2CTransaction.iC2CTransaction(self._loop, r_addr=r_addr, sstag=sstag, dstag=sstag, l_cesid=self.cesid, r_cesid= r_cesid, policy_mgr=self.policy_mgr, \
+        ic2c_transaction = C2CTransaction.iC2CTransaction(self._loop, r_addr=r_addr, sstag=sstag, dstag=sstag, l_cesid=self.cesid, r_cesid= r_cesid, policy_mgr=self.policy_mgr_old, \
                                                            cetpstate_table=self.cetpstate_table, ces_params=self.ces_params, proto=proto, cetp_security=self.cetp_security, \
                                                            interfaces=self.interfaces, conn_table=self.conn_table, cetp_mgr=self, payloadID_table=self.payloadID_table)
         response = yield from ic2c_transaction.process_c2c_transaction(cetp_msg)

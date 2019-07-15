@@ -71,6 +71,7 @@ class PolicyManager(object):
     def __init__(self, l_cesid, policy_file=None, name="PolicyManager"):
         self._cespolicy       = {}         # key: PolicyCETP()
         self._hostpolicy      = {}         # key: PolicyCETP()
+        self.name             = "PolicyManager"
         self.l_cesid          = l_cesid
         self._logger          = logging.getLogger(name)
         self.config_file      = policy_file
@@ -125,7 +126,7 @@ class PolicyManager(object):
             self._logger.error("Exception '{}' in loading policy for '{}'".format(ex, self.l_cesid))
             return None
     
-    def get_host_policy(self, direction, host_id=""):
+    def get_host_policy(self, direction="", host_id=""):
         """ The search key for host-policy number 0 is 'policy-0' """
         try:
             policy_type = "hostpolicy"
@@ -356,12 +357,34 @@ class RESTPolicyClient(object):
         self.policy_cache[key] = policy
 
     @asyncio.coroutine
-    def get_host_policy(self, params=None, timeout=None):
+    def get_host_policy_old(self, params=None, timeout=None):
         """ Initiates host-policy query towards SPM """
         if self.spm_host_policy_url is not None:
             resp = yield from self.get(self.spm_host_policy_url, params=params, timeout=timeout)
             return resp
         
+        return None
+    
+    def _adjust_direction(self, direction):
+        """ For some strange reasons, Hassaan's developed SPM uses words 'EGRESS' in place for 'outbound', and 'INGRESS' for 'inbound' direction """
+        if direction == "outbound":  direction = "EGRESS"
+        elif direction == "inbound": direction = "INGRESS"
+        else: direction = None
+        return direction
+
+    @asyncio.coroutine
+    def get_host_policy(self, host_id=None, direction=None, timeout=2.0):
+        """ Initiates host-policy query towards SPM """
+        if (host_id is not None) or (direction is not None):
+            direction   = self._adjust_direction(direction)
+            params = {'lfqdn': host_id, 'direction': direction}
+            
+            if self.spm_host_policy_url is not None:
+                resp = yield from self.get(self.spm_host_policy_url, params=params, timeout=timeout)
+                json_policy = json.loads(resp)
+                host_policy = PolicyCETP(json_policy)
+                return host_policy
+            
         return None
 
     @asyncio.coroutine

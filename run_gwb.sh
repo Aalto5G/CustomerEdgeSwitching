@@ -35,9 +35,10 @@ cd src
           --network-api-url  http://127.0.0.1:8081/                          \
           --repository-subscriber-folder ../config.d/cesb.lte.subscriber.d/  \
           --repository-policy-folder     ../config.d/cesb.lte.policy.d/      \
-          --cetp-config  		     ../config.d/cesb.lte.cetp.policy/config_cesb.yaml   \
-          --cetp-policies  		     ../config.d/cesb.lte.cetp.policy/cetp_policies.json \
-          --spm-url-cetp-host   	http://10.0.3.201/API/cetp_policy_node?                  \
-          --spm-url-cetp-network  	http://10.0.3.201/API/cetp_policy_node?                  \
-          --repository-api-url  	http://10.0.3.201:8001                   \
-          --synproxy         10.0.3.151 12345
+          --spm-services-boolean    True \
+          --spm-url-cetp-host   	http://10.0.3.200/API/cetp_policy_node?  \
+          --spm-url-cetp-network  	http://10.0.3.200/API/cetp_policy_node?  \
+          --cetp-config  		    ../config.d/cesb.lte.cetp.policy/config_cesb.yaml   \
+          --cetp-policies  		    ../config.d/cesb.lte.cetp.policy/cetp_policies.json \
+          --repository-api-url  	http://10.0.3.200:8001                   \
+          --synproxy         		10.0.3.151 12345

@@ -128,7 +128,7 @@ class CETPH2H:
         self.c2c_connectivity = connected
         if connected:       self.start_h2h_consumption()
         else:               self.suspend_h2h_consumption()
-    
+        
     @asyncio.coroutine
     def h2h_transaction_start(self, cb, dst_id):
         (cb_func, cb_args) = cb
