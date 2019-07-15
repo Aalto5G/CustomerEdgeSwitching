@@ -322,6 +322,16 @@ class H2HTransaction(CETPTransaction):
             self._logger.error("Exception '{}' in _allocate_proxy_address".format(ex))
             return
         
+    @asyncio.coroutine
+    def load_policies(self, host_id=None, direction=None):
+        pfunc = self.policy_mgr.get_host_policy
+        if self.policy_mgr.name == "RESTPolicyClient":
+            policy = yield from pfunc(host_id= host_id, direction= direction)
+        else:
+            policy = pfunc(host_id= host_id, direction= direction)
+        
+        return policy
+
 
 
 class H2HTransactionOutbound(H2HTransaction):
@@ -361,40 +371,12 @@ class H2HTransactionOutbound(H2HTransaction):
         self.completion_t0      = self.ces_params['incomplete_cetp_state_t0']
 
     @asyncio.coroutine
-    def load_policies(self, host_id=None):
+    def get_policies(self, host_id=None):
         """ Returns the host-policy from the local policy file on success, or None on failure """
-        if self.policy_mgr.name == "RESTPolicyClient":
-            self.opolicy = yield from self.policy_mgr.get_host_policy(direction= self.direction, host_id= host_id)
-        else:
-            self.opolicy = self.policy_mgr.get_host_policy(direction= self.direction, host_id= host_id)
-            
-        self.opolicy_tmp = self.get_policy_copy(self.opolicy)
-        self.policy      = self.opolicy
-        return self.policy
-
-    @asyncio.coroutine
-    def load_policies_local(self, host_id=None):
-        """ Returns the host-policy from the local policy file on success, or None on failure """
-        self.opolicy     = self.policy_mgr.get_host_policy(self.direction, host_id = host_id)
-        self.opolicy_tmp = self.get_policy_copy(self.opolicy)
-        self.policy      = self.opolicy
-        return self.policy
-
-    @asyncio.coroutine
-    def load_policies_from_spm(self, host_id=""):
-        """ Downloads the host policy from Policy Management System """
-        timeout     = 2
-        direction   = "EGRESS"
-        params      = {'lfqdn': host_id, 'direction': direction}
-        response    = yield from self.policy_mgr.get_host_policy(params=params, timeout=timeout)
-        
-        if response is not None:
-            host_policy      = json.loads(response)
-            self.opolicy     = PolicyManager.PolicyCETP(host_policy)
-            self.opolicy_tmp = self.get_policy_copy(self.opolicy)
-            self.policy      = self.opolicy
-            return self.policy
-
+        policy                      = yield from self.load_policies(host_id = host_id, direction = self.direction)
+        self.opolicy, self.policy   = policy, policy
+        self.opolicy_tmp            = self.get_policy_copy(self.opolicy)
+        return policy
 
     def has_ongoing_h2h_negotiation(self, src_id, dst_id):
         key = (KEY_HOST_IDS, src_id, dst_id)
@@ -427,7 +409,7 @@ class H2HTransactionOutbound(H2HTransaction):
                 self._logger.error(" Proxypool of the sender '{}' is depleted.".format(self.src_id))
                 return False
             
-            host_policy = yield from self.load_policies(host_id = self.src_id)
+            host_policy = yield from self.get_policies(host_id = self.src_id)
             #print("host_policy:", host_policy)
             
             if host_policy is None:
@@ -867,31 +849,13 @@ class H2HTransactionInbound(H2HTransaction):
         self._logger.setLevel(LOGLEVEL_H2HTransactionInbound)
 
     @asyncio.coroutine
-    def load_policies(self, host_id):
-        """ Returns None OR host policy """
-        if self.policy_mgr.name == "RESTPolicyClient":
-            self.ipolicy     = yield from self.policy_mgr.get_host_policy(direction= self.direction, host_id= host_id)
-        else:
-            self.ipolicy     = self.policy_mgr.get_host_policy(direction= self.direction, host_id= host_id)
-        
-        self.ipolicy_tmp = self.get_policy_copy(self.ipolicy)
-        self.policy      = self.ipolicy
-        return self.policy
+    def get_policies(self, host_id=None):
+        """ Either returns the host policy or None """
+        policy                      = yield from self.load_policies(host_id = host_id, direction = self.direction)
+        self.ipolicy, self.policy   = policy, policy
+        self.ipolicy_tmp            = self.get_policy_copy(self.ipolicy)
+        return policy
 
-    @asyncio.coroutine
-    def load_policies_from_spm(self, host_id):
-        """ Download the host policy from Policy management System """         
-        timeout     = 2
-        params      = {'lfqdn': host_id, 'direction': self.direction}
-        response    = yield from self.policy_mgr.get_host_policy(params=params, timeout=timeout)
-        
-        if response is not None:             
-            host_policy      = json.loads(response)
-            self.ipolicy     = PolicyManager.PolicyCETP(host_policy)
-            self.ipolicy_tmp = self.get_policy_copy(self.ipolicy)
-            self.policy      = self.ipolicy
-            return self.policy
-    
     @asyncio.coroutine
     def _pre_process(self, cetp_msg):
         """ Pre-process the inbound packet for the minimum necessary details. """
@@ -937,7 +901,7 @@ class H2HTransactionInbound(H2HTransaction):
                 return False
             
             #start_time = time.time()
-            host_policy = yield from self.load_policies(self.dst_id)
+            host_policy = yield from self.get_policies(self.dst_id)
             #print("_load_policies_from_spm: ", time.time()-start_time)
             
             if host_policy is None:
@@ -1146,33 +1110,7 @@ class H2HTransactionLocal(H2HTransaction):
         self._logger            = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_H2HTransactionLocal)
     
-    @asyncio.coroutine
-    def load_policies_old(self, host_id = "", direction = ""):
-        yield from asyncio.sleep(0.000)
-        policy = self.policy_mgr.get_host_policy( direction, host_id = host_id)
-        return policy
-
-    @asyncio.coroutine
-    def load_policies(self, host_id = "", direction = ""):
-        if self.policy_mgr.name == "RESTPolicyClient":
-            policy     = yield from self.policy_mgr.get_host_policy(direction= direction, host_id= host_id)
-        else:
-            policy     = self.policy_mgr.get_host_policy(direction= direction, host_id= host_id)
-        return policy
-
-
-    @asyncio.coroutine
-    def load_policies_from_spm(self, host_id="", direction=""):
-        """ Downloads the host policy from SPM """
-        timeout     = 2
-        params      = {'lfqdn': host_id, 'direction': direction}
-        response    = yield from self.policy_mgr.get_host_policy(params=params, timeout=timeout)
-        
-        if response is not None:
-            policy      = json.loads(response)
-            host_policy = PolicyManager.PolicyCETP(host_policy)
-            return host_policy
-        
+    
     @asyncio.coroutine
     def _pre_process(self):
         try:
@@ -1213,7 +1151,6 @@ class H2HTransactionLocal(H2HTransaction):
             self._logger.error(" Failure in initiating the local H2H session towards '{}'.".format(self.dst_id))
             return
         
-
         error = False
         
         # If a host is reaching its ownself or own services, we shall return its own IP address in DNS callback.
