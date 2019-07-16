@@ -258,13 +258,16 @@ class C2CTransaction(CETPTransaction):
             """ Build a list based on the code field of the payload TLV: "ipv4", "ipv6", "ether" """
             retlist = []
             for p in tlvlist:
-                if 'cmp' in p:
-                    if p['cmp']=="notAvailable":
-                        continue
-                
-                typ = p["code"]
-                pref, tun_id_in = p["value"]
-                retlist.append((typ, pref, tun_id_in))
+                try:
+                    if 'cmp' in p:
+                        if p['cmp']=="notAvailable":
+                            continue
+                    
+                    typ = p["code"]
+                    pref, tun_id_in = p["value"]
+                    retlist.append((typ, pref, tun_id_in))
+                except:
+                    pass
             return retlist
 
         def _filter(base_payload, cmp_payload):
@@ -285,7 +288,6 @@ class C2CTransaction(CETPTransaction):
                     
             return (lpayloads, rpayloads)
 
-        
         l_payloads = _build_list(sent_tlvlist)          #Build the payload list for comparison
         r_payloads = _build_list(recv_tlvlist)
         l_payloads = list(set(l_payloads))
@@ -307,6 +309,15 @@ class C2CTransaction(CETPTransaction):
         if key is not None:
             if key in self.negotiated_params:
                 return self.negotiated_params[key]
+
+    @asyncio.coroutine
+    def load_policies(self, proto=None, cesid=None):
+        pfunc = self.policy_mgr.get_ces_policy
+        if self.policy_mgr.name == "RESTPolicyClient":
+            policy = yield from pfunc(proto=proto, cesid=cesid)
+        else:
+            policy = pfunc(proto=proto, cesid=cesid)
+        return policy
 
 
 
@@ -355,39 +366,23 @@ class oC2CTransaction(C2CTransaction):
         self.keepalive_cycle    = self.ces_params['keepalive_idle_t0']
         self.keepalive_timeout  = self.ces_params['keepalive_interval']
         self.completion_t0      = self.ces_params['incomplete_cetp_state_t0']
-    
-    @asyncio.coroutine
-    def load_policies(self):
-        """ Retrieves the policies stored in the Policy file"""
-        yield from asyncio.sleep(0.000)
-        self.oces_policy      = self.policy_mgr.get_ces_policy(proto=self.proto)
-        self.oces_policy_tmp  = self.get_policy_copy(self.oces_policy)
-        self.ces_policy       = self.oces_policy
-        return self.ces_policy
 
     @asyncio.coroutine
-    def load_policies2(self):
-        """ Downloads the CES policy from Policy Management System """
-        timeout     = 2
-        proto       = self.proto
-        url         = "http://100.64.254.24/API/ces?"
-        params      = {'cesid': self.l_cesid, 'proto': proto}
-        response    = yield from self.policy_mgr.get(url, params=params, timeout=timeout)
-        
-        if response is not None:
-            ces_policy           = json.loads(response)
-            self.oces_policy     = PolicyManager.PolicyCETP(ces_policy)
-            self.oces_policy_tmp = self.get_policy_copy(self.oces_policy)
-            self.ces_policy      = self.oces_policy
-            return self.ces_policy
-        
+    def get_policies(self):
+        """ Retrieves the policies stored in the Policy file"""
+        policy = yield from self.load_policies(proto=self.proto, cesid=self.l_cesid)
+        self.oces_policy      = policy
+        self.oces_policy_tmp  = self.get_policy_copy(policy)
+        self.ces_policy       = policy
+        return policy
+    
     @asyncio.coroutine
     def _initialize(self):
         """ Loads policies, generates session tags, and initiates event handlers """
         try:
             self.load_parameters()            
             self.sstag = self.generate_session_tags()
-            ces_policy = yield from self.load_policies()
+            ces_policy = yield from self.get_policies()
             
             if ces_policy is None:
                 self._logger.error("Failure to load policies for local CES '{}'".format(self.l_cesid))
@@ -662,11 +657,11 @@ class oC2CTransaction(C2CTransaction):
             self._logger.info(" Negotiated params: {}".format(self.get_negotiated_params()))
             
             if len(self.lrloc)==0 or len(self.rrloc)==0:
-                self._logger.error("C2C negotiation with CES '{}' didn't provide RLOC information".format(self.r_cesid))
+                self._logger.error(" DP-RLOC negotiation with Remote CES '{}' failed".format(self.r_cesid))                
                 return False
                 
             if len(self.lpayload)==0 or len(self.rpayload)==0:
-                self._logger.error("C2C negotiation with CES '{}' didn't provide Payload information.".format(self.r_cesid))
+                self._logger.error(" DP tunneling negotiation with Remote CES '{}' failed".format(self.r_cesid))
                 return False
             
             key = (connection.KEY_MAP_RCESID_C2C, self.r_cesid)
@@ -1019,31 +1014,14 @@ class iC2CTransaction(C2CTransaction):
         self._logger.setLevel(LOGLEVEL_iC2CTransaction)        
         
     @asyncio.coroutine
-    def load_policies(self):
-        """ Retrieves the policies stored in the policy file"""
-        yield from asyncio.sleep(0.000)
-        self.ices_policy, self.ices_policy_tmp  = None, None
-        self.ices_policy        = self.policy_mgr.get_ces_policy(proto=self.proto)
-        self.ices_policy_tmp    = self.get_policy_copy(self.ices_policy)
-        self.ces_policy         = self.ices_policy
-        return self.ces_policy
+    def get_policies(self):
+        """ Retrieves the policies stored in the Policy file"""
+        policy = yield from self.load_policies(proto=self.proto, cesid=self.l_cesid)
+        self.ices_policy      = policy
+        self.ices_policy_tmp  = self.get_policy_copy(policy)
+        self.ces_policy       = policy
+        return policy
 
-    @asyncio.coroutine
-    def load_policies2(self):
-        """ Downloads the CES policy from Policy Management System """
-        timeout     = 2
-        proto       = self.proto
-        url         = "http://100.64.254.24/API/ces?"
-        params      = {'cesid': self.l_cesid, 'proto': proto}
-        response    = yield from self.policy_mgr.get(url, params=params, timeout=timeout)
-        
-        if response is not None:
-            ces_policy           = json.loads(response)
-            self.ices_policy     = PolicyManager.PolicyCETP(ces_policy)
-            self.ices_policy_tmp = self.get_policy_copy(self.ices_policy)
-            self.ces_policy      = self.ices_policy
-            return self.ces_policy
-        
     @asyncio.coroutine
     def _pre_process(self, cetp_msg):
         """ Pre-process the inbound packet for the minimum necessary details, AND loads the CES-to-CES policies. """
@@ -1065,7 +1043,7 @@ class iC2CTransaction(C2CTransaction):
                 self._logger.error(" Invalid Remote CES-ID '{}'".format(r_cesid))
                 return False
             
-            ces_policy = yield from self.load_policies()
+            ces_policy = yield from self.get_policies()
             
             if ces_policy is None:
                 self._logger.error("Failure to load the CES policies '{}'".format(self.l_cesid))
@@ -1205,11 +1183,11 @@ class iC2CTransaction(C2CTransaction):
             self._logger.info(" Negotiated params: {}".format(self.get_negotiated_params()))            
             
             if len(self.lrloc)==0 or len(self.rrloc)==0:
-                self._logger.error(" Remote CES '{}' didn't negotiate RLOC information in C2C negotiation".format(self.r_cesid))
+                self._logger.error(" DP-RLOC negotiation with Remote CES '{}' failed".format(self.r_cesid))
                 return False
                 
             if len(self.lpayload)==0 or len(self.rpayload)==0:
-                self._logger.error(" Remote CES '{}' didn't negotiate  Payload information in C2C negotiation.".format(self.r_cesid))
+                self._logger.error(" DP tunneling negotiation with Remote CES '{}' failed".format(self.r_cesid))
                 return False
             
             key = (connection.KEY_MAP_RCESID_C2C, self.r_cesid)
@@ -1221,6 +1199,7 @@ class iC2CTransaction(C2CTransaction):
         
         except Exception as ex:
             self._logger.error("Exception in _create_connection_template(): '{}'".format(ex))
+            traceback.print_exc(file=sys.stdout)
             return False
 
     def _export_to_stateful(self):

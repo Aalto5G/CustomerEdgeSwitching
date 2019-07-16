@@ -367,15 +367,15 @@ class RealmGateway(object):
             return False
 
         if self.cetp_config is not None:
-            self.cetpstate_table            = CETP.CETPStateTable()
-            self.ces_params                 = self.ces_conf['CESParameters']
-            self.cesid                      = self.ces_params['cesid']
-            self._cetp_policies             = self._config.getdefault('cetp_policies', None)
-            spm_host_cetp_policy_url        = self._config.getdefault('spm_url_cetp_host', None)
-            spm_network_cetp_policy_url     = self._config.getdefault('spm_url_cetp_network', None)
-            spm_services_boolean            = get_spm_services_parameter()
-            self._cetp_mgr                  = cetpManager.CETPManager(self._cetp_policies, self.cesid, self.ces_params, self._hosttable, self._connectiontable, self._pooltable, \
-                                                                      self._network, self.cetpstate_table, spm_services_boolean, spm_host_cetp_policy_url, spm_network_cetp_policy_url, self._loop)
+            self.cetpstate_table     = CETP.CETPStateTable()
+            self.ces_params          = self.ces_conf['CESParameters']
+            self.cesid               = self.ces_params['cesid']
+            self._cetp_policies      = self._config.getdefault('cetp_policies', None)
+            host_cetp_policy_url     = self._config.getdefault('spm_url_cetp_host', None)
+            network_cetp_policy_url  = self._config.getdefault('spm_url_cetp_network', None)
+            spm_services_boolean     = get_spm_services_parameter()
+            self._cetp_mgr           = cetpManager.CETPManager(self._cetp_policies, self.cesid, self.ces_params, self._hosttable, self._connectiontable, self._pooltable, \
+                                                               self._network, self.cetpstate_table, spm_services_boolean, host_cetp_policy_url, network_cetp_policy_url, self._loop)
             for s in self._cetp_service:
                 (ip_addr, port, proto, o, p) = s
                 yield from self._cetp_mgr.initiate_cetp_service(ip_addr, port, proto)

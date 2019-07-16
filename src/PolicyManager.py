@@ -115,11 +115,14 @@ class PolicyManager(object):
     def _get_host_policies(self):
         return self._hostpolicies
     
-    def get_ces_policy(self, proto="tls"):
+    def get_ces_policy(self, proto=None, cesid=None):
         try:
+            if proto is None or cesid is None:
+                return
+            
             policy_type = "cespolicy"
-            l_cesid = self.l_cesid
-            key = policy_type+":"+proto+":"+l_cesid
+            cesid = cesid
+            key = policy_type+":"+proto+":"+cesid
             policy = self._cespolicy[key]
             return copy.deepcopy(policy)
         except Exception as ex:
@@ -330,12 +333,12 @@ LOGLEVEL_RESTPolicyClient = logging.INFO
 
 
 class RESTPolicyClient(object):
-    def __init__(self, loop, spm_network_policy_url=None, spm_host_policy_url=None, tcp_conn_limit=1, verify_ssl=False, name="RESTPolicyClient"):
+    def __init__(self, loop, network_policy_url=None, host_policy_url=None, tcp_conn_limit=1, verify_ssl=False, name="RESTPolicyClient"):
         self._loop                  = loop
         self.tcp_conn_limit         = tcp_conn_limit
         self.verify_ssl             = verify_ssl
-        self.spm_network_policy_url = spm_network_policy_url
-        self.spm_host_policy_url    = spm_host_policy_url
+        self.network_policy_url     = network_policy_url
+        self.host_policy_url        = host_policy_url
         self.policy_cache           = {}
         self._timeout               = 2.0
         self.name                   = name
@@ -358,15 +361,6 @@ class RESTPolicyClient(object):
     def cache_policy(self, key, policy):
         self.policy_cache[key] = policy
 
-    @asyncio.coroutine
-    def get_host_policy_old(self, params=None, timeout=None):
-        """ Initiates host-policy query towards SPM """
-        if self.spm_host_policy_url is not None:
-            resp = yield from self.get(self.spm_host_policy_url, params=params, timeout=timeout)
-            return resp
-        
-        return None
-    
     def _adjust_direction(self, direction):
         """ For some strange reasons, Hassaan's developed SPM uses words 'EGRESS' in place for 'outbound', and 'INGRESS' for 'inbound' direction """
         if direction == "outbound":  direction = "EGRESS"
@@ -377,23 +371,43 @@ class RESTPolicyClient(object):
     @asyncio.coroutine
     def get_host_policy(self, host_id=None, direction=None, timeout=2.0):
         """ Initiates host-policy query towards SPM """
+        if self.host_policy_url is None:
+            return
+        
         if (host_id is not None) or (direction is not None):
             direction   = self._adjust_direction(direction)
             params = {'lfqdn': host_id, 'direction': direction}
-            
-            if self.spm_host_policy_url is not None:
-                resp = yield from self.get(self.spm_host_policy_url, params=params, timeout=timeout)
-                json_policy = json.loads(resp)
-                host_policy = PolicyCETP(json_policy)
-                return host_policy
+            resp = yield from self.get(self.host_policy_url, params=params, timeout=timeout)
+            json_policy = json.loads(resp)
+            host_policy = PolicyCETP(json_policy)
+            return host_policy
             
         return None
 
     @asyncio.coroutine
-    def get_network_policy(self, params=None, timeout=None):
+    def get_ces_policy(self, proto=None, cesid=None, timeout=2.0):
         """ Initiates host-policy query towards SPM """
-        if self.spm_network_policy_url is not None:
-            resp = yield from self.get(self.spm_network_policy_url, params=params, timeout=timeout)
+        try:
+            if self.network_policy_url is None:
+                return
+            
+            if (proto is None) or (cesid is None):
+                return
+            
+            params      = {'ces_id': cesid, 'protocol': proto}
+            resp        = yield from self.get(self.network_policy_url, params=params, timeout=timeout)
+            json_policy = json.loads(resp)
+            ces_policy  = PolicyCETP(json_policy)
+            return ces_policy
+        except Exception as ex:
+            self._logger.error("Exception '{}' in processing the policy response".format(ex))
+        
+    
+    @asyncio.coroutine
+    def get_network_policy_old(self, params=None, timeout=None):
+        """ Initiates host-policy query towards SPM """
+        if self.network_policy_url is not None:
+            resp = yield from self.get(self.network_policy_url, params=params, timeout=timeout)
             return resp
         
         return None
@@ -419,7 +433,7 @@ class RESTPolicyClient(object):
                 # .close() on exception.
                 if resp!=None:
                     resp.close()
-                self._logger.error("Exception {} in getting REST response: ".format(ex))
+                self._logger.error("Exception '{}' in getting REST policy response".format(ex))
             finally:
                 if resp!=None:
                     yield from resp.release()               # .release() - returns connection into free connection pool.

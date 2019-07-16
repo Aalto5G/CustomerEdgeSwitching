@@ -37,7 +37,7 @@ cd src
           --repository-policy-folder     ../config.d/cesb.lte.policy.d/      \
           --spm-services-boolean    True \
           --spm-url-cetp-host   	http://10.0.3.200/API/cetp_policy_node?  \
-          --spm-url-cetp-network  	http://10.0.3.200/API/cetp_policy_node?  \
+          --spm-url-cetp-network  	http://10.0.3.200/API/ces_policy_node?   \
           --cetp-config  		    ../config.d/cesb.lte.cetp.policy/config_cesb.yaml   \
           --cetp-policies  		    ../config.d/cesb.lte.cetp.policy/cetp_policies.json \
           --repository-api-url  	http://10.0.3.200:8001                   \
