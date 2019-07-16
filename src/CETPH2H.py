@@ -238,10 +238,8 @@ class CETPH2H:
 
     def update_H2H_transaction_count(self, initiated=True):
         """ To limit the number of H2H transaction to limit agreed in C2C Negotiation """
-        if initiated:
-            self.ongoing_h2h_transactions += 1
-        else:
-            self.ongoing_h2h_transactions -= 1
+        if initiated:   self.ongoing_h2h_transactions += 1
+        else:           self.ongoing_h2h_transactions -= 1
 
             
 class CETPH2HLocal:
@@ -282,13 +280,9 @@ class CETPH2HLocal:
         h2h = H2HTransaction.H2HTransactionLocal(cb=cb, host_ip=ip_addr, src_id=src_id, dst_id=dst_id, policy_mgr=self.policy_mgr, cesid=self.l_cesid, \
                                                  cetp_security= self.cetp_security, host_table=self.host_table, pool_table=self.pool_table, \
                                                  conn_table=self.conn_table, network=self.network)
-        
         yield from h2h.start_cetp_processing()
-        #if result == True:
-        #    self._logger.info("OK")
-        #else:
-        #    self._logger.info("NOK")
-
+        #if result == True:    self._logger.info("Local policy negotiation successful.")
+        #else:                 self._logger.info("Local policy negotiation failed.")
 
     def close(self):
         self._closure_signal = True

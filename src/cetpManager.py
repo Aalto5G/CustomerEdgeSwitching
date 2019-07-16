@@ -57,20 +57,19 @@ class CETPManager:
         self.interfaces             = PolicyManager.DPConfigurations(cesid, ces_params = ces_params)
         self._loop                  = loop
         self.network                = network
-        self.policy_mgr             = self._launch_policy_manager(policy_file, network_policy_url, host_policy_url)
         self._inbound_transports    = {}                        # {'cesid': [transports]} - Temporary record of list of transports connected against a cesid
         self._load_cetp_params()
         self.name                   = name
         self._logger                = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPManager)
         self._initiate_local_cetp()
+        self._launch_policy_manager(policy_file, network_policy_url, host_policy_url)
 
     def _launch_policy_manager(self, policy_file, network_policy_url, host_policy_url):
         if self.spm_services_boolean is True:
-            policy_mgr = PolicyManager.RESTPolicyClient(self._loop, network_policy_url= network_policy_url, host_policy_url= host_policy_url, tcp_conn_limit=10)    # Fetches CETP policies from the Security Policy Management (SPM) system.
+            self.policy_mgr = PolicyManager.RESTPolicyClient(network_policy_url= network_policy_url, host_policy_url= host_policy_url, tcp_conn_limit=10)    # Fetches CETP policies from the Security Policy Management (SPM) system.
         else:
-            policy_mgr = PolicyManager.PolicyManager(self.cesid, policy_file = policy_file)         # Gets CETP policies from a local JSON-based policy file.
-        return policy_mgr
+            self.policy_mgr = PolicyManager.PolicyManager(self.cesid, policy_file = policy_file)         # Gets CETP policies from a local JSON-based policy file.
 
     def _initiate_local_cetp(self):
         self.local_cetp = CETPH2H.CETPH2HLocal(l_cesid=self.cesid, policy_mgr=self.policy_mgr, cetp_security=self.cetp_security, \

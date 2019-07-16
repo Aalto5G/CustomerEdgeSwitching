@@ -21,6 +21,8 @@ import aiohttp
 
 LOGLEVEL_PolicyCETP         = logging.INFO
 LOGLEVEL_PolicyManager      = logging.INFO
+LOGLEVEL_RESTPolicyClient   = logging.INFO
+
 
 class DPConfigurations(object):
     """ To be replaced by actual Class defining the CES Network Interfaces """
@@ -141,6 +143,132 @@ class PolicyManager(object):
         except Exception as ex:
             self._logger.error("No '{}' policy exists for host_id: '{}'".format(direction, host_id))
             return None
+
+
+
+# Aiohttp-based PolicyAgent in CES to retrieve CETP policies from Policy Management System
+# Leveraging https://stackoverflow.com/questions/37465816/async-with-in-python-3-4
+
+
+class RESTPolicyClient(object):
+    def __init__(self, network_policy_url=None, host_policy_url=None, tcp_conn_limit=1, verify_ssl=False, name="RESTPolicyClient"):
+        self._loop                  = asyncio.get_event_loop()
+        self.tcp_conn_limit         = tcp_conn_limit
+        self.verify_ssl             = verify_ssl
+        self.network_policy_url     = network_policy_url
+        self.host_policy_url        = host_policy_url
+        self.policy_cache           = {}
+        self._timeout               = 2.0
+        self.name                   = name
+        self._logger                = logging.getLogger(name)
+        self._logger.setLevel(LOGLEVEL_RESTPolicyClient)
+        self._logger.info("Initiating RESTPolicyClient towards Policy Management System ")
+        self._connect()
+        
+    def _connect(self):
+        try:
+            tcp_conn            = aiohttp.TCPConnector(limit=self.tcp_conn_limit, loop=self._loop, verify_ssl=self.verify_ssl, keepalive_timeout=30)
+            self.client_session = aiohttp.ClientSession(connector=tcp_conn)
+        except Exception as ex:
+            self._logger.error("Failure initiating the rest policy client")
+            self._logger.error(ex)
+
+    def close(self):
+        self.client_session.close()
+
+    def cache_policy(self, key, policy):
+        self.policy_cache[key] = policy
+
+    def _adjust_host_policy_key_word(self, direction):
+        """ For some strange reasons, Hassaan's developed SPM uses words 'EGRESS' in place for 'outbound', and 'INGRESS' for 'inbound' direction """
+        if direction == "outbound":     direction = "EGRESS"
+        elif direction == "inbound":    direction = "INGRESS"
+        else:                           direction = None
+        return direction
+
+    @asyncio.coroutine
+    def get_host_policy(self, host_id=None, direction=None, timeout=2.0):
+        """ Initiates host-policy query towards SPM """
+        try:
+            if self.host_policy_url is None:
+                return
+            
+            if (host_id is None) or (direction is None):
+                return
+            
+            direction   = self._adjust_host_policy_key_word(direction)
+            params = {'lfqdn': host_id, 'direction': direction}
+            resp = yield from self.get(self.host_policy_url, params=params, timeout=timeout)
+            json_policy = json.loads(resp)
+            host_policy = PolicyCETP(json_policy)
+            return host_policy
+        
+        except Exception as ex:
+            self._logger.error("Exception '{}' in processing the policy response".format(ex))
+            return
+            
+
+    @asyncio.coroutine
+    def get_ces_policy(self, cesid=None, proto=None, timeout=2.0):
+        """ Initiates host-policy query towards SPM """
+        try:
+            if self.network_policy_url is None:
+                return
+            
+            if (proto is None) or (cesid is None):
+                return
+            
+            params      = {'ces_id': cesid, 'protocol': proto}
+            resp        = yield from self.get(self.network_policy_url, params=params, timeout=timeout)
+            json_policy = json.loads(resp)
+            ces_policy  = PolicyCETP(json_policy)
+            return ces_policy
+        
+        except Exception as ex:
+            self._logger.error("Exception '{}' in processing the policy response".format(ex))
+            return
+
+    
+    @asyncio.coroutine
+    def get(self, url, params=None, timeout=None):
+        if timeout is None:
+            timeout = self._timeout
+        
+        with aiohttp.Timeout(timeout):
+            resp = None                                     # To handles issues related to connectivity with url
+            try:
+                resp = yield from self.client_session.get(url, params=params) 
+                if resp.status == 200:
+                    policy_response = yield from resp.text()
+                    #print(policy_response)
+                    return policy_response
+                else:
+                    return None
+            
+            except Exception as ex:
+                # .close() on exception.
+                if resp!=None:
+                    resp.close()
+                self._logger.error("Exception '{}' in getting REST policy response".format(ex))
+            finally:
+                if resp!=None:
+                    yield from resp.release()               # .release() - returns connection into free connection pool.
+
+
+    @asyncio.coroutine
+    def delete(self, url, timeout=None):
+        if timeout is None:
+            timeout = self._timeout
+            
+        with aiohttp.Timeout(timeout):
+            resp = yield from self.client_session.delete(url)
+            try:
+                return (yield from resp.text())
+            except Exception as ex:
+                resp.close()
+                raise ex
+            finally:
+                yield from resp.release()
 
     
 
@@ -325,134 +453,6 @@ class PolicyCETP(object):
     
 
 
-
-LOGLEVEL_RESTPolicyClient = logging.INFO
-
-# Aiohttp-based PolicyAgent in CES to retrieve CETP policies from Policy Management System
-# Leveraging https://stackoverflow.com/questions/37465816/async-with-in-python-3-4
-
-
-class RESTPolicyClient(object):
-    def __init__(self, loop, network_policy_url=None, host_policy_url=None, tcp_conn_limit=1, verify_ssl=False, name="RESTPolicyClient"):
-        self._loop                  = loop
-        self.tcp_conn_limit         = tcp_conn_limit
-        self.verify_ssl             = verify_ssl
-        self.network_policy_url     = network_policy_url
-        self.host_policy_url        = host_policy_url
-        self.policy_cache           = {}
-        self._timeout               = 2.0
-        self.name                   = name
-        self._logger                = logging.getLogger(name)
-        self._logger.setLevel(LOGLEVEL_RESTPolicyClient)
-        self._logger.info("Initiating RESTPolicyClient towards Policy Management System ")
-        self._connect()
-        
-    def _connect(self):
-        try:
-            tcp_conn            = aiohttp.TCPConnector(limit=self.tcp_conn_limit, loop=self._loop, verify_ssl=self.verify_ssl, keepalive_timeout=30)
-            self.client_session = aiohttp.ClientSession(connector=tcp_conn)
-        except Exception as ex:
-            self._logger.error("Failure initiating the rest policy client")
-            self._logger.error(ex)
-
-    def close(self):
-        self.client_session.close()
-
-    def cache_policy(self, key, policy):
-        self.policy_cache[key] = policy
-
-    def _adjust_direction(self, direction):
-        """ For some strange reasons, Hassaan's developed SPM uses words 'EGRESS' in place for 'outbound', and 'INGRESS' for 'inbound' direction """
-        if direction == "outbound":  direction = "EGRESS"
-        elif direction == "inbound": direction = "INGRESS"
-        else: direction = None
-        return direction
-
-    @asyncio.coroutine
-    def get_host_policy(self, host_id=None, direction=None, timeout=2.0):
-        """ Initiates host-policy query towards SPM """
-        if self.host_policy_url is None:
-            return
-        
-        if (host_id is not None) or (direction is not None):
-            direction   = self._adjust_direction(direction)
-            params = {'lfqdn': host_id, 'direction': direction}
-            resp = yield from self.get(self.host_policy_url, params=params, timeout=timeout)
-            json_policy = json.loads(resp)
-            host_policy = PolicyCETP(json_policy)
-            return host_policy
-            
-        return None
-
-    @asyncio.coroutine
-    def get_ces_policy(self, proto=None, cesid=None, timeout=2.0):
-        """ Initiates host-policy query towards SPM """
-        try:
-            if self.network_policy_url is None:
-                return
-            
-            if (proto is None) or (cesid is None):
-                return
-            
-            params      = {'ces_id': cesid, 'protocol': proto}
-            resp        = yield from self.get(self.network_policy_url, params=params, timeout=timeout)
-            json_policy = json.loads(resp)
-            ces_policy  = PolicyCETP(json_policy)
-            return ces_policy
-        except Exception as ex:
-            self._logger.error("Exception '{}' in processing the policy response".format(ex))
-        
-    
-    @asyncio.coroutine
-    def get_network_policy_old(self, params=None, timeout=None):
-        """ Initiates host-policy query towards SPM """
-        if self.network_policy_url is not None:
-            resp = yield from self.get(self.network_policy_url, params=params, timeout=timeout)
-            return resp
-        
-        return None
-
-
-    @asyncio.coroutine
-    def get(self, url, params=None, timeout=None):
-        if timeout is None:
-            timeout = self._timeout
-        
-        with aiohttp.Timeout(timeout):
-            resp = None                                     # To handles issues related to connectivity with url
-            try:
-                resp = yield from self.client_session.get(url, params=params) 
-                if resp.status == 200:
-                    policy_response = yield from resp.text()
-                    #print(policy_response)
-                    return policy_response
-                else:
-                    return None
-            
-            except Exception as ex:
-                # .close() on exception.
-                if resp!=None:
-                    resp.close()
-                self._logger.error("Exception '{}' in getting REST policy response".format(ex))
-            finally:
-                if resp!=None:
-                    yield from resp.release()               # .release() - returns connection into free connection pool.
-
-
-    @asyncio.coroutine
-    def delete(self, url, timeout=None):
-        if timeout is None:
-            timeout = self._timeout
-            
-        with aiohttp.Timeout(timeout):
-            resp = yield from self.client_session.delete(url)
-            try:
-                return (yield from resp.text())
-            except Exception as ex:
-                resp.close()
-                raise ex
-            finally:
-                yield from resp.release()
 
 
 def main(policy_client):
