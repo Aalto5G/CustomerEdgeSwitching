@@ -326,7 +326,7 @@ class oC2CTransaction(C2CTransaction):
     Negotiates outbound CES policies with the remote CES.
     Also contains methods to facilitate signalling in the post-c2c negotiation phase between CES nodes.
     """
-    def __init__(self, loop, l_cesid="", r_cesid="", c_sstag=0, c_dstag=0, cetpstate_table=None, policy_client=None, policy_mgr=None, proto="tls", ces_params=None, \
+    def __init__(self, loop, l_cesid="", r_cesid="", c_sstag=0, c_dstag=0, cetpstate_table=None, policy_mgr=None, proto="tls", ces_params=None, \
                  cetp_security=None, remote_addr=None, interfaces=None, c2c_layer=None, conn_table=None, cetp_mgr=None, payloadID_table=None, \
                  direction="outbound", name="oC2CTransaction"):
         self._loop                  = loop
@@ -335,7 +335,6 @@ class oC2CTransaction(C2CTransaction):
         self.sstag                  = c_sstag
         self.dstag                  = c_dstag
         self.cetpstate_table        = cetpstate_table
-        self.policy_client          = policy_client
         self.policy_mgr             = policy_mgr                            # Used in absence of the PolicyAgent to PolicyManagementSystem interaction.
         self.direction              = direction
         self.proto                  = proto                                 # Protocol of the CETP-Transport.
@@ -986,7 +985,7 @@ Another possible post-c2c work:
 LOGLEVEL_iC2CTransaction        = logging.INFO
 
 class iC2CTransaction(C2CTransaction):
-    def __init__(self, loop, sstag=0, dstag=0, l_cesid="", r_cesid="", l_addr=(), r_addr=(), policy_mgr= None, policy_client=None, cetpstate_table= None, ces_params=None, \
+    def __init__(self, loop, sstag=0, dstag=0, l_cesid="", r_cesid="", l_addr=(), r_addr=(), policy_mgr= None, cetpstate_table= None, ces_params=None, \
                  cetp_security=None, interfaces=None, conn_table=None, proto="tcp", cetp_mgr=None, payloadID_table=None, name="iC2CTransaction"):
         self._loop                      = loop
         self.local_addr                 = l_addr

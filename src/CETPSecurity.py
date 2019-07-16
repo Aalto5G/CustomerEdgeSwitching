@@ -64,15 +64,13 @@ class CETPSecurity:
         self.filtered_domains                = {}
         self.unverifiable_cetp_addrs         = []
         self.unverifiable_cetp_senders       = []
-        
         self.conn_table                      = conn_table
         self.ces_params                      = ces_params
         self._loop                           = loop
         self._logger                         = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPSecurity)
         self._initialize_pow()
-        
-    # CETPSecurity shall have specific 'CES-to-CES' view & aggregated view of all 'CES-to-CES' interactions
+        # CETPSecurity shall have specific 'CES-to-CES' view & aggregated view of all 'CES-to-CES' interactions
 
 
     def register_unverifiable_cetp_sender(self, ip_addr):

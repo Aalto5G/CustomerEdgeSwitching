@@ -23,13 +23,12 @@ LOGLEVEL_CETPH2H             = logging.INFO
 LOGLEVEL_CETPH2HLocal        = logging.INFO
 
 class CETPH2H:
-    def __init__(self, loop=None, l_cesid="", r_cesid="", cetpstate_table= None, policy_client=None, policy_mgr=None, cetp_mgr=None, ces_params=None, cetp_security=None, \
+    def __init__(self, loop=None, l_cesid="", r_cesid="", cetpstate_table= None, policy_mgr=None, cetp_mgr=None, ces_params=None, cetp_security=None, \
                  host_table=None, pool_table=None, c2c_negotiated=False, c2c_layer=None, conn_table=None, network=None, name="CETPH2H"):
         self._loop                      = loop
         self.l_cesid                    = l_cesid
         self.r_cesid                    = r_cesid
         self.cetpstate_table            = cetpstate_table
-        self.policy_client              = policy_client
         self.policy_mgr                 = policy_mgr
         self.ces_params                 = ces_params
         self.cetp_mgr                   = cetp_mgr

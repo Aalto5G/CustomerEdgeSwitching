@@ -27,14 +27,13 @@ class CETPC2CLayer:
     Performs resource cleanup upon 'Ctrl+C' or on CES-to-CES connectivity loss.
     Provides an API to forward messages to/from H2H Layer, once CES-to-CES is negotiated.
     """
-    def __init__(self, loop, cetp_h2h=None, l_cesid=None, r_cesid=None, cetpstate_table=None, policy_mgr=None, policy_client=None, ces_params=None, cetp_security=None, \
+    def __init__(self, loop, cetp_h2h=None, l_cesid=None, r_cesid=None, cetpstate_table=None, policy_mgr=None, ces_params=None, cetp_security=None, \
                  cetp_mgr=None, conn_table=None, interfaces=None, payloadID_table=None, name="CETPC2CLayer"):
         self._loop                      = loop
         self.cetp_h2h                   = cetp_h2h                          # H2H layer towards remote-cesid 
         self.l_cesid                    = l_cesid
         self.r_cesid                    = r_cesid
         self.cetpstate_table            = cetpstate_table
-        self.policy_client              = policy_client
         self.policy_mgr                 = policy_mgr
         self.ces_params                 = ces_params
         self.cetp_security              = cetp_security
