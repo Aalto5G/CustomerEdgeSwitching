@@ -62,8 +62,8 @@ class CETPManager:
         self.name                   = name
         self._logger                = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPManager)
-        self._initiate_local_cetp()
         self._launch_policy_manager(policy_file, network_policy_url, host_policy_url)
+        self._initiate_local_cetp()
 
     def _launch_policy_manager(self, policy_file, network_policy_url, host_policy_url):
         if self.spm_services_boolean is True:

@@ -587,7 +587,7 @@ class PolicyBasedResourceAllocation(container3.Container):
             return
 
         [node.transition_period() for node in nodes]
-        [print(node) for node in nodes]
+        #[print(node) for node in nodes]
         #[node.show_reputation() for node in nodes]
 
 
