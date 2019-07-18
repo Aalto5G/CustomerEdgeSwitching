@@ -1,3 +1,35 @@
+"""
+BSD 3-Clause License
+
+Copyright (c) 2018, Jesus Llorente Santos, Aalto University, Finland
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+
+* Neither the name of the copyright holder nor the names of its
+  contributors may be used to endorse or promote products derived from
+  this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""
+
 import asyncio
 import logging
 from customdns.dnsutils import *
@@ -5,6 +37,8 @@ from customdns.dnsutils import *
 import struct
 from socket import IPPROTO_TCP, TCP_NODELAY
 
+loop = asyncio.get_event_loop()
+TIMESTAMP_THRESHOLD = 0.850 #sec
 
 class DNSProxy(asyncio.DatagramProtocol):
     def __init__(self, soa_list = [], cb_soa = None, cb_nosoa = None):
@@ -24,19 +58,21 @@ class DNSProxy(asyncio.DatagramProtocol):
         try:
             self._logger.debug('Data received from {}"'.format(debug_data_addr(data, addr)))
             query = dns.message.from_wire(data)
+            query.timestamp = loop.time()
             query.transport = 'udp'
-            fqdn = format(query.question[0].name)
+            query.fqdn = format(query.question[0].name).lower()
             cb_f = self.callback_send
-            
-            if self._name_in_soa(fqdn) and self.cb_soa:
+            if self._name_in_soa(query.fqdn) and self.cb_soa:
                 self.cb_soa(query, addr, cb_f)
             elif self.cb_nosoa:
                 self.cb_nosoa(query, addr, cb_f)
-                
         except Exception as e:
             self._logger.error('Failed to process DNS message: {}\n{}'.format(e, data))
 
     def callback_send(self, query, addr, response=None):
+        t_elapsed = loop.time() - query.timestamp
+        if t_elapsed >= TIMESTAMP_THRESHOLD:
+            self._logger.critical('Timestamp threshold expired: {:.3f} / {:.3f} (sec) / {} @ {}:{}'.format(t_elapsed, TIMESTAMP_THRESHOLD, query.fqdn, addr[0], addr[1]))
         if response is None:
             self._send_error(query, addr, dns.rcode.REFUSED)
         else:
@@ -56,7 +92,7 @@ class DNSProxy(asyncio.DatagramProtocol):
         response = dns.message.make_response(query, recursion_available=True)
         response.set_rcode(rcode)
         self._send_msg(response, addr)
-        
+
 
 class DNSTCPProxy(asyncio.Protocol):
     # start -> connection_made() [-> data_received() *] [-> eof_received() ?] -> connection_lost() -> end
@@ -87,11 +123,11 @@ class DNSTCPProxy(asyncio.Protocol):
             addr = self.raddr
             self._logger.debug('Data received from {}"'.format(debug_data_addr(data, addr)))
             query = dns.message.from_wire(data[2:])
+            query.timestamp = loop.time()
             query.transport = 'tcp'
-            fqdn = format(query.question[0].name)
+            query.fqdn = format(query.question[0].name).lower()
             cb_f = self.callback_send
-            
-            if self._name_in_soa(fqdn) and self.cb_soa:
+            if self._name_in_soa(query.fqdn) and self.cb_soa:
                 self.cb_soa(query, addr, cb_f)
             elif self.cb_nosoa:
                 self.cb_nosoa(query, addr, cb_f)
@@ -99,6 +135,9 @@ class DNSTCPProxy(asyncio.Protocol):
             self._logger.error('Failed to process DNS message: {}\n{}'.format(e, data))
 
     def callback_send(self, query, addr, response=None):
+        t_elapsed = loop.time() - query.timestamp
+        if t_elapsed >= TIMESTAMP_THRESHOLD:
+            self._logger.critical('Timestamp threshold expired: {:.3f} / {:.3f} (sec) / {} @ {}:{}'.format(t_elapsed, TIMESTAMP_THRESHOLD, query.fqdn, addr[0], addr[1]))
         if response is None:
             self._send_error(query, addr, dns.rcode.REFUSED)
         else:

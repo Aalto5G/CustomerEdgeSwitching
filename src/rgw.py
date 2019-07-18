@@ -1,20 +1,54 @@
-#!/usr/bin/env python3
+"""
+BSD 3-Clause License
+
+Copyright (c) 2018, Jesus Llorente Santos, Aalto University, Finland.
+All rights reserved.
+
+Edited: 2019, Hammad Kabir, Aalto University, Finland - for CES cooperative firewalling solution.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+
+* Neither the name of the copyright holder nor the names of its
+  contributors may be used to endorse or promote products derived from
+  this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""
 
 #TODO: Add logic to register several DNS resolvers and round robin or avoid using unreachable one
 #TODO: Define better transition from CUSTOMER_POLICY towards ADMIN_POLICY in filter.FORWARD - Use ipt-host-unknown ?
 '''
 Run as:
-./rgw.py  --name gwa.demo                                                    \
-          --dns-soa gwa.demo. 0.168.192.in-addr.arpa. 1.64.100.in-addr.arpa. \
+./rgw.py  --name             gwa.demo                                        \
+          --dns-soa          gwa.demo. cname-gwa.demo.                       \
+                             0.168.192.in-addr.arpa. 1.64.100.in-addr.arpa.  \
+          --dns-cname-soa    cname-gwa.demo.                                 \
           --dns-server-local 127.0.0.1 53                                    \
           --dns-server-lan   192.168.0.1 53                                  \
           --dns-server-wan   100.64.1.130 53                                 \
-          --dns-resolver     8.8.8.8 53                                      \
+          --dns-resolver     127.0.0.1 54                                    \
           --ddns-server      127.0.0.2 53                                    \
-          --dns-timeout      0.010 0.100 0.200                               \
+          --dns-timeout      0.25 0.25 0.25                                  \
           --pool-serviceip   100.64.1.130/32                                 \
-          --pool-cpoolip     100.64.1.133/32 100.64.1.134/32 100.64.1.135/32 \
-          --pool-cespoolip   192.168.124.100/31                              \
+          --pool-cpoolip     100.64.1.131/32 100.64.1.132/32 100.64.1.133/32 \
           --ipt-cpool-queue  1                                               \
           --ipt-cpool-chain  CIRCULAR_POOL                                   \
           --ipt-host-chain   CUSTOMER_POLICY                                 \
@@ -27,13 +61,13 @@ Run as:
           --ips-hosts        IPS_SUBSCRIBERS                                 \
           --ipt-markdnat                                                     \
           --ipt-flush                                                        \
-          --network-api-url  http://127.0.0.1:8081/                          \
-          ---subscriber-folder ../config.d/gwa.demo.subscriber.d/  \
-          --repository-policy-folder     ../config.d/gwa.demo.policy.d/      \
-          --cetp-config config_cesa/config_cesa.yaml                      \
+          --repository-subscriber-folder /customer_edge_switching_v2/config.d/gwa.demo.subscriber.d/ \
+          --repository-policy-folder     /customer_edge_switching_v2/config.d/gwa.demo.policy.d/     \
           --repository-api-url  http://127.0.0.1:8082/                       \
-          --mode rgw
+          --network-api-url     http://127.0.0.1:8081/                       \
+          --synproxy         172.31.255.14 12345
 '''
+
 
 import argparse
 import asyncio
@@ -51,6 +85,7 @@ import connection
 import CETP
 
 from contextlib import suppress
+
 from callbacks import DNSCallbacks, PacketCallbacks
 from connection import ConnectionTable
 from customdns.ddns import DDNSServer
@@ -60,6 +95,7 @@ from host import HostTable, HostEntry
 from network import Network
 from pbra import PolicyBasedResourceAllocation
 from pool import PoolContainer, NamePool, AddressPoolShared, AddressPoolUser
+from suricata import SuricataAlert
 from helpers_n_wrappers import utils3
 from global_variables import RUNNING_TASKS
 
@@ -86,6 +122,8 @@ def parse_arguments():
     # DNS parameters
     parser.add_argument('--dns-soa', nargs='*', required=True,
                         help='Available SOA zones (FQDN and PTR)')
+    parser.add_argument('--dns-cname-soa', nargs='*', required=True,
+                        help='Available SOA zones for CNAME alias generation')
     parser.add_argument('--dns-server-local', nargs=2, action='append',
                         metavar=('IPADDR', 'PORT'),
                         help='DNS serving own host')
@@ -124,7 +162,7 @@ def parse_arguments():
     parser.add_argument('--pool-cespoolip',nargs='*',
                         metavar=('IPADDR'),
                         help='Proxy IP address(es) for CES-to-CES communication')
-
+    
     # Iptables parameters
     parser.add_argument('--ipt-cpool-queue', nargs='*', type=int,
                         metavar=('QUEUENUM'),
@@ -160,6 +198,7 @@ def parse_arguments():
                         metavar=('URL'),
                         help='URL of the repository API')
     
+    
     ## SPM API URL information
     parser.add_argument('--spm-services-boolean', type=str,
                         metavar=('Boolean (True/False)'),
@@ -170,7 +209,7 @@ def parse_arguments():
     parser.add_argument('--spm-url-cetp-network', type=str,
                         metavar=('URL'),
                         help='URL of the SPM for loading network policy')
-    
+        
     ## Subscriber information
     parser.add_argument('--repository-subscriber-file', type=str,
                         metavar=('FILENAME'),
@@ -185,6 +224,8 @@ def parse_arguments():
     parser.add_argument('--repository-policy-folder', type=str,
                         metavar=('FOLDERNAME'),
                         help='Configuration folder with local policy information')
+    
+    ## CES/CETP related parameters 
     parser.add_argument('--cetp-config', dest="cetp_config", type=str,
                         metavar=('FILENAME'),
                         help='File containing CETP configurations')
@@ -193,11 +234,9 @@ def parse_arguments():
                         help='File containing CETP configurations')
 
     ## SYNPROXY information
-    parser.add_argument('--synproxy', nargs=2, default=('127.0.0.1', 12345),
+    parser.add_argument('--synproxy', nargs=2, default=None, #('127.0.0.1', 12345),
                         metavar=('IPADDR', 'PORT'),
                         help='SYNPROXY control endpoint')
-    # Operation mode
-    parser.add_argument('--mode', dest='mode', default='rgw', choices=['rgw', 'ces'])
 
     return parser.parse_args()
 
@@ -227,7 +266,7 @@ class RealmGateway(object):
         # Initialize PacketCallbacks
         yield from self._init_packet_callbacks()
         # Initialize CETP
-        yield from self._init_cetp()
+        yield from self._init_cetp()        
         # Initialize DNS
         yield from self._init_dns()
         # Create task: CircularPool cleanup
@@ -238,27 +277,33 @@ class RealmGateway(object):
         RUNNING_TASKS.append((_t, 'cleanup_pbra_timers'))
         # Create task for cleaning & synchronizing the CETP-H2H conns.
         _t = asyncio.ensure_future(self._init_cleanup_ovsConnections(2.0))
-        RUNNING_TASKS.append((_t, 'H2H_conn_timers'))
+        RUNNING_TASKS.append((_t, 'DP_conn_timers'))        
         # Create task: Show DNS groups
         _t = asyncio.ensure_future(self._init_show_dnsgroups(20.0))
         RUNNING_TASKS.append((_t, 'show_dnsgroups'))
         # Initialize Subscriber information
         yield from self._init_subscriberdata()
+
+        # Initialize Subscriber information
+        yield from self._init_suricata('0.0.0.0', 12346)
+
+
         # Ready!
         self._logger.warning('RealmGateway_v2 is ready!')
+
 
     @asyncio.coroutine
     def _init_datarepository(self):
         # Initialize Data Repository
         self._logger.warning('Initializing Data Repository')
-        configfile                      = self._config.getdefault('repository_subscriber_file', None)
-        configfolder                    = self._config.getdefault('repository_subscriber_folder', None)
-        policyfile                      = self._config.getdefault('repository_policy_file', None)
-        policyfolder                    = self._config.getdefault('repository_policy_folder', None)
-        api_url                         = self._config.getdefault('repository_api_url', None)
+        configfile   = self._config.getdefault('repository_subscriber_file', None)
+        configfolder = self._config.getdefault('repository_subscriber_folder', None)
+        policyfile   = self._config.getdefault('repository_policy_file', None)
+        policyfolder = self._config.getdefault('repository_policy_folder', None)
+        api_url      = self._config.getdefault('repository_api_url', None)
         spm_host_cetp_policy_url        = self._config.getdefault('spm_url_cetp_host', None)
         spm_network_cetp_policy_url     = self._config.getdefault('spm_url_cetp_network', None)
-        
+                
         self._datarepository = DataRepository(configfile = configfile, configfolder = configfolder,
                                               policyfile = policyfile, policyfolder = policyfolder,
                                               api_url = api_url)
@@ -273,7 +318,6 @@ class RealmGateway(object):
         ## Service IP Pool
         ap = AddressPoolShared('servicepool', name='Service Pool')
         self._pooltable.add(ap)
-        
         for ipaddr in self._config.getdefault('pool_serviceip', ()):
             self._logger.info('Adding resource(s) to pool {} @ <{}>'.format(ipaddr, ap))
             ap.add_to_pool(ipaddr)
@@ -281,7 +325,6 @@ class RealmGateway(object):
         ## Circular IP Pool
         ap = AddressPoolShared('circularpool', name='Circular Pool')
         self._pooltable.add(ap)
-        
         for ipaddr in self._config.getdefault('pool_cpoolip', ()):
             self._logger.info('Adding resource(s) to pool {} @ <{}>'.format(ipaddr, ap))
             ap.add_to_pool(ipaddr)
@@ -291,12 +334,12 @@ class RealmGateway(object):
         ap = AddressPoolUser('proxypool', name='CES Proxy Pool')
         self._pooltable.add(ap)
         
-        address_pools = self._config.getdefault('pool_cespoolip', ())
-        if address_pools is not None:
-            for ipaddr in address_pools:
+        address_pool = self._config.getdefault('pool_cespoolip', ())
+        if address_pool is not None:
+            for ipaddr in address_pool:
                 self._logger.info('Adding resource(s) to pool {} @ <{}>'.format(ipaddr, ap))
                 ap.add_to_pool(ipaddr)
-            
+
     @asyncio.coroutine
     def _init_hosttable(self):
         # Create container of Hosts
@@ -336,7 +379,7 @@ class RealmGateway(object):
                 srv = self.ces_conf["CETPServers"][s]
                 ip_addr, port, proto, order, preference = srv["ip"], srv["port"], srv["transport"], srv["order"], srv["preference"]
                 self._cetp_service.append( (ip_addr, port, proto, order, preference) )
-        
+                
     @asyncio.coroutine
     def _init_pbra(self):
         # Create container of Reputation objects
@@ -345,7 +388,8 @@ class RealmGateway(object):
                                                    hosttable       = self._hosttable,
                                                    connectiontable = self._connectiontable,
                                                    datarepository  = self._datarepository,
-                                                   network         = self._network)
+                                                   network         = self._network,
+                                                   cname_soa       = self._config.dns_cname_soa)
 
     @asyncio.coroutine
     def _init_packet_callbacks(self):
@@ -365,7 +409,6 @@ class RealmGateway(object):
                 if spm_services_boolean.lower()=="true":
                     return True
             return False
-
         if self.cetp_config is not None:
             self.cetpstate_table     = CETP.CETPStateTable()
             self.ces_params          = self.ces_conf['CESParameters']
@@ -384,80 +427,76 @@ class RealmGateway(object):
     @asyncio.coroutine
     def _init_dns(self):
         # Create object for storing all DNS-related information
-        self.dnscb = DNSCallbacks(cachetable      = None,
+        self._dnscb = DNSCallbacks(cachetable      = None,
                                   datarepository  = self._datarepository,
                                   network         = self._network,
                                   hosttable       = self._hosttable,
                                   pooltable       = self._pooltable,
                                   connectiontable = self._connectiontable,
-                                  cetp_mgr        = self._cetp_mgr,
                                   pbra            = self._pbra,
+                                  cetp_mgr        = self._cetp_mgr,
                                   cetp_service    = self._cetp_service,
                                   cesid           = self.cesid)
 
         # Register defined DNS timeouts
-        self.dnscb.dns_register_timeout(self._config.dns_timeout, None)
-        self.dnscb.dns_register_timeout(self._config.dns_timeout_a, 1)
-        self.dnscb.dns_register_timeout(self._config.dns_timeout_aaaa, 28)
-        self.dnscb.dns_register_timeout(self._config.dns_timeout_srv, 33)
-        self.dnscb.dns_register_timeout(self._config.dns_timeout_naptr, 35)
+        self._dnscb.dns_register_timeout(self._config.dns_timeout, None)
+        self._dnscb.dns_register_timeout(self._config.dns_timeout_a, 1)
+        self._dnscb.dns_register_timeout(self._config.dns_timeout_aaaa, 28)
+        self._dnscb.dns_register_timeout(self._config.dns_timeout_srv, 33)
+        self._dnscb.dns_register_timeout(self._config.dns_timeout_naptr, 35)
 
         # Register defined SOA zones
         for soa_name in self._config.dns_soa:
             self._logger.info('Registering DNS SOA {}'.format(soa_name))
-            self.dnscb.dns_register_soa(soa_name)
-        soa_list = self.dnscb.dns_get_soa()
+            self._dnscb.dns_register_soa(soa_name)
+        soa_list = self._dnscb.dns_get_soa()
 
         # Register DNS resolvers
-        if self._config.dns_resolver is not None:
-            for ipaddr, port in self._config.dns_resolver:
-                self._logger.info('Creating DNS Resolver endpoint @{}:{}'.format(ipaddr, port))
-                self.dnscb.dns_register_resolver((ipaddr, port))
+        for ipaddr, port in self._config.dns_resolver:
+            self._logger.info('Creating DNS Resolver endpoint @{}:{}'.format(ipaddr, port))
+            self._dnscb.dns_register_resolver((ipaddr, port))
 
         # Dynamic DNS Server for DNS update messages
         for ipaddr, port in self._config.ddns_server:
-            cb_function = lambda x,y,z: asyncio.ensure_future(self.dnscb.ddns_process(x,y,z))
+            cb_function = lambda x,y,z: asyncio.ensure_future(self._dnscb.ddns_process(x,y,z))
             transport, protocol = yield from self._loop.create_datagram_endpoint(functools.partial(DDNSServer, cb_default = cb_function), local_addr=(ipaddr, port))
             self._logger.info('Creating DNS DDNS endpoint @{}:{}'.format(ipaddr, port))
-            self.dnscb.register_object('DDNS@{}:{}'.format(ipaddr, port), protocol)
+            self._dnscb.register_object('DDNS@{}:{}'.format(ipaddr, port), protocol)
 
         # DNS Server for WAN via UDP
-        if self._config.dns_server_wan is not None:
-            for ipaddr, port in self._config.dns_server_wan:
-                cb_soa   = lambda x,y,z: asyncio.ensure_future(self.dnscb.dns_process_rgw_wan_soa(x,y,z))
-                cb_nosoa = lambda x,y,z: asyncio.ensure_future(self.dnscb.dns_process_rgw_wan_nosoa(x,y,z))
-                transport, protocol = yield from self._loop.create_datagram_endpoint(functools.partial(DNSProxy, soa_list = soa_list, cb_soa = cb_soa, cb_nosoa = cb_nosoa), local_addr=(ipaddr, port))
-                self._logger.info('Creating DNS Server endpoint @{}:{}'.format(ipaddr, port))
-                self.dnscb.register_object('DNSServer@{}:{}'.format(ipaddr, port), protocol)
+        for ipaddr, port in self._config.dns_server_wan:
+            cb_soa   = lambda x,y,z: asyncio.ensure_future(self._dnscb.dns_process_rgw_wan_soa(x,y,z))
+            cb_nosoa = lambda x,y,z: asyncio.ensure_future(self._dnscb.dns_process_rgw_wan_nosoa(x,y,z))
+            transport, protocol = yield from self._loop.create_datagram_endpoint(functools.partial(DNSProxy, soa_list = soa_list, cb_soa = cb_soa, cb_nosoa = cb_nosoa), local_addr=(ipaddr, port))
+            self._logger.info('Creating DNS Server endpoint @{}:{}'.format(ipaddr, port))
+            self._dnscb.register_object('DNSServer@{}:{}'.format(ipaddr, port), protocol)
 
         # DNS Server for WAN via TCP
-        if self._config.dns_server_wan is not None:
-            for ipaddr, port in self._config.dns_server_wan:
-                cb_soa   = lambda x,y,z: asyncio.ensure_future(self.dnscb.dns_process_rgw_wan_soa(x,y,z))
-                cb_nosoa = lambda x,y,z: asyncio.ensure_future(self.dnscb.dns_process_rgw_wan_nosoa(x,y,z))
-                server = yield from self._loop.create_server(functools.partial(DNSTCPProxy, soa_list = soa_list, cb_soa = cb_soa, cb_nosoa = cb_nosoa), host=ipaddr, port=port, reuse_address=True)
-                server.connection_lost = lambda x: server.close()
-                self._logger.info('Creating DNS TCP Server endpoint @{}:{}'.format(ipaddr, port))
-                self.dnscb.register_object('DNSTCPServer@{}:{}'.format(ipaddr, port), server)
+        for ipaddr, port in self._config.dns_server_wan:
+            cb_soa   = lambda x,y,z: asyncio.ensure_future(self._dnscb.dns_process_rgw_wan_soa(x,y,z))
+            cb_nosoa = lambda x,y,z: asyncio.ensure_future(self._dnscb.dns_process_rgw_wan_nosoa(x,y,z))
+            server = yield from self._loop.create_server(functools.partial(DNSTCPProxy, soa_list = soa_list, cb_soa = cb_soa, cb_nosoa = cb_nosoa), host=ipaddr, port=port, reuse_address=True)
+            server.connection_lost = lambda x: server.close()
+            self._logger.info('Creating DNS TCP Server endpoint @{}:{}'.format(ipaddr, port))
+            self._dnscb.register_object('DNSTCPServer@{}:{}'.format(ipaddr, port), server)
 
         # DNS Proxy for LAN
-        if self._config.dns_server_lan is not None:
-            for ipaddr, port in self._config.dns_server_lan:
-                cb_soa   = lambda x,y,z: asyncio.ensure_future(self.dnscb.dns_process_rgw_lan_soa(x,y,z))
-                cb_nosoa = lambda x,y,z: asyncio.ensure_future(self.dnscb.dns_process_rgw_lan_nosoa(x,y,z))
-                transport, protocol = yield from self._loop.create_datagram_endpoint(functools.partial(DNSProxy, soa_list = soa_list, cb_soa = cb_soa, cb_nosoa = cb_nosoa), local_addr=(ipaddr, port))
-                self._logger.info('Creating DNS Proxy endpoint @{}:{}'.format(ipaddr, port))
-                self.dnscb.register_object('DNSProxy@{}:{}'.format(ipaddr, port), protocol)
+        for ipaddr, port in self._config.dns_server_lan:
+            cb_soa   = lambda x,y,z: asyncio.ensure_future(self._dnscb.dns_process_rgw_lan_soa(x,y,z))
+            cb_nosoa = lambda x,y,z: asyncio.ensure_future(self._dnscb.dns_process_rgw_lan_nosoa(x,y,z))
+            transport, protocol = yield from self._loop.create_datagram_endpoint(functools.partial(DNSProxy, soa_list = soa_list, cb_soa = cb_soa, cb_nosoa = cb_nosoa), local_addr=(ipaddr, port))
+            self._logger.info('Creating DNS Proxy endpoint @{}:{}'.format(ipaddr, port))
+            self._dnscb.register_object('DNSProxy@{}:{}'.format(ipaddr, port), protocol)
 
         ## DNS Proxy for Local
-        if self._config.dns_server_local is not None:
-            for ipaddr, port in self._config.dns_server_local:
-                cb_soa   = lambda x,y,z: asyncio.ensure_future(self.dnscb.dns_process_rgw_local_soa(x,y,z))
-                # Disable resolutions of non SOA domains for self generated DNS queries (i.e. HTTP proxy) - Answer with REFUSED
-                cb_nosoa = lambda x,y,z: asyncio.ensure_future(self.dnscb.dns_error_response(x,y,z,rcode=dns.rcode.REFUSED))
-                transport, protocol = yield from self._loop.create_datagram_endpoint(functools.partial(DNSProxy, soa_list = soa_list, cb_soa = cb_soa, cb_nosoa = cb_nosoa), local_addr=(ipaddr, port))
-                self._logger.info('Creating DNS Proxy endpoint @{}:{}'.format(ipaddr, port))
-                self.dnscb.register_object('DNSProxy@{}:{}'.format(ipaddr, port), protocol)
+        for ipaddr, port in self._config.dns_server_local:
+            cb_soa   = lambda x,y,z: asyncio.ensure_future(self._dnscb.dns_process_rgw_lan_soa(x,y,z))
+            # Disable resolutions of non SOA domains for self generated DNS queries (i.e. HTTP proxy) - Answer with REFUSED
+            cb_nosoa = lambda x,y,z: asyncio.ensure_future(self._dnscb.dns_error_response(x,y,z,rcode=dns.rcode.REFUSED))
+            transport, protocol = yield from self._loop.create_datagram_endpoint(functools.partial(DNSProxy, soa_list = soa_list, cb_soa = cb_soa, cb_nosoa = cb_nosoa), local_addr=(ipaddr, port))
+            self._logger.info('Creating DNS Proxy endpoint @{}:{}'.format(ipaddr, port))
+            self._dnscb.register_object('DNSProxy@{}:{}'.format(ipaddr, port), protocol)
+
 
     @asyncio.coroutine
     def _init_subscriberdata(self):
@@ -468,13 +507,12 @@ class RealmGateway(object):
             fqdn = subs_data['ID']['fqdn'][0]
             self._logger.debug('Registering subscriber {} / {}@{}'.format(subs_id, fqdn, ipaddr))
             
-            # Hammad addition - to register CES proxy pool against each served host 
             key  = 'proxypool'
             if self._pooltable.has(key):
                 ap = self._pooltable.get(key)
                 ap.create_pool(fqdn)
-                
-            yield from self.dnscb.ddns_register_user(fqdn, 1, ipaddr)
+                            
+            yield from self._dnscb.ddns_register_user(fqdn, 1, ipaddr)
         self._logger.info('Completed initializacion of subscriber data in {:.3f} sec'.format(self._loop.time()-tzero))
 
     @asyncio.coroutine
@@ -491,15 +529,16 @@ class RealmGateway(object):
         while True:
             yield from asyncio.sleep(delay)
             # Update table and remove expired elements
-            #self._pbra.cleanup_timers()
+            self._pbra.cleanup_timers()
 
     @asyncio.coroutine
     def _init_show_dnsgroups(self, delay):
         self._logger.warning('Initiating display of DNSGroup information every {} seconds'.format(delay))
+        self._pbra.debug_dnsgroups(transition = False)
         while True:
             yield from asyncio.sleep(delay)
             # Update table and remove expired elements
-            self._pbra.debug_dnsgroups()
+            self._pbra.debug_dnsgroups(transition = True)
 
     @asyncio.coroutine
     def _init_cleanup_ovsConnections(self, delay):
@@ -518,22 +557,15 @@ class RealmGateway(object):
             self._logger.error("Exception in _init_cleanup_ovsH2HConnections: {}".format(ex))
             #utils3.trace()
 
-            
     @asyncio.coroutine
     def shutdown(self):
         self._logger.warning('RealmGateway_v2 is shutting down...')
-        
-        # Close registered sockets in callback module
-        for obj in self.dnscb.get_object(None):
-            obj.connection_lost(None)
-        # Close bound NFQUEUEs
-        self._network.ipt_deregister_nfqueues()
-        # Close open aiohttp_client objects
-        self._network.rest_api_close()
-        self._datarepository.rest_api_close()
+        self._dnscb.shutdown()
+        self._network.shutdown()
+        self._datarepository.shutdown()
         self._cetp_mgr.terminate()
         yield from asyncio.sleep(0.1)
-        
+
         for task_obj, task_name in RUNNING_TASKS:
             with suppress(asyncio.CancelledError):
                 self._logger.info('Cancelling {} task'.format(task_name))
@@ -541,6 +573,12 @@ class RealmGateway(object):
                 yield from asyncio.sleep(1)
                 yield from task_obj
                 self._logger.warning('>> Cancelled {} task'.format(task_name))
+
+    @asyncio.coroutine
+    def _init_suricata(self, ipaddr, port):
+        ## Added for Suricata testing
+        transport, protocol = yield from self._loop.create_datagram_endpoint(SuricataAlert, local_addr=(ipaddr, port))
+        self._logger.warning('Creating SuricataAlert endpoint @{}:{}'.format(ipaddr, port))
 
 
 if __name__ == '__main__':
@@ -554,7 +592,6 @@ if __name__ == '__main__':
     # Get event loop
     loop = asyncio.get_event_loop()
     loop.set_debug(False)
-    
     try:
         # Create object instance
         obj = RealmGateway(args)
@@ -584,3 +621,4 @@ if __name__ == '__main__':
 
     loop.stop()
     loop.close()
+

@@ -1,0 +1,56 @@
+# YAML configuration file for Realm Gateway Traffic Test Suite v0.1
+## Modify and test via yaml.load(open('config_test.yaml', 'r'))
+
+# Total duration of the test (sec)
+duration: 1
+
+# Backoff time before scheduling tests (sec)
+backoff: 3
+
+# Global definitions for traffic tests, used if no test specific parameter is defined
+global_traffic:
+    dnsdata:
+        dns_laddr: [["0.0.0.0", 0, 6], ["0.0.0.0", 0, 17]]
+        dns_raddr: [["8.8.8.8", 53, 17], ["8.8.8.8", 53, 6], ["8.8.4.4", 53, 17], ["8.8.4.4", 53, 6]]
+        data_laddr: [["0.0.0.0", 0, 6], ["0.0.0.0", 0, 17]]
+        data_raddr: [["example.com", 80, 6], ["google-public-dns-a.google.com", 53, 17]]
+        dns_timeouts: [1,5,5,5]
+        data_timeouts: [1]
+        # Traffic Control parameters / network delay (sec) via tc and netem
+        dns_delay: [0.250, 0.250]
+        data_delay: [0.200, 0.200]
+    dns:
+        dns_laddr: [["0.0.0.0", 0, 6], ["0.0.0.0", 0, 17]]
+        dns_raddr: [["8.8.8.8", 53, 17], ["8.8.8.8", 53, 6], ["8.8.4.4", 53, 17], ["8.8.4.4", 53, 6]]
+        data_raddr: [["example.com", 0, 0], ["google-public-dns-a.google.com", 0, 0]]
+        dns_timeouts: [1,5,5,5]
+        # Traffic Control parameters / network delay (sec) via tc and netem
+        dns_delay: [0.250, 0.250]
+    data:
+        data_laddr: [["0.0.0.0", 0, 6], ["0.0.0.0", 0, 17]]
+        data_raddr: [["93.184.216.34", 80, 6], ["8.8.8.8", 53, 17]]
+        data_timeouts: [1]
+        # Traffic Control parameters / network delay (sec) via tc and netem
+        data_delay: [0.200, 0.200]
+    dnsspoof:
+        dns_laddr: [["1.1.1.1", 2000, 17], ["2.2.2.2", 2000, 17]]
+        dns_raddr: [["8.8.8.8", 53, 17], ["8.8.4.4", 53, 17], ["195.148.125.201", 53, 17], ["100.64.1.130", 53, 17]]
+        data_raddr: [["dnsspoof.example.com", 0, 0], ["dnsspoof.google.es", 0, 0]]
+        interface: "wan0"
+    dataspoof:
+        data_laddr: [["1.1.1.1", 3000, 17], ["1.1.1.1", 0, 6]]
+        data_raddr: [["8.8.8.8", 0, 17], ["8.8.8.8", 0, 6], ["195.148.125.201", 0, 17], ["195.148.125.201", 0, 6], ["100.64.1.130", 0, 17], ["100.64.1.130", 0, 6]]
+        interface: "wan0"
+
+# This models all the test traffic
+traffic:
+    # Example of tests with global_traffic parameters
+    - {type: "dnsdata",   load: 2}
+    - {type: "dns",       load: 2, distribution: "exp", edns_options: ["ecs"]}
+    - {type: "data",      load: 2, distribution: "uni"}
+    - {type: "dataspoof", load: 2, interface: "ens18"}
+    - {type: "dnsspoof",  load: 2, interface: "ens18"}
+
+    ## Example of tests with specific values
+    ## dnsdata: Specific duration and starting time
+    - {type: "dnsdata",   load: 2, ts_start: 10, duration: 10}

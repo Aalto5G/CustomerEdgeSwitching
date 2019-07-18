@@ -1,9 +1,41 @@
+"""
+BSD 3-Clause License
+
+Copyright (c) 2018, Jesus Llorente Santos, Aalto University, Finland
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+
+* Neither the name of the copyright holder nor the names of its
+  contributors may be used to endorse or promote products derived from
+  this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""
+
 import asyncio
 import logging
 import time
-from functools import partial
-
+import functools
 import ipaddress
+import random
 
 from helpers_n_wrappers import container3
 from helpers_n_wrappers import utils3
@@ -23,7 +55,6 @@ from dns.rdatatype import *
 
 # Reputation and system load
 PBRA_REPUTATION_MIDDLE = 0.45
-SYSTEM_LOAD_ENABLED   = lambda x: x>=0
 
 # Keys for uStateDNSResolver
 KEY_DNSNODE_IPADDR  = 10
@@ -47,7 +78,6 @@ KEY_DNS_REPUTATION  = 50
 # Keys for uStateDataPacket
 KEY_DATA_PACKET     = 60
 
-# TODO: Create minimal unit that extends ContainerNode and implements a uReputation object with basic methods to avoid code duplication
 
 class uReputation(object):
     """
@@ -141,7 +171,7 @@ class uReputation(object):
 
 
 class uDNSQueryTimer(container3.ContainerNode):
-    TIMEOUT = 8.0
+    TIMEOUT = 5.0
 
     def __init__(self, query, ipaddr, service, alias_service, timeout=0):
         """ Initialize as a ContainerNode """
@@ -208,7 +238,7 @@ class uStateDNSHost(container3.ContainerNode):
         keys = []
         # Typical keys of an advertised DNS host and data host
         keys.append(((KEY_DNSHOST_IPADDR, self.ipaddr), True))
-        keys.append(((KEY_DNSHOST_NCID, self.ncid), True))
+        #keys.append(((KEY_DNSHOST_NCID, self.ncid), True))
         # Common key for indexing all reputation objects
         keys.append((KEY_DNS_REPUTATION, False))
         return keys
@@ -497,14 +527,11 @@ class PolicyBasedResourceAllocation(container3.Container):
     * PBRA_DNS_POLICY_TCP establishes that incoming first queries must be carried via TCP
     * PBRA_DNS_POLICY_CNAME establishes that allocation is only allowed via temporary alias names of CNAME responses
         These two policies can be enabled or disabled independently
-    * PBRA_DNS_LOG_UNTRUSTED enables logging all untrsuted UDP DNS query attempts
-    * PBRA_DNS_LOAD_POLICING enables dynamic fine-grained policy enforcement based on system load
+    * PBRA_DNS_LOG_UNTRUSTED enables logging all untrusted UDP DNS query attempts
 
-    # Load levels in 100% (Use -1 value in load_threshold parameter to disable step)
-    * SYSTEM_LOAD_VERY_HIGH
-    * SYSTEM_LOAD_HIGH
-    * SYSTEM_LOAD_MEDIUM
-    * SYSTEM_LOAD_LOW
+    # Load levels in 100% (Use -1 value in threshold parameter to disable step)
+    ## math choices 'min', 'max', 'avg'
+    {'threshold_min':  0, 'threshold_max': 100, 'fqdn_new': 0.0, 'sfqdn_new': 0.0, 'sfqdn_reuse': 0.0, 'math': 'max'}
 
     """
 
@@ -513,14 +540,13 @@ class PolicyBasedResourceAllocation(container3.Container):
     PBRA_DNS_POLICY_TCP       = False
     PBRA_DNS_POLICY_CNAME     = False
     PBRA_DNS_LOG_UNTRUSTED    = False
-    PBRA_DNS_LOAD_POLICING    = False
-
-    # Define default load threshold levels when PBRA_DNS_LOAD_POLICING is active
-    SYSTEM_LOAD_LOW           = {'load_threshold': 0,  'reputation_fqdn': 0,    'reputation_sfqdn': 0}
-    SYSTEM_LOAD_MEDIUM        = {'load_threshold': 20, 'reputation_fqdn': 0.5,  'reputation_sfqdn': 0.3}
-    SYSTEM_LOAD_HIGH          = {'load_threshold': 60, 'reputation_fqdn': 0.75, 'reputation_sfqdn': 0.6}
-    SYSTEM_LOAD_VERY_HIGH     = {'load_threshold': 80, 'reputation_fqdn': -1,   'reputation_sfqdn': 0.8}
-
+    # Define default system load policies
+    SYSTEM_LOAD = [
+                   #{'threshold_min': 80, 'threshold_max': 100, 'fqdn_new': 1.0, 'sfqdn_new': 0.8, 'sfqdn_reuse': 0.7, 'math': 'min'},
+                   #{'threshold_min': 66, 'threshold_max': 100, 'fqdn_new': 0.6, 'sfqdn_new': 0.4, 'sfqdn_reuse': 0.3, 'math': 'avg'},
+                   #{'threshold_min': 33, 'threshold_max': 100, 'fqdn_new': 0.3, 'sfqdn_new': 0.2, 'sfqdn_reuse': 0.1, 'math': 'max'},
+                   {'threshold_min':  0, 'threshold_max': 100, 'fqdn_new': 0.0, 'sfqdn_new': 0.0, 'sfqdn_reuse': 0.0, 'math': 'max'},
+                   ]
 
     def __init__(self, **kwargs):
         """ Initialize as a Container """
@@ -543,10 +569,14 @@ class PolicyBasedResourceAllocation(container3.Container):
         # Set all existing values of the policy
         kwargs = cpool_policy['CONTROL_VARIABLES']
         utils3.set_attributes(self, override=True, **kwargs)
+
         # Show running control variables
-        control_variables = ['PBRA_DNS_POLICY_TCPCNAME', 'PBRA_DNS_POLICY_TCP', 'PBRA_DNS_POLICY_CNAME', 'PBRA_DNS_LOG_UNTRUSTED', 'PBRA_DNS_LOAD_POLICING', 'SYSTEM_LOAD_VERY_HIGH', 'SYSTEM_LOAD_HIGH', 'SYSTEM_LOAD_MEDIUM', 'SYSTEM_LOAD_LOW']
-        for _name in control_variables:
-            self._logger.info('Control variable: {}={}'.format(_name, getattr(self, _name)))
+        self._logger.info('Control variable: {}={}'.format('PBRA_DNS_POLICY_TCPCNAME', self.PBRA_DNS_POLICY_TCPCNAME))
+        self._logger.info('Control variable: {}={}'.format('PBRA_DNS_POLICY_TCP', self.PBRA_DNS_POLICY_TCP))
+        self._logger.info('Control variable: {}={}'.format('PBRA_DNS_POLICY_CNAME', self.PBRA_DNS_POLICY_CNAME))
+        self._logger.info('Control variable: {}={}'.format('PBRA_DNS_LOG_UNTRUSTED', self.PBRA_DNS_LOG_UNTRUSTED))
+        self._logger.info('Control variable: {}=\n{}'.format('SYSTEM_LOAD', '\n'.join(format(_) for _ in self.SYSTEM_LOAD)))
+
 
     def _init_dns_group_policy(self):
         # Initialize DNS Group Policy with bootstrapping values
@@ -572,24 +602,26 @@ class PolicyBasedResourceAllocation(container3.Container):
 
     def cleanup_timers(self):
         """ Perform a cleanup of expired timer objects """
+        self._logger.warning('Initiating cleanup of timers')
         nodes = self.lookup(KEY_TIMER, update=False, check_expire=False)
         if nodes is None:
             return
         for node in list(nodes):
             if node.hasexpired():
                 self.remove(node)
+        self._logger.warning('Terminated cleanup of timers')
 
-    def debug_dnsgroups(self):
+    def debug_dnsgroups(self, transition = False):
         # For debugging purposes
-        #nodes = self.lookup(KEY_DNSGROUP, update=False, check_expire=False)
+        self._logger.warning('Initiating debug_dnsgroups: transition={}'.format(transition))
         nodes = self.lookup(KEY_DNS_REPUTATION, update=False, check_expire=False)
-        if nodes is None:
-            return
+        if nodes and transition:
+            for node in nodes:
+                self._logger.warning('[1] {}\n\t>> {}'.format(node, node.reputation_current))
+                node.transition_period()
+                self._logger.warning('[2] {}\n\t>> {}'.format(node, node.reputation_current))
 
-        [node.transition_period() for node in nodes]
-        #[print(node) for node in nodes]
-        #[node.show_reputation() for node in nodes]
-
+        self._logger.warning('Terminated debug_dnsgroups: transition={}'.format(transition))
 
     def _policy_tcp(self, query):
         # Answer TRUNCATED
@@ -600,6 +632,7 @@ class PolicyBasedResourceAllocation(container3.Container):
 
     def _policy_cname(self, query):
         # Answer CNAME
+        ## Use original FQDN as it comes in the query
         fqdn = format(query.question[0].name)
         """
         There seems to be a bug using LXC and string match.
@@ -608,12 +641,14 @@ class PolicyBasedResourceAllocation(container3.Container):
         The ideal MAX_LENGTH_LABEL should have value of 63. For compatibility, we use 32.
         """
         MAX_LENGTH_LABEL = 32
-        _fqdn = utils3.random_string(MAX_LENGTH_LABEL) + '.' + fqdn
+        # Get random SOA name from list
+        cname_soa = self.cname_soa[random.randrange(0, len(self.cname_soa))]
+        cname_fqdn = utils3.random_string(MAX_LENGTH_LABEL) + '.' + cname_soa
         ttl = 0
         response = dns.message.make_response(query, recursion_available=False)
         response.set_rcode(dns.rcode.NOERROR)
-        response.answer = [dns.rrset.from_text(fqdn, ttl, 1, dns.rdatatype.CNAME, _fqdn)]
-        return response, _fqdn
+        response.answer = [dns.rrset.from_text(fqdn, ttl, 1, dns.rdatatype.CNAME, cname_fqdn)]
+        return response, cname_fqdn
 
     def _load_metadata_resolver(self, query, addr, create=False):
         # Collect metadata from DNS query related to resolver based on IP address
@@ -635,16 +670,20 @@ class PolicyBasedResourceAllocation(container3.Container):
             query.reputation_resolver = dnsgroup_obj
 
     def _load_metadata_requestor(self, query, addr, create=False):
-        # TODO: Bind ncid based on specific dns group id instead of resolver ipaddr (as to respect EDNS0 NCID cluster specification)
-
         # Collect metadata from DNS query related to requestor based on DNS options (EDNS0)
         dnshost_obj = None
         meta_ipaddr = None
+        meta_mask = None
         meta_ncid = None
         meta_flag = False
 
         for opt in query.options:
-            self._logger.debug('Found EDNS0: {}'.format(opt.to_text()))
+            # My custom EDNS0 options implement this method (changes in the dnspython API)
+            if hasattr(opt, 'to_text'):
+                self._logger.debug('Found EDNS0: {}'.format(opt.to_text()))
+            else:
+                self._logger.debug('Found EDNS0: Generic {}'.format(opt.otype))
+
             if opt.otype == 0x08 and meta_ipaddr is None:
                 # ClientSubnet
                 meta_ipaddr = opt.address
@@ -665,7 +704,6 @@ class PolicyBasedResourceAllocation(container3.Container):
             return
 
         ipaddr_lookupkey = format(ipaddress.ip_network('{}/{}'.format(meta_ipaddr, meta_mask), strict=False).network_address)
-        ncid_lookupkey = (meta_ncid, addr[0]) # tuple of ncid tag and resolver IP address
 
         if self.has((KEY_DNSHOST_IPADDR, ipaddr_lookupkey)):
             # Get existing object
@@ -677,7 +715,13 @@ class PolicyBasedResourceAllocation(container3.Container):
             dnshost_obj = uStateDNSHost(ipaddr = meta_ipaddr, ipaddr_mask = meta_mask)
             self.add(dnshost_obj)
 
-        # Needs to be tested
+        '''
+        # TODO: Bind ncid based on specific dns group id instead of resolver ipaddr (as to respect EDNS0 NCID cluster specification)
+                The value can be obtained from the query object // query.reputation_resolver.group_id
+        NB: The code for uStateDNSHost has not been tested for ncid creation!
+            What follows is an example of a potential implementation.
+
+        ncid_lookupkey = (meta_ncid, query.reputation_resolver.group_id) # tuple of ncid tag and resolver IP address
         elif self.has((KEY_DNSHOST_NCID, ncid_lookupkey)):
             # Get existing object
             dnshost_obj = self.get((KEY_DNSHOST_NCID, ncid_lookupkey))
@@ -687,7 +731,7 @@ class PolicyBasedResourceAllocation(container3.Container):
             self._logger.info('Create uStateDNSHost for requestor ncid={}@{}'.format(meta_ncid, addr[0]))
             dnshost_obj = uStateDNSHost(ncid = ncid_lookupkey)
             self.add(dnshost_obj)
-
+        '''
         # Add reputation to the DNS query
         query.reputation_requestor = dnshost_obj
 
@@ -706,21 +750,25 @@ class PolicyBasedResourceAllocation(container3.Container):
             # Register an untrusted event
             query.reputation_resolver.event_untrusted()
 
-
+    @asyncio.coroutine
     def pbra_dns_preprocess_rgw_wan_soa(self, query, addr, host_obj, service_data):
         """ This function implements section: Tackling real resolutions and reputation for remote server(s) and DNS clusters """
-        # TODO: Add a case when reputation is very high and UDP.cookie is found for resolver ?
-        # TODO: Implement TCPCNAME or CNAME based on reputation of the sender?
-        # TODO: Specify the event logging sequence, when do neutral, trusted and untrusted
-
-        fqdn = format(query.question[0].name)
+        '''
+        TODO: Here is a list with ideas related to policy enforcement
+            - Override TCP.tc if UDP.cookie is present ?
+            - Dynamic enforcing of TCPCNAME or CNAME policies based on reputation of the sender ?
+            - Neutral events may indicate a correct behaviour of a server (DNSoTCP or CNAME follow-up), however,
+            limiting the penalty to a host-only, my open the door to rogue servers impersonating numerous clients. Tread carefully!!!
+        '''
+        fqdn = query.fqdn
         alias = service_data['alias']
 
         self._logger.debug('WAN SOA pre-process for {} / {}'.format(fqdn, service_data))
 
         # Load available reputation metadata in query object
         self._load_metadata_resolver(query, addr, create=self.PBRA_DNS_LOG_UNTRUSTED)
-        self._load_metadata_requestor(query, addr, create=False)
+        # Create always reputation information (it will be used depending on the policy)
+        self._load_metadata_requestor(query, addr, create=True)
 
         # Log untrusted requests
         self._dns_preprocess_rgw_wan_soa_event_logging(query, alias)
@@ -750,6 +798,7 @@ class PolicyBasedResourceAllocation(container3.Container):
             return response
 
         # Continue processing with *trusted* DNS query
+        #self._logger.debug('WAN SOA detected trusted query for {} / {}'.format(fqdn, service_data))
 
         ## Enforce PBRA_DNS_POLICY_CNAME
         if self.PBRA_DNS_POLICY_CNAME is False:
@@ -764,7 +813,7 @@ class PolicyBasedResourceAllocation(container3.Container):
             ## Create uDNSQueryTimer object
             timer_obj = uDNSQueryTimer(query, addr[0], service_data, alias_service_data)
             # Monkey patch delete function for timer object
-            timer_obj.delete = partial(self._cb_dnstimer_deleted, timer_obj, host_obj)
+            timer_obj.delete = functools.partial(self._cb_dnstimer_deleted, timer_obj, host_obj)
             self.add(timer_obj)
 
             # Evaluate resolver metadata and create new if does not exist
@@ -775,11 +824,6 @@ class PolicyBasedResourceAllocation(container3.Container):
             self._logger.debug('Create CNAME response / {}'.format(alias_service_data))
             # Return CNAME response
             return response
-
-        # Query is trusted, load/create metadata related to requestor
-        self._load_metadata_requestor(query, addr, create=True)
-
-        self._logger.info('WAN SOA detected trusted query for {} / {}'.format(fqdn, service_data))
 
         # Evaluate seen IP addresses for current FQDN
         timer_obj = self.get((KEY_TIMER_FQDN, fqdn))
@@ -802,8 +846,9 @@ class PolicyBasedResourceAllocation(container3.Container):
         ## > This requires DNSHost created with NCID to be linked to DNSGroup id
 
 
+    @asyncio.coroutine
     def pbra_dns_process_rgw_wan_soa(self, query, addr, host_obj, service_data, host_ipv4):
-        fqdn = format(query.question[0].name)
+        fqdn = query.fqdn
         rdtype = query.question[0].rdtype
 
         # Get cached record
@@ -821,7 +866,7 @@ class PolicyBasedResourceAllocation(container3.Container):
             # Resolve via Circular Pool
             self._logger.debug('Process {} with CircularPool ({}) for {} / {}'.format(fqdn, dns.rdatatype.to_text(rdtype), host_ipv4, service_data))
             # Decision making based on load level(s) and reputation
-            allocated_ipv4 = self._rgw_allocate_circularpool(query, addr, host_obj, service_data, host_ipv4)
+            allocated_ipv4 = yield from self._rgw_allocate_circularpool(query, addr, host_obj, service_data, host_ipv4)
 
         # Create cached record
         self._rgw_cache_set(fqdn, rdtype, allocated_ipv4)
@@ -833,13 +878,8 @@ class PolicyBasedResourceAllocation(container3.Container):
         if timer_obj is None:
             # PBRA_DNS_POLICY_CNAME must not be enabled...
             return None
-        if rdtype not in timer_obj.cache:
-            # A record has not been allocated
-            return None
-
-        # Return cached record
-        allocated_ipv4 = timer_obj.cache[rdtype]
-        return allocated_ipv4
+        # Return cached record or None
+        return timer_obj.cache.get(rdtype, None)
 
     def _rgw_cache_set(self, fqdn, rdtype, rdata):
         """ Create a cached rdata for an fqdn/rdtype """
@@ -864,10 +904,9 @@ class PolicyBasedResourceAllocation(container3.Container):
         allocated_ipv4 = ap_spool.release(ap_spool.allocate())
         return allocated_ipv4
 
+    @asyncio.coroutine
     def _rgw_allocate_circularpool(self, query, addr, host_obj, service_data, host_ipv4):
         """ Takes in a DNS query for CircularPool """
-        # TODO: Implement logic for policy and reputation checking
-
         # Get Circular Pool policy for host
         host_policy = host_obj.get_service('CIRCULARPOOL')
 
@@ -876,192 +915,128 @@ class PolicyBasedResourceAllocation(container3.Container):
 
         # Get host usage stats of the pool - lookup because there could be none
         rgw_conns = self.connectiontable.stats(connection.KEY_RGW)
-        host_conns = self.connectiontable.stats((connection.KEY_RGW, host_obj.fqdn)) # Use host fqdn as connection id
+        host_conns = self.connectiontable.stats((connection.KEY_RGW_FQDN, host_obj.fqdn)) # Use host fqdn as connection id
 
         # Evaluate host policy for quick exit
         if host_conns >= host_policy['max']:
-            self._logger.warning('RealmGateway host policy exceeded: {}'.format(host_policy['max']))
+            self._logger.warning('RealmGateway host policy exceeded: {} pending connection(s)'.format(host_policy['max']))
             return None
 
+        # Enforce Circular Pool policy to allocate an address
+        allocated_ipv4 = yield from self._unified_policy_circularpool(query, addr, host_obj, service_data, host_ipv4)
+        return allocated_ipv4
+
+    def _normalize_reputation_values(self, a, b):
+        """
+        Return normalized values based on current reputation values.
+
+        The normalization problem arises because the policy ranges are defined in [0,1] interval.
+        It could be that our best reputation ~0.75 is not enough to meet the policy because of the [0,1] interval.
+        This would create an under-utilization of resources during high load intervals.
+
+        We opt to normalize the reputation in a new interval [0, max_reputation] to unlock resource access to the best reputed nodes.
+        """
+        # Get list of nodes
+        nodes = self.lookup(KEY_DNS_REPUTATION, update=False, check_expire=False)
+
+        # Obtain the highest reputation of the existing nodes
+        max_reputation = max(nodes, key=lambda node: node.reputation).reputation
+
+        ## Scale normalized [0,1] value to new range [x, y]
+        normalized_f = lambda value, x, y: (value * (y - x)) + x
+        a_norm = normalized_f(a, 0, max_reputation)
+        b_norm = normalized_f(b, 0, max_reputation)
+        return (a_norm, b_norm)
+
+    def _compute_policy_math_reputation(self, r_resolver, r_requestor, math):
+        # Validate choice for math operation
+        assert math in ('max', 'min', 'avg')
+        if math == 'max':
+            return max(r_resolver, r_requestor)
+        elif math == 'min':
+            return min(r_resolver, r_requestor)
+        elif math == 'avg':
+            return (r_resolver + r_requestor) / 2.0
+
+    @asyncio.coroutine
+    def _unified_policy_circularpool(self, query, addr, host_obj, service_data, host_ipv4):
+        '''
+        Execute unified policy enforcement
+        Calculate current system load and attempt to execute all matching policies
+        This simplifies the policy definition supporting overlaps and different criteria
+        '''
         # Calculate system load and find executing policy function
         ## Get Circular Pool address pool stats
         ap_cpool = self.pooltable.get('circularpool')
         pool_size, pool_allocated, pool_available = ap_cpool.get_stats()
         ## Calculate current load in 100%
         sysload = (pool_allocated / pool_size) * 100
+        ## Calculate values from service data
+        fqdn, sfqdn_reuse = self._describe_service_data(service_data, partial_reuse=False)
+        sfqdn = not fqdn
 
-        ## Get executing function
-        ### Execute best-effort policy if DNS Load Policing is disabled
-        if self.PBRA_DNS_LOAD_POLICING is False:
-            allocated_ipv4 = self._policy_circularpool_low(query, addr, host_obj, service_data, host_ipv4)
-            return allocated_ipv4
-        else:
-            cb_f = self._get_policy_load_function(sysload)
-            allocated_ipv4 = cb_f(query, addr, host_obj, service_data, host_ipv4)
-            return allocated_ipv4
-
-
-    def _get_policy_load_function(self, sysload):
-        """ Based on current load, return callback function for policy processing """
-        # We define up to 4 different levels of system load
-
-        if SYSTEM_LOAD_ENABLED(self.SYSTEM_LOAD_VERY_HIGH['load_threshold']) and \
-          sysload >= self.SYSTEM_LOAD_VERY_HIGH['load_threshold']:
-            self._logger.warning('SYSTEM_LOAD_VERY_HIGH ({:.2f}%%)'.format(sysload))
-            return self._policy_circularpool_veryhigh
-
-        elif SYSTEM_LOAD_ENABLED(self.SYSTEM_LOAD_HIGH['load_threshold']) and \
-          sysload >= self.SYSTEM_LOAD_HIGH['load_threshold']:
-            self._logger.warning('SYSTEM_LOAD_HIGH ({:.2f}%%)'.format(sysload))
-            return self._policy_circularpool_high
-
-        elif SYSTEM_LOAD_ENABLED(self.SYSTEM_LOAD_MEDIUM['load_threshold']) and \
-          sysload >= self.SYSTEM_LOAD_MEDIUM['load_threshold']:
-            self._logger.info('SYSTEM_LOAD_MEDIUM ({:.2f}%%)'.format(sysload))
-            return self._policy_circularpool_medium
-
-        elif SYSTEM_LOAD_ENABLED(self.SYSTEM_LOAD_LOW['load_threshold']) and \
-          sysload >= self.SYSTEM_LOAD_LOW['load_threshold']:
-            self._logger.debug('SYSTEM_LOAD_LOW ({:.2f}%%)'.format(sysload))
-            return self._policy_circularpool_low
-
-    def _policy_get_max_reputation(self, query):
-        """ Return the maximum reputation value among DNS resolver and requestor """
+        # Calculate normalized reputations for a query
         r_resolver = 0
         r_requestor = 0
         if query.reputation_resolver:
             r_resolver = query.reputation_resolver.reputation
         if query.reputation_requestor:
-            r_resolver = query.reputation_requestor.reputation
-        return max(r_resolver, r_requestor)
+            r_requestor = query.reputation_requestor.reputation
 
-    def _policy_get_min_reputation(self, query):
-        """ Return the minimum reputation value among DNS resolver and requestor """
-        r_resolver = 0
-        r_requestor = 0
-        if query.reputation_resolver:
-            r_resolver = query.reputation_resolver.reputation
-        if query.reputation_requestor:
-            r_resolver = query.reputation_requestor.reputation
-        return min(r_resolver, r_requestor)
+        # Obtain IP addressing information of DNS parties for improved logging
+        dns_host_ipaddr = query.reputation_requestor.ipaddr if query.reputation_requestor else None
+        dns_resolver_ipaddr = addr[0]
 
-    def _policy_circularpool_veryhigh(self, query, addr, host_obj, service_data, host_ipv4):
-        """ The following restrictions apply
-        1. Minimum reputation is required for allocating new IP address only if service can be overloaded, i.e. port and protocol are not zero
-        """
-        # TODO: Calculate _reputation with max() if dns group SLA is active, else with min()
+        # Normalize reputation values
+        r_resolver, r_requestor = self._normalize_reputation_values(r_resolver, r_requestor)
 
-        self._logger.debug('SYSTEM_LOAD_VERY_HIGH')
+        # Define allocation service for easy logging
+        if fqdn:
+            service_alloc = 'fqdn_new'
+        elif sfqdn and not sfqdn_reuse:
+            service_alloc = 'sfqdn_new'
+        elif sfqdn and sfqdn_reuse:
+            service_alloc = 'sfqdn_reuse'
 
-        _reputation = self._policy_get_max_reputation(query)
-        _overload   = self._service_is_overloadable(service_data, partial_overload=False)
+        # Obtain load policy parameters
+        load_policies = [entry for entry in self.SYSTEM_LOAD if (sysload >= entry['threshold_min'] and sysload <= entry['threshold_max'])]
+        self._logger.info('System load at {:.2f}%% / Attempting match of {} policy(ies)'.format(sysload, len(load_policies)))
 
-        # 1. Minimum reputation is required for allocating new IP address only if service can be overloaded, i.e. port and protocol are not zero
-        if _reputation >= self.SYSTEM_LOAD_VERY_HIGH['reputation_sfqdn'] and _overload is True:
-            self._logger.info('Policy match @ SYSTEM_LOAD_VERY_HIGH: reputation={:.2f}/{:.2f} overload={}/{}'.format(_reputation, self.SYSTEM_LOAD_VERY_HIGH['reputation_sfqdn'], _overload, True))
-            return self._best_effort_allocate(query, addr, host_obj, service_data, host_ipv4)
+        for i, policy in enumerate(load_policies):
+            self._logger.debug('>> [{}/{}] Testing policy / {}'.format(i+1, len(load_policies), policy))
 
-        # Log error violation
-        self._logger.info('Policy violation @ SYSTEM_LOAD_VERY_HIGH')
-        self._logger.info('Policy violation: required reputation={:.2f} overload={}'.format(self.SYSTEM_LOAD_VERY_HIGH['reputation_sfqdn'], True))
-        self._logger.info('Policy violation: offered  reputation={:.2f} overload={}'.format(_reputation, _overload))
+            # Calculate values for policy math
+            reputation = self._compute_policy_math_reputation(r_resolver, r_requestor, policy['math'])
+            # Create log message
+            log_msg = 'load={:.2f}%% allocation={} reputation={:.2f} // reputation offered {:.2f} / {}({:.2f},{:.2f}) // {} @ {}'.format(sysload, service_alloc, policy[service_alloc], reputation, policy['math'], r_resolver, r_requestor, dns_host_ipaddr, dns_resolver_ipaddr)
+
+            # 1. Minimum reputation is required for allocating a new IP address for an FQDN service
+            if ((fqdn and reputation >= policy['fqdn_new']) or
+            # 2. Minimum reputation is required for allocating a new IP address for an SFQDN service
+                (sfqdn and reputation >= policy['sfqdn_new'] and sfqdn_reuse is False) or
+            # 3. Minimum reputation is required for overloading an existing IP address for an SFQDN service
+                (sfqdn and reputation >= policy['sfqdn_reuse'] and sfqdn_reuse is True)):
+                self._logger.info('Policy accepted! {}'.format(log_msg))
+                allocated_ipv4 = yield from self._best_effort_allocate(query, addr, host_obj, service_data, host_ipv4)
+                return allocated_ipv4
+
+            # Fine-grained logging of policy violation
+            self._logger.warning('Policy violation! {}'.format(log_msg))
+
+        # No policy could be executed
         return None
 
-    def _policy_circularpool_high(self, query, addr, host_obj, service_data, host_ipv4):
-        """ The following restrictions apply
-        1. Minimum reputation1 is required for allocating new IP address regardless of the service
-        2. Minimum reputation2 is required for allocating new IP address only if service can be overloaded, i.e. port and protocol are not zero
-        #3. Minimum reputation3 is required for allocating new IP address only if service can be overloaded, supposed there are multiple overloadable IP addresses.
-
-        Note: reputation1 > reputation2 > reputation3
-        """
-        self._logger.debug('SYSTEM_LOAD_HIGH')
-
-        _reputation = self._policy_get_max_reputation(query)
-        _overload   = self._service_is_overloadable(service_data, partial_overload=False)
-
-        # 1. Minimum reputation is required for allocating new IP address regardless of the service
-        if _reputation >= self.SYSTEM_LOAD_HIGH['reputation_fqdn']:
-            self._logger.info('Policy match @ SYSTEM_LOAD_HIGH: reputation={:.2f}/{:.2f}'.format(_reputation, self.SYSTEM_LOAD_HIGH['reputation_fqdn']))
-            return self._best_effort_allocate(query, addr, host_obj, service_data, host_ipv4)
-
-        # 2. Minimum reputation is required for allocating new IP address only if service can be overloaded, i.e. port and protocol are not zero
-        if _reputation >= self.SYSTEM_LOAD_HIGH['reputation_sfqdn'] and _overload is True:
-            self._logger.info('Policy match @ SYSTEM_LOAD_HIGH: reputation={:.2f}/{:.2f} overload={}/{}'.format(_reputation, self.SYSTEM_LOAD_HIGH['reputation_sfqdn'], _overload, True))
-            return self._best_effort_allocate(query, addr, host_obj, service_data, host_ipv4)
-
-        # Log error violation
-        self._logger.info('Policy violation @ SYSTEM_LOAD_HIGH')
-        self._logger.info('Policy violation: required reputation={:.2f} overload={}'.format(self.SYSTEM_LOAD_HIGH['reputation_fqdn'], False))
-        self._logger.info('Policy violation: required reputation={:.2f} overload={}'.format(self.SYSTEM_LOAD_HIGH['reputation_sfqdn'], True))
-        self._logger.info('Policy violation: offered  reputation={:.2f} overload={}'.format(_reputation, _overload))
-        return None
-
-    def _policy_circularpool_medium(self, query, addr, host_obj, service_data, host_ipv4):
-        """ The following restrictions apply
-        1. Minimum reputation1 is required for allocating new IP address regardless of the service
-        2. Minimum reputation2 is required for allocating new IP address only if service can be overloaded, i.e. port or protocol are not zero
-        #3. Minimum reputation3 is required for allocating new IP address only if service can be overloaded, supposed there are multiple overloadable IP addresses.
-        Note: reputation1 > reputation2 > reputation3
-        """
-        self._logger.debug('SYSTEM_LOAD_MEDIUM')
-
-        _reputation = self._policy_get_max_reputation(query)
-        _overload   = self._service_is_overloadable(service_data, partial_overload=True)
-
-        # 1. Minimum reputation is required for allocating new IP address regardless of the service
-        if _reputation >= self.SYSTEM_LOAD_MEDIUM['reputation_fqdn']:
-            self._logger.info('Policy match @ SYSTEM_LOAD_MEDIUM: reputation={:.2f}/{:.2f}'.format(_reputation, self.SYSTEM_LOAD_MEDIUM['reputation_fqdn']))
-            return self._best_effort_allocate(query, addr, host_obj, service_data, host_ipv4)
-
-        # 2. Minimum reputation is required for allocating new IP address only if service can be overloaded, i.e. port or protocol are not zero
-        if _reputation >= self.SYSTEM_LOAD_MEDIUM['reputation_sfqdn'] and _overload is True:
-            self._logger.info('Policy match @ SYSTEM_LOAD_MEDIUM: reputation={:.2f}/{:.2f} overload={}/{}'.format(_reputation, self.SYSTEM_LOAD_MEDIUM['reputation_sfqdn'], _overload, True))
-            return self._best_effort_allocate(query, addr, host_obj, service_data, host_ipv4)
-
-        # Log error violation
-        self._logger.info('Policy violation @ SYSTEM_LOAD_MEDIUM')
-        self._logger.info('Policy violation: required reputation={:.2f} overload={}'.format(self.SYSTEM_LOAD_MEDIUM['reputation_fqdn'], False))
-        self._logger.info('Policy violation: required reputation={:.2f} overload={}'.format(self.SYSTEM_LOAD_MEDIUM['reputation_sfqdn'], True))
-        self._logger.info('Policy violation: offered  reputation={:.2f} overload={}'.format(_reputation, _overload))
-        return None
-
-    def _policy_circularpool_low(self, query, addr, host_obj, service_data, host_ipv4):
-        """ No restrictions apply
-        Note: Gambling stage
-        """
-        self._logger.debug('SYSTEM_LOAD_LOW')
-        return self._best_effort_allocate(query, addr, host_obj, service_data, host_ipv4)
-
-
+    @asyncio.coroutine
     def _best_effort_allocate(self, query, addr, host_obj, service_data, host_ipv4):
-        # TODO: Improve connection creation to include DNS metadata and check for SLA
-        # TODO: Define a connection KEY when creating the object to indicate what tuples need to be registered?
-        self._logger.debug('_best_effort_allocate')
-
         # Obtain FQDN from query
-        fqdn = format(query.question[0].name)
+        fqdn_query = query.fqdn
+        fqdn_alias = service_data.get('_fqdn', fqdn_query)
 
         # Get Circular Pool address pool stats
         ap_cpool = self.pooltable.get('circularpool')
         pool_size, pool_allocated, pool_available = ap_cpool.get_stats()
 
-        # Get list of reusable addresses
-        reuse_ipaddr_l = self._connection_circularpool_get_overloadable(service_data)
-        if len(reuse_ipaddr_l) > 0:
-            # Use first available address from the pool
-            allocated_ipv4 = reuse_ipaddr_l[0]
-            self._logger.debug('Found {} IP(s) for reuse: {}'.format(len(reuse_ipaddr_l), reuse_ipaddr_l))
-            self._logger.info('Overloading reserved address: {} @ {}'.format(fqdn, allocated_ipv4))
-        elif pool_available > 0:
-            # Allocate a new address from the pool
-            allocated_ipv4 = ap_cpool.allocate()
-        else:
-            self._logger.warning('Failed to allocate a new address from CircularPool: {} @ N/A'.format(fqdn))
-            return None
-
-        # TODO: Improve dns_host representation and consider the use within connection object (contains())
-
+        # Get related DNS metadata
         dns_resolver = addr[0]
         dns_host = query.reputation_requestor
         dns_bind = False
@@ -1070,6 +1045,22 @@ class PolicyBasedResourceAllocation(container3.Container):
             dns_bind = False
         elif query.reputation_resolver.sla and dns_host.ipaddr:
             dns_bind = True
+
+        # Get list of reusable addresses
+        reuse_ipaddr_l = self._connection_circularpool_get_overloadable(service_data)
+        if len(reuse_ipaddr_l) > 0:
+            # Use first available address from the pool
+            allocated_ipv4 = reuse_ipaddr_l[0]
+            self._logger.debug('Found {} IP(s) for reuse: {}'.format(len(reuse_ipaddr_l), reuse_ipaddr_l))
+            self._logger.info('Overloading reserved address: {} @ {}'.format(fqdn_alias, allocated_ipv4))
+        elif pool_available > 0:
+            # Allocate a new address from the pool
+            allocated_ipv4 = ap_cpool.allocate()
+            self._logger.debug('Allocated address from CircularPool: {} / allocated={} available={}'.format(allocated_ipv4, ap_cpool.get_allocated(), ap_cpool.get_available()))
+        else:
+            _dns_host_ipaddr = dns_host.ipaddr if dns_host else None
+            self._logger.warning('Failed to allocate a new address from CircularPool: {} for {} @ {}'.format(fqdn_alias, _dns_host_ipaddr, dns_resolver))
+            return None
 
         # Continue to creating the connection
         # Create RealmGateway connection
@@ -1080,7 +1071,7 @@ class PolicyBasedResourceAllocation(container3.Container):
                       #'remote_ip': remote_ip,
                       #'remote_port': remote_port,
                       'protocol': service_data['protocol'],
-                      'fqdn': fqdn,
+                      'fqdn': fqdn_alias,
                       'host_fqdn': host_obj.fqdn,
                       'dns_resolver': dns_resolver,
                       'dns_host': dns_host,
@@ -1092,112 +1083,154 @@ class PolicyBasedResourceAllocation(container3.Container):
                       }
 
         conn = ConnectionLegacy(**conn_param)
-        # Monkey patch delete function for connection object
-        ## TODO: Execute this as a coroutine to yield from synproxy_del_connection ?
-        conn.delete = partial(self._cb_connection_deleted, conn)
+        # Monkey patch delete function as a coroutine for the connection object
+        conn.delete = functools.partial(asyncio.ensure_future, self._cb_connection_deleted(conn))
         # Add connection to table
         self.connectiontable.add(conn)
         # Log
-        self._logger.info('Allocated IP address from Circular Pool: {} @ {} for {:.3f} msec'.format(fqdn, allocated_ipv4, conn.timeout*1000))
+        via_text = '(via {})'.format(fqdn_query) if fqdn_query != fqdn_alias else ''
+        self._logger.info('Allocated IP address from Circular Pool: {} @ {} for {:.3f} msec {}'.format(fqdn_alias, allocated_ipv4, conn.timeout*1000, via_text))
         self._logger.info('New Circular Pool connection: {}'.format(conn))
 
         # Synchronize connection with SYNPROXY module
-        ## TODO: Get TCP options policy from host
-        """
+        ## TODO: Implement retrieval of TCP options policy from host
         if service_data['protocol'] in [0, 6]:
-            # TODO: Test performance and consider optimizations / Do this in parallel or yield from it?
             tcpmss, tcpsack, tcpwscale = 1460, 1, 7
-            asyncio.ensure_future(self.network.synproxy_add_connection(conn.outbound_ip, conn.outbound_port, conn.protocol, tcpmss, tcpsack, tcpwscale))
-        """
+            yield from self.network.synproxy_add_connection(conn.outbound_ip, conn.outbound_port, conn.protocol, tcpmss, tcpsack, tcpwscale)
+
         # Return the allocated address
         return allocated_ipv4
 
+    @asyncio.coroutine
     def _cb_connection_deleted(self, conn):
-        # Get Circular Pool address pool
-        ap_cpool = self.pooltable.get('circularpool')
-        ipaddr = conn.outbound_ip
+        self._logger.debug('Delete callback for node {}'.format(conn))
 
         if conn.hasexpired():
             # Connection expired
-            self._logger.info('Connection expired: {} in {:.3f} msec '.format(conn, conn.age*1000))
-            # Blame attribution to DNS resolver and requestor
-            self._logger.debug('  >> Blame attribution!')
-            # Register a nok event
-            if conn.query.reputation_resolver is not None:
-                conn.query.reputation_resolver.event_nok()
-            if conn.query.reputation_requestor is not None:
+            self._logger.warning('Connection expired: {} in {:.3f} msec (id {})'.format(conn, conn.age*1000, conn.query.id))
+            # Blame attribution to DNS resolver and requestor - register a nok event
+            """
+            If the DNS server is SLA and there exists DNS client information -> conn.dns_bind is True, penalize only the DNS client.
+            If the DNS server is not SLA, cannot be trusted about the DNS client information, penalize only the DNS server.
+            Penalizing only the DNS server creates incentives towards SLA-agreements.
+            """
+            if conn.dns_bind and conn.query.reputation_requestor is not None:
+                self._logger.warning('  >> Blame DNS client!')
                 conn.query.reputation_requestor.event_nok()
+            elif conn.query.reputation_resolver is not None:
+                self._logger.warning('  >> Blame DNS server!')
+                conn.query.reputation_resolver.event_nok()
         else:
             # Connection was used
             self._logger.debug('Connection used: {} in {:.3f} msec '.format(conn, conn.age*1000))
-            # Success attribution to DNS resolver and requestor
-            self._logger.debug('  >> Success attribution!')
-            ## Register an ok event
+            # Success attribution to DNS resolver and requestor - register an ok event
             if conn.query.reputation_resolver is not None:
+                self._logger.debug('  >> Success DNS server!')
                 conn.query.reputation_resolver.event_ok()
             if conn.query.reputation_requestor is not None:
+                self._logger.debug('  >> Success DNS client!')
                 conn.query.reputation_requestor.event_ok()
+
+        """
+        This function is now called as a coroutine. Under heavy load, these callbacks may be executed after several connection have been deleted.
+        In that case, the callbacks will attempt to release the allocated public IP address if no other connection is registered in the connection table.
+        Now we include additional checks to verify if the address has been already released to the pool.
+        """
+        # Get RealmGateway connections
+        ap_cpool = self.pooltable.get('circularpool')
+        ipaddr = conn.outbound_ip
+        try:
+            if self.connectiontable.has((connection.KEY_RGW_PUBLIC_IP, ipaddr)):
+                rgw_conns = self.connectiontable.get((connection.KEY_RGW_PUBLIC_IP, ipaddr))
+                self._logger.debug('Cannot release IP address to Circular Pool: {} connection(s) still pending @ {}'.format(len(rgw_conns), ipaddr))
+                self._logger.debug('  >> Existing connections @{}\n{}'.format(ipaddr, utils3.repr_iterable_index(rgw_conns)))
+            else:
+                # Attempt to release the IP address back to the pool
+                self._logger.info('Releasing IP address to Circular Pool: {} @ {} in {:.3f} msec'.format(ipaddr, conn.fqdn, conn.age*1000))
+                ap_cpool.release(ipaddr)
+        except ValueError:
+            self._logger.debug('Failed to release IP address to Circular Pool: {}'.format(ipaddr))
+        finally:
+            self._logger.debug('  >> Current CircularPool: allocated={} available={}'.format(ap_cpool.get_allocated(), ap_cpool.get_available()))
+
 
         # Synchronize connection with SYNPROXY module
         if (conn.outbound_port, conn.protocol) == (0 ,0):
             # This is an FQDN connection -> Reset TCP default options in SYNPROXY connection!
             tcpmss, tcpsack, tcpwscale = 1460, 1, 7
-            asyncio.ensure_future(self.network.synproxy_add_connection(conn.outbound_ip, conn.outbound_port, conn.protocol, tcpmss, tcpsack, tcpwscale))
+            yield from self.network.synproxy_add_connection(conn.outbound_ip, conn.outbound_port, conn.protocol, tcpmss, tcpsack, tcpwscale)
+        elif conn.protocol in [0, 6]:
+            # This is an (S)FQDN connection -> Remove from SYNPROXY!
+            yield from self.network.synproxy_del_connection(conn.outbound_ip, conn.outbound_port, conn.protocol)
+
+
+    def _describe_service_data(self, service_data, partial_reuse=True):
+        """ Return fqdn, sfqdn_reuse booleans according to service_data definition """
+        if service_data['port'] == 0 and service_data['protocol'] == 0:
+            fqdn = True
+            sfqdn_reuse = False
+        elif service_data['port'] != 0 and service_data['protocol'] != 0:
+            fqdn = False
+            sfqdn_reuse = True
+        elif (service_data['port'] != 0 or service_data['protocol'] != 0) and partial_reuse:
+            fqdn = False
+            sfqdn_reuse = True
         else:
-            # This is an SFQDN connection -> Remove from SYNPROXY!
-            asyncio.ensure_future(self.network.synproxy_del_connection(conn.outbound_ip, conn.outbound_port, conn.protocol))
+            fqdn = False
+            sfqdn_reuse = False
 
-        # Get RealmGateway connections
-        if self.connectiontable.has((connection.KEY_RGW, ipaddr)):
-            self._logger.debug('Cannot release IP address to Circular Pool: {} @ {} still in use for {:.3f} msec'.format(conn.fqdn, ipaddr, conn.age*1000))
-            return
+        # Associate sfqdn_reuse flag with the overloadable existing connections for such service_data
+        if sfqdn_reuse is True and len(self._connection_circularpool_get_overloadable(service_data)) == 0:
+            sfqdn_reuse = False
 
-        ap_cpool.release(ipaddr)
-        self._logger.info('Released IP address to Circular Pool: {} @ {} in {:.3f} msec'.format(ipaddr, conn.fqdn, conn.age*1000))
-
-    def _service_is_overloadable(self, service_data, partial_overload=True):
-        """ Return True if service is overloadable """
-        if partial_overload:
-            return (service_data['port'] != 0 or service_data['protocol'] != 0)
-        else:
-            return (service_data['port'] != 0 and service_data['protocol'] != 0)
+        return (fqdn, sfqdn_reuse)
 
     def _connection_circularpool_get_overloadable(self, service_data):
         """ Returns a list of IPv4 address that can be overloaded """
         port, protocol = service_data['port'], service_data['protocol']
         self._logger.debug('Attempt to overload connection for {}:{}'.format(port, protocol))
-        # List of available addresses for reuse
+
+        # Create lists of addresses for comparison
         available = []
+        unavailable = []
 
         if not self.connectiontable.has(connection.KEY_RGW):
             return available
 
         # Iterate all RealmGateway connections and try to reuse existing allocated IP addresses
         rgw_conns = self.connectiontable.get(connection.KEY_RGW)
+        self._logger.debug('>> Existing connections \n{}'.format(utils3.repr_iterable_index(rgw_conns)))
         for conn in rgw_conns:
             ipaddr = conn.outbound_ip
             c_port, c_proto = conn.outbound_port, conn.protocol
             s_port, s_proto = port, protocol
 
-            # Do not iterate already available addresses
-            if ipaddr in available:
+            # Do not iterate already unavailable addresses
+            if ipaddr in unavailable:
                 continue
 
             self._logger.debug('Comparing {} vs {} @{}'.format((c_port, c_proto),(s_port, s_proto), ipaddr))
             # The following statements match when IP overloading cannot be performed
-            if (c_port == 0 and c_proto == 0) or (s_port == 0 and s_proto == 0):
+            if (c_port, c_proto) == (0, 0) or (s_port, s_proto) == (0, 0) or (c_port, c_proto) == (s_port, s_proto):
                 self._logger.debug('0. Port & Protocol blocked')
+                unavailable.append(ipaddr)
                 continue
             elif (c_port == s_port) and (c_proto == s_proto or c_proto == 0 or s_proto == 0):
                 self._logger.debug('1. Port blocked')
+                unavailable.append(ipaddr)
                 continue
             elif (c_proto == s_proto) and (c_port == 0 or s_port == 0):
                 self._logger.debug('2. Port blocked')
+                unavailable.append(ipaddr)
                 continue
 
-            available.append(ipaddr)
-        # Return list of available IP addresses for overload
-        return available
+            # The IP address could be used / Add only once
+            if ipaddr not in available:
+                self._logger.debug('Adding {} to overloading pool {}'.format(ipaddr, available))
+                available.append(ipaddr)
+
+        # Return available IP addresses that are not in the unavailable list
+        return [x for x in available if x not in unavailable]
 
     def _register_host_alias(self, host_obj, service_data, original_fqdn, alias_fqdn):
         # Add alias as SFQDN host service
@@ -1217,15 +1250,33 @@ class PolicyBasedResourceAllocation(container3.Container):
         # Update reputation values based on timer_obj utilization. DNS group must exists
         dnsgroup_obj = self.get((KEY_DNSGROUP_IPADDR, timer_obj.ipaddr))
         if not timer_obj.active:
+            """
+            This means that a CNAME service was allocated but never followed-through.
+            It could be due to a lost DNS response or else.
+            Also, if PBRA_DNS_POLICY_TCP is not set, we cannot ensure spoof free communications,
+            therefore attributing blame on someone could lead to badmouthing.
+            """
             # Timer could not be used. Do not blame any party
             self._logger.info('[--] Timer expired {}'.format(timer_obj))
-            pass
-        elif len(timer_obj.cache):
-            self._logger.debug('[OK] Timer expired {}'.format(timer_obj))
-            dnsgroup_obj.event_ok()
         else:
-            self._logger.warning('[KO] Timer expired {}'.format(timer_obj))
-            dnsgroup_obj.event_nok()
+            """
+            This means that a CNAME service was allocated and resolved.
+            Whether or not the internal cache had any record should not matter to establish any
+            penalty on the reputation. If the CNAME was resolved, we deem this as an ok_event.
+
+            UPDATE!!!
+            On the event of dns-only traffic, we are currently artificially increasing the reputation for no good reason.
+            For every CNAME that is resolved, we are generating 1 event_ok(), regardless whether the IP address was used or not!!
+            This means that DDoS against the Circular Pool from a party actually increases the reputation of such party if it
+            follows the TCP/CNAME policies in place.
+
+            We could consider using event_trusted(), but this is already used in call to _dns_preprocess_rgw_wan_soa_event_logging()
+
+            After all, it seems this type of event cannot be used to alter reputation after all.
+            In this commit, we comment out the event_ok() call that remains in the code for future reference.
+            """
+            self._logger.debug('[OK] Timer expired {}'.format(timer_obj))
+            #dnsgroup_obj.event_ok()
 
         # Remove alias FQDN service from host
         host_obj.remove_service(KEY_SERVICE_SFQDN, timer_obj.alias_service)

@@ -1,14 +1,14 @@
+<<<<<<< HEAD
 # Customer Edge Switching
 
 ## Introduction
 
-This version of Customer Edge Switching v2.0 has been developed under
-Ubuntu 16.04 and python3 'asyncio' framework for asynchronous calls.
+This version of Customer Edge Switching v2.0 has been developed in Ubuntu 16.04, using and python3's asyncio framework for asynchronous calls.
 
-This particular branch adds the CES/CETP based cooperative firewall functionality to previously developed RGW functionality.
-The project code has been developed and tested on LXC containers, that simulate different network scenarios.
+This particular branch adds the CES/CETP based cooperative firewall functionality to previously published Realm Gateway (RGW) functionality. The source code for RGW can be found at: https://github.com/Aalto5G/RealmGateway. The CES implementation has been validated with a test network, developed using LXC container and other default Linux networking capabilities. The project source code will also provide an orchestration of these test networks, for rapid testing of CES functions.
 
-This repository contains a submodule. Clone with ```git clone ssh://git@gitlab.cloud.mobilesdn.org:60022/CES/customer_edge_switching_v2.git --recursive```
+This repository contains a submodule and thus it shall be cloned as following: ```git clone $REPOSITORY_URL --recursive```
+
 
 ## Install package dependencies
 
@@ -30,26 +30,17 @@ $ pip3 install --upgrade pip setuptools
 $ pip3 install --upgrade ipython dnspython aiohttp scapy-python3 pyyaml NetfilterQueue ryu python-iptables pyroute2 --user
 ```
 
-## Caveats and pitfalls
 
-There are two ways of running automated enviroment for CES/RealmGateway, either using the LXC container orchestration or via the bash script with Linux network namespaces.
-In both cases, the CES/RealmGateway uses the "router" node as default gateway, which also provides SYNPROXY protection to its stub network. Similarly, the "router" node
-is configured to send all default traffic to 100.64.0.254 IP address, which is installed on the host machine running the virtual environment.
-
-If Internet connectivity is desired on the virtual environment, one can enable NATting (on hosting-VM) via MASQUERADE as follows:
-
-```
-iptables -t nat -I POSTROUTING -o interfaceWithInternetAccess -j MASQUERADE
-```
-
-## How to run a Realm Gateway
+## How to run CES firewall
 
 The configuration file has been discontinued. Now all parameters are passed as arguments to the program, i.e.:
 
 ```
 Run as:
 ./rgw.py  --name gwa.demo                                                    \
-          --dns-soa gwa.demo. 0.168.192.in-addr.arpa. 1.64.100.in-addr.arpa. \
+          --dns-soa          gwa.demo. cname-gwa.demo.                       \
+                             0.168.192.in-addr.arpa. 1.64.100.in-addr.arpa.  \
+          --dns-cname-soa    cname-gwa.demo.                                 \
           --dns-server-local 127.0.0.1 53                                    \
           --dns-server-lan   192.168.0.1 53                                  \
           --dns-server-wan   100.64.1.130 53                                 \
@@ -70,14 +61,102 @@ Run as:
           --ips-hosts        IPS_SUBSCRIBERS                                 \
           --ipt-markdnat                                                     \
           --ipt-flush                                                        \
-          --repository-subscriber-folder gwa.subscriber.d/                   \
-          --repository-policy-folder     gwa.policy.d/
+          --repository-subscriber-folder ../config.d/gwa.demo.subscriber.d/  \
+          --repository-policy-folder     ../config.d/gwa.demo.policy.d/      \
+          --repository-api-url  http://127.0.0.1:8082/                       \
+          --network-api-url     http://127.0.0.1:8081/                       \
+          --synproxy         172.31.255.14 12345
 ```
+
+
+## Caveats and pitfalls
+
+There are two ways of running automated enviroment for CES/RealmGateway, either using the LXC container orchestration or via the bash script with Linux network namespaces.
+In both cases, the CES/RealmGateway uses the "router" node as default gateway, which also provides SYNPROXY protection to its stub network. Similarly, the "router" node
+is configured to send all default traffic to 100.64.0.254 IP address, which is installed on the host machine running the virtual environment.
+
+If Internet connectivity is desired on the virtual environment, one can enable NATting (on hosting-VM) via MASQUERADE as follows:
+
+```
+iptables -t nat -I POSTROUTING -o interfaceWithInternetAccess -j MASQUERADE
+```
+
+## What are all these folders?
+
+This is the current view of the root folder
+
+```
+.
+├── config.d
+├── docs
+├── iptables_devel
+├── logs
+├── orchestration
+├── scripts
+├── src
+├── traffic_tests
+├── AUTHORS
+├── DOCUMENTATION.md
+├── LICENSE
+├── LICENSE.header
+├── README.md
+├── run_gwa.sh
+└── TODO
+```
+
+A brief description of what to find:
+
+- config.d: Realm Gateway and subcriber policies we have used in the past.
+- docs: Assorted documentation.
+- iptables_devel: Userspace and kernel modules for MARKDNAT iptables module.
+- logs: Storage for runtime logging.
+- orchestration: Necessary scripts for quick deployment of test environments.
+- scripts: Assorted script files that have been of some use at some point.
+- src: The holy grail of our code.
+- traffic_tests: Test related scripts from functional and performance perspective.
+- AUTHORS
+- DOCUMENTATION.md
+- LICENSE
+- LICENSE.header
+- README.md
+- run_gwa.sh: Quickest way to start the code of a netns enviroment
+- TODO
 
 
 ## Configuring a deployment
 
+There are two ways of running automated enviroments for Realm Gateway, either using the LXC container orchestration or via the bash script with Linux network namespaces.
+In both cases, the Realm Gateway uses the "router" node as default gateway.
+Additionally, the "router" node is configured to send all default traffic to 100.64.0.254 IP address, which is installed on the host machine running the virtual environment.
+
+If Internet connectivity is desired on the virtual environment, one can enable NATting via MASQUERADE as follows:
+
+```
+iptables -t nat -I POSTROUTING -o interfaceWithInternetAccess -j MASQUERADE
+```
+
+
+### LXC deployment
+
+Originally developed as a separate project for quick orchestration and replication of environments, it has now been added to the main repository.
+
+Check the documentation inside the ```orchestration\lxc``` folder to quickly spawn the ready-made test environment ```dev_environment```.
+
+
+### Network namespaces deployment
+
+Originally devised as the quickest way to virtualize hosts with a minimal overhead.
+Isolation is mainly related to the network stack, local modifications to the file system are allowed, but discouraged.
+
+Check the documentation inside the ```orchestration\netns``` folder to quickly spawn the ready-made test environment.
+
+
+### Policy information
+
 The current repository ships with a set of policies and subscriber information for basic testing.
+
+Depending on the deployment option, LXC or netns, a transparent TCP SYNPROXY may be available.
+
 However, if we plan on making a new deployment there are a few things we need to take into account:
 
 * circularpool.policy: Set a sensible maximum level according the size of the Circular Pool.
@@ -86,9 +165,9 @@ However, if we plan on making a new deployment there are a few things we need to
 Setting incorrect values on these fields may make debugging quite difficult as you might need to trace packets in iptables.
 
 * iptables.policy: This is one of the most critical files that needs editing. Please pay attention to the following:
-    
+
     NAT.rules: In mangle.CIRCULAR_POOL chain the targets NFQUEUE queue-num need to match the argument ```--ipt-cpool-queue``` passed to the python program.
-    
+
     NAT.rules: In nat.POSTROUTING chain we use 2 rules for SNAT target that match on a different packet mark.
 The most crucial is the one indicated as ```SNAT to available pool``` and it should include the available addresses in the Circular Pool for better efficiency of outgoing connections.
 
@@ -171,6 +250,117 @@ for i in $(seq 1 254); do
 done
 ```
 
+## Considerations to performance testing of Realm Gateway
+
+Use the developed client to specifically control the IP addresses for DNS resolution and Data transfers:
+
+- You may need to add host-only addresses (/32) to an interface and configure the routing table accordingly.
+- Using several IP sources also enables more socket binding options, which is necesarry for high test loads.
+
+Use well defined (S)FQDN to test specifically UDP and TCP connections, as they may be subjected to different network delays due to the presence of an in-network TCP SYNPROXY.
+
+### Increase the number of file descriptors
+
+This is the workaround for the "too many files open" problem:
+
+- Add to /etc/sysctl.conf
+```
+# Custom extend number of files
+fs.file-max=2097152
+fs.inotify.max_queued_events=1048576
+fs.inotify.max_user_instances=1048576
+fs.inotify.max_user_watches=1048576
+```
+
+- Reload sysctl configuration
+```
+sysctl -p
+```
+
+- Add to /etc/security/limits.conf
+```
+# Added on 17/01/2017
+*         hard    nofile      500000
+*         soft    nofile      500000
+root      hard    nofile      500000
+root      soft    nofile      500000
+```
+
+- Check that /etc/ssh/sshd_config contains:
+```
+UsePAM=yes
+```
+
+- Check that /etc/pam.d/sshd contains
+```
+session    required   pam_limits.so
+```
+
+- Restart SSH service and reconnect
+
+
+### Configure the system for high traffic volume
+
+- Add to /etc/sysctl.conf
+
+```
+# Reduce TIME_WAIT socket connections
+net.ipv4.tcp_fin_timeout=1
+
+# Increase virtual memory areas
+vm.max_map_count=262144
+
+# Increase system IP port limits
+net.ipv4.ip_local_port_range=1024 65535
+
+
+# Increase conntrack size 1:16 bucket ratio for 4M connections
+
+Increase bucket size: Verify input parameter with "modinfo nf_conntrack" / (expect_hashsize or hashsize)
+net.netfilter.nf_conntrack_buckets=262144
+### In recent kernels it might not be possible to modify this value on the fly, alternatively try one of the following:
+### Option 1: echo "options nf_conntrack expect_hashsize=262144" > /etc/modprobe.d/nf_conntrack.conf
+### Option 2: /sbin/modprobe nf_conntrack expect_hashsize=262144
+
+## Increase max number of connections
+net.netfilter.nf_conntrack_max=4194304
+
+### It is a good idea to reboot the system to ensure the kernel module is loaded with the appropriate configuration and reapplying the settings with "sysctl -p"
+### Verify the values are loaded correctly!
+```
+
+- Reload sysctl configuration
+```
+sysctl -p
+```
+
+
+### Rate limiting policies
+
+Disable iptables rules that may rate limit packet per second (hashlimit).
+
+
+### Network related considerations
+
+- Use tc/netem for network simulations on the interfaces of a Linux bridge
+```
+tc qdisc add    dev eth0 root netem delay 1000ms
+tc qdisc change dev eth0 root netem delay 1000ms 50ms
+tc qdisc del    dev eth0 root
+```
+
+- Increase the qlen size of your virtual adaptors. We have witnessed how veth pairs with qlen=1000 have resulted in packet loss when testing >2000 new TCP connections per second. Experimentally we have used the value qlen=25000.
+```
+ip link set dev eth0 qlen 25000
+```
+
+
+### Miscellaneous
+
+- Configure TCP SYNPROXY in default mode for all the required IP addresses and disable synchronization of Realm Gateway connections (add & delete)
+
+- Reduce console logging (WARNING level) and deactivate other file loggers.
+
 
 ## Other useful information
 
@@ -206,4 +396,5 @@ net.bridge.bridge-nf-filter-pppoe-tagged=0
 net.bridge.bridge-nf-filter-vlan-tagged=1
 net.bridge.bridge-nf-pass-vlan-input-dev=1
 ```
->>>>>>> refs/heads/master
+
+

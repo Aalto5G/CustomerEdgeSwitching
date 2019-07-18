@@ -1,0 +1,25 @@
+# YAML configuration file for Realm Gateway Traffic Test Suite v0.1
+
+# Total duration of the test (sec)
+duration: 120
+
+# Backoff time before scheduling tests (sec)
+backoff: 5
+
+# Global definitions for traffic tests, used if no test specific parameter is defined
+global_traffic:
+    data:
+        # Control TCP or UDP connections via data_laddr
+        data_laddr: [["1.1.3.1", 0, 6], ["1.1.3.2", 0, 6], ["1.1.3.3", 0, 6], ["1.1.3.4", 0, 6], ["1.1.3.5", 0, 6], ["1.1.3.6", 0, 6], ["1.1.3.7", 0, 6], ["1.1.3.8", 0, 6], ["1.1.3.9", 0, 6], ["1.1.3.10", 0, 6]]
+        #data_laddr: [["1.1.3.1", 0, 17], ["1.1.3.2", 0, 17], ["1.1.3.3", 0, 17], ["1.1.3.4", 0, 17], ["1.1.3.5", 0, 17], ["1.1.3.6", 0, 17], ["1.1.3.7", 0, 17], ["1.1.3.8", 0, 17], ["1.1.3.9", 0, 17], ["1.1.3.10", 0, 17]]
+
+        ## 50% well known port 2000 + 50% random port with mixed UDP and TCP services
+        data_raddr: [["100.64.1.131", 2000, 6], ["100.64.1.132", 2000, 6], ["100.64.1.133", 2000, 6], ["100.64.1.131", 0, 6], ["100.64.1.132", 0, 6], ["100.64.1.133", 0, 6], ["100.64.1.131", 2000, 17], ["100.64.1.132", 2000, 17], ["100.64.1.133", 2000, 17], ["100.64.1.131", 0, 17], ["100.64.1.132", 0, 17], ["100.64.1.133", 0, 17]]
+
+        data_timeouts: [1]
+
+
+# This models all the test traffic
+traffic:
+    # 10% noise level
+    - {type: "data",      load: 3.0, distribution: "exp"}

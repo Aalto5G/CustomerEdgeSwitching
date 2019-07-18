@@ -1,7 +1,43 @@
+"""
+BSD 3-Clause License
+
+Copyright (c) 2018, Jesus Llorente Santos, Aalto University, Finland
+All rights reserved.
+
+Edited: 2019, Hammad Kabir, Aalto University, Finland - for CES cooperative firewalling solution.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+
+* Neither the name of the copyright holder nor the names of its
+  contributors may be used to endorse or promote products derived from
+  this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""
+
 import asyncio
 import aiohttp
 import json
 import logging
+import functools
 import socket, struct
 import os, subprocess
 import random, string
@@ -62,6 +98,7 @@ OVS_PORT_TUN_GENEVE = 103
 OVS_PORT_TUN_L3_MAC = '00:00:00:12:34:56'
 OVS_PORT_TUN_L3_NET = '172.16.0.0/16'
 OVS_DIFFSERV_MARK   = 10 #DSCP10 AF11 priority traffic & low drop probability / Sets 6 bits field IP.dscp
+
 OF_PROTOCOL_VERSION = 1.4
 
 API_URL_SWITCHES    = 'stats/switches'
@@ -87,12 +124,24 @@ class Network(object):
         self.ips_init()
         # Initialize iptables
         self.ipt_init()
+        # Create SYNPROXY instance
+        self.synproxy_create()
+        '''
+        # TODO: Uncomment these lines when CES support is added
         # Create HTTP REST Client
         self.rest_api_init()
         # Create OpenvSwitch
         self.ovs_create()
-        # Create SYNPROXY instance
-        #self.synproxy_create()
+        '''
+
+    def shutdown(self):
+        self._logger.warning('Shutdown')
+        # Close bound NFQUEUEs
+        self.ipt_deregister_nfqueues()
+        # Close open aiohttp_client objects
+        self.rest_api_close()
+        # Close SYNPROXY socket
+        self.synproxy_close()
 
     def ips_init(self):
         data_d = self.datarepository.get_policy_ces('IPSET', {})
@@ -447,12 +496,15 @@ class Network(object):
             return False
 
 
-    def rest_api_init(self, n=10):
+    def rest_api_init(self, n=5):
         """ Create long lived HTTP session """
         self.rest_api = aiohttp_client.HTTPRestClient(n)
 
     def rest_api_close(self):
-        self.rest_api.close()
+        try:
+            self.rest_api.close()
+        except:
+            pass
 
     def ovs_init(self):
         """ Selects ovs-functions based on the OpenFlow protocol version """        
@@ -461,8 +513,6 @@ class Network(object):
         self.add_local_connection   = self.add_local_connection_OF14 if OF_PROTOCOL_VERSION>1.3 else self.add_local_connection_OF13
 
     def ovs_create(self):
-        self.ovs_init()
-        #"""
         self.ovs_bridge_name = "br-ces0"
         self._logger.info('Create OpenvSwitch for CES data tunnelling')
         ## Create OVS bridge, set datapath-id (16 hex digits) and configure controller
@@ -470,14 +520,15 @@ class Network(object):
                    'ovs-vsctl add-br {}'.format(self.ovs_bridge_name),
                    'ovs-vsctl set bridge {} other-config:datapath-id={:016x}'.format(self.ovs_bridge_name, OVS_DATAPATH_ID),
                    'ovs-vsctl set-controller {} tcp:127.0.0.1:6653'.format(self.ovs_bridge_name)]
+                
         for _ in to_exec:
             self._do_subprocess_call(_, raise_exc = False, silent = False)
 
         ## Add ports
-        to_exec = ['ovs-vsctl add-port br-ces0 tun0 -- set interface tun0 ofport_request={} -- set interface tun0 type=internal'.format(OVS_PORT_TUN_L3),
-                   'ovs-vsctl add-port br-ces0 gre0-ces0 -- set interface gre0-ces0 ofport_request={} -- set interface gre0-ces0 type=gre options:key=flow options:remote_ip=flow options:local_ip=flow options:tos=inherit'.format(OVS_PORT_TUN_GRE),
-                   'ovs-vsctl add-port br-ces0 vxlan0-ces0 -- set interface vxlan0-ces0 ofport_request={} -- set interface vxlan0-ces0 type=vxlan options:key=flow options:remote_ip=flow options:local_ip=flow options:tos=inherit'.format(OVS_PORT_TUN_VXLAN),
-                   'ovs-vsctl add-port br-ces0 geneve0-ces0 -- set interface geneve0-ces0 ofport_request={} -- set interface geneve0-ces0 type=geneve options:key=flow options:remote_ip=flow options:local_ip=flow options:tos=inherit'.format(OVS_PORT_TUN_GENEVE)]
+        to_exec = ['ovs-vsctl add-port {} tun0 -- set interface tun0 ofport_request={} -- set interface tun0 type=internal'.format(self.ovs_bridge_name, OVS_PORT_TUN_L3),
+                   'ovs-vsctl add-port {} gre0-ces0 -- set interface gre0-ces0 ofport_request={} -- set interface gre0-ces0 type=gre options:key=flow options:remote_ip=flow options:local_ip=flow options:tos=inherit'.format(self.ovs_bridge_name, OVS_PORT_TUN_GRE),
+                   'ovs-vsctl add-port {} vxlan0-ces0 -- set interface vxlan0-ces0 ofport_request={} -- set interface vxlan0-ces0 type=vxlan options:key=flow options:remote_ip=flow options:local_ip=flow options:tos=inherit'.format(self.ovs_bridge_name, OVS_PORT_TUN_VXLAN),
+                   'ovs-vsctl add-port {} geneve0-ces0 -- set interface geneve0-ces0 ofport_request={} -- set interface geneve0-ces0 type=geneve options:key=flow options:remote_ip=flow options:local_ip=flow options:tos=inherit'.format(self.ovs_bridge_name, OVS_PORT_TUN_GENEVE)]
         for _ in to_exec:
             self._do_subprocess_call(_, raise_exc = False, silent = False)
 
@@ -493,53 +544,43 @@ class Network(object):
         # Schedule task to wait for SDN Controller
         _t = asyncio.ensure_future(self.wait_up())
         RUNNING_TASKS.append((_t, 'network.wait_up'))
-        #"""
 
-    
+
     @asyncio.coroutine
     def ovs_init_flowtable_OF14(self):
         self._logger.info('Bootstrapping OpenvSwitch flow table')
-
         # Build URL for add and delete operations
         url_add    = urllib.parse.urljoin(self.api_url, API_URL_FLOW_ADD)
         url_delete = urllib.parse.urljoin(self.api_url, API_URL_FLOW_DELETE)
-
         # Remove all existing flows
         data = {'dpid': OVS_DATAPATH_ID}
         yield from self.rest_api.do_post(url_delete, json.dumps(data))
-
         # Populate TABLE 0
         ## Install miss flow as DROP
         data = {'dpid': OVS_DATAPATH_ID, 'table_id':0, 'priority':0, 'match':{}, 'actions':[]}
         yield from self.rest_api.do_post(url_add, json.dumps(data))
-
         ## Outgoing CES-Local & CES-CES / Go to table 1
         data = {'dpid':OVS_DATAPATH_ID, 'table_id':0, 'priority':10,
                 'match':{'in_port':OVS_PORT_TUN_L3, 'eth_type':2048, 'ipv4_dst':OVS_PORT_TUN_L3_NET},
                 'instructions':[{'type':'GOTO_TABLE', 'table_id':1}]}
         yield from self.rest_api.do_post(url_add, json.dumps(data))
-
         ## Incoming CES-CES from tunneling ports / Go to table 2
         data = {'dpid': OVS_DATAPATH_ID, 'table_id':0, 'priority':10,
                 'match':{'in_port':OVS_PORT_TUN_GRE},
                 'instructions':[{'type':'GOTO_TABLE','table_id':2}]}
         yield from self.rest_api.do_post(url_add, json.dumps(data))
-
         data = {'dpid': OVS_DATAPATH_ID, 'table_id':0, 'priority':10,
                 'match':{'in_port':OVS_PORT_TUN_VXLAN},
                 'instructions':[{'type':'GOTO_TABLE','table_id':2}]}
         yield from self.rest_api.do_post(url_add, json.dumps(data))
-
         data = {'dpid': OVS_DATAPATH_ID, 'table_id':0, 'priority':10,
                 'match':{'in_port':OVS_PORT_TUN_GENEVE},
                 'instructions':[{'type':'GOTO_TABLE','table_id':2}]}
         yield from self.rest_api.do_post(url_add, json.dumps(data))
-
         # Populate TABLE 1
         ## Install miss flow as DROP
         data = {'dpid': OVS_DATAPATH_ID, 'table_id':1, 'priority':0, 'match':{}, 'instructions':[]}
         yield from self.rest_api.do_post(url_add, json.dumps(data))
-
         # Populate TABLE 2
         ## Install miss flow as DROP
         data = {'dpid': OVS_DATAPATH_ID, 'table_id':2, 'priority':0, 'match':{}, 'instructions':[]}
@@ -624,8 +665,7 @@ class Network(object):
         #yield from self.add_tunnel_connection('192.168.0.100', '172.16.0.3', '100.64.1.130', '100.64.2.130', 6, 60, 'vxlan', True)
         #yield from self.add_tunnel_connection('192.168.0.100', '172.16.0.4', '100.64.1.130', '100.64.2.130', 7, 70, 'geneve')
         #yield from self.delete_tunnel_connection('192.168.0.100', '172.16.0.2', '100.64.1.130', '100.64.2.130', 5, 50, 'gre')
-
-
+    
     @asyncio.coroutine
     def get_dp_flow_stats(self):
         api_url_stats   = "stats/flow/{}".format(OVS_DATAPATH_ID)
@@ -633,7 +673,8 @@ class Network(object):
         d               = yield from self.rest_api.do_get(url_add)
         dp_stats        = json.loads(d)
         stats           = dp_stats[str(OVS_DATAPATH_ID)]
-        
+        return stats
+    
         """
         count = 0
         for stat in stats:
@@ -642,15 +683,12 @@ class Network(object):
             
         self._logger.info("{} H2H connections found in DP.".format(count))
         """
-        return stats
-            
     
     def _synchronize_conns(self, conn_table, cp_conns, dp_stats):
         """ Synchronizing the CP and DP """
         dp_cookies = []        
         to_remove  = []
         #self._logger.info("{} H2H connections found in CES-CP.".format(len(cp_conns)))
-
         # Generate a list of all DP connection cookies        
         for d in dp_stats:
             cookie = d["cookie"]
@@ -667,15 +705,12 @@ class Network(object):
         # Remove non matching CP H2H-connections 
         for t in range(0, len(to_remove)):
             conn_table.remove(to_remove[0], callback=True)
-                    
 
     @asyncio.coroutine
     def add_local_connection_OF14(self, src, psrc, dst, pdst, cookie=0, hard_timeout=None, idle_timeout=None):
         #self._logger.info('Create CES local connection {}:{} <=> {}:{}'.format(src, psrc, dst, pdst))
-
         # Build URL for add operations
         url_add    = urllib.parse.urljoin(self.api_url, API_URL_FLOW_ADD)
-
         # Create first unidirectional connection
         data =  {'dpid': OVS_DATAPATH_ID, 'table_id':1, 'priority':10, 'cookie':cookie,
                 'match':{'in_port':OVS_PORT_TUN_L3, 'eth_type':2048,
@@ -691,12 +726,10 @@ class Network(object):
         
         if hard_timeout is not None:
             data['hard_timeout'] = hard_timeout
-
         if idle_timeout is not None:
             data['idle_timeout'] = idle_timeout
         
         yield from self.rest_api.do_post(url_add, json.dumps(data))
-
         # Create second unidirectional connection
         data =  {'dpid': OVS_DATAPATH_ID, 'table_id':1, 'priority':10, 'cookie':cookie,
                 'match':{'in_port':OVS_PORT_TUN_L3, 'eth_type':2048,
@@ -712,13 +745,11 @@ class Network(object):
         
         if hard_timeout is not None:
             data['hard_timeout'] = hard_timeout
-
         if idle_timeout is not None:
             data['idle_timeout'] = idle_timeout
         
         yield from self.rest_api.do_post(url_add, json.dumps(data))
 
-        
     @asyncio.coroutine
     def add_local_connection_OF13(self, src, psrc, dst, pdst, cookie=0, hard_timeout=None, idle_timeout=None):
         self._logger.info('Create CES local connection {}:{} <=> {}:{}'.format(src, psrc, dst, pdst))
@@ -738,9 +769,8 @@ class Network(object):
         
         if hard_timeout is not None:
             data['hard_timeout'] = hard_timeout
-
         if idle_timeout is not None:
-            data['idle_timeout'] = idle_timeout
+            data['idle_timeout'] = idle_timeout        
         
         yield from self.rest_api.do_post(url_add, json.dumps(data))
 
@@ -756,10 +786,9 @@ class Network(object):
         
         if hard_timeout is not None:
             data['hard_timeout'] = hard_timeout
-
         if idle_timeout is not None:
             data['idle_timeout'] = idle_timeout
-        
+                    
         yield from self.rest_api.do_post(url_add, json.dumps(data))
 
     @asyncio.coroutine
@@ -781,13 +810,12 @@ class Network(object):
                          'ipv4_src':dst, 'ipv4_dst':pdst}}
         yield from self.rest_api.do_post(url_delete, json.dumps(data))
 
+
     @asyncio.coroutine
     def add_tunnel_connection_OF14(self, src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, cookie=0, sstag=0, dstag=0, hard_timeout=None, idle_timeout=None, diffserv=False):
         #self._logger.info('Create CES tunnel connection {}:{} / {}:{}  tun_in={} tun_out={} [{} diffserv={}]'.format(src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, diffserv))
-
         # Build URL for add operations
         url_add    = urllib.parse.urljoin(self.api_url, API_URL_FLOW_ADD)
-
         # This function performs the encapsulation of user data within the supported tunnels, GRE, VXLAN, GENEVE
         if tun_type == 'gre':
             tunnel_port = OVS_PORT_TUN_GRE
@@ -797,7 +825,6 @@ class Network(object):
             tunnel_port = OVS_PORT_TUN_GENEVE
         else:
             raise Exception('Unsupported tunneling type! {}'.format(tun_type))
-
         # For security, zero IPv4 src and dst fields / TEID <=> tun_id
         zero_mac  = '00:00:00:00:00:00'
         zero_ipv4 = '0.0.0.0'
@@ -826,7 +853,6 @@ class Network(object):
         
         if hard_timeout is not None:
             data['hard_timeout'] = hard_timeout
-
         if idle_timeout is not None:
             data['idle_timeout'] = idle_timeout
         
@@ -835,7 +861,6 @@ class Network(object):
             data['actions'].insert(-1, {'type':'SET_FIELD', 'field':'ip_dscp', 'value':OVS_DIFFSERV_MARK})
         
         yield from self.rest_api.do_post(url_add, json.dumps(data))
-
         'ovs-ofctl add-flow -OOpenFlow13 br-ces0 "table=2,priority=10,in_port=tunnel_port,ip,tun_src=tun_dst,tun_dst=tun_src,tun_id=tun_id_in actions=mod_dl_src:OVS_PORT_TUN_L3_MAC,mod_dl_dst:OVS_PORT_TUN_L3_MAC,mod_nw_src:psrc,mod_nw_dst:src,output:OVS_PORT_TUN_L3"'
         
         """
@@ -863,16 +888,14 @@ class Network(object):
         
         if hard_timeout is not None:
             data['hard_timeout'] = hard_timeout
-
         if idle_timeout is not None:
             data['idle_timeout'] = idle_timeout
             
         if diffserv:
             # Add matching of IP.dscp field for DiffServ treatment   - # if ofctl-connection runs, then also modify template string to include the following
             data['match']['ip_dscp'] = OVS_DIFFSERV_MARK
-
         yield from self.rest_api.do_post(url_add, json.dumps(data))
-        #"""
+        
 
     @asyncio.coroutine
     def add_tunnel_connection_OF13(self, src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, cookie=0, sstag=0, dstag=0, hard_timeout=None, idle_timeout=None, diffserv=False):
@@ -899,8 +922,8 @@ class Network(object):
                 
         if sstag != 0 and dstag != 0:
             src_ip = Utils.int2ip(sstag)
-            dst_ip = Utils.int2ip(dstag)
-        
+            dst_ip = Utils.int2ip(dstag)        
+
         # Create outgoing unidirectional connection
         data = {'dpid': OVS_DATAPATH_ID, 'table_id':1, 'priority':10, 'cookie':cookie,
                 'match':{'in_port':OVS_PORT_TUN_L3, 'eth_type':2048,
@@ -916,27 +939,16 @@ class Network(object):
         
         if hard_timeout is not None:
             data['hard_timeout'] = hard_timeout
-
         if idle_timeout is not None:
             data['idle_timeout'] = idle_timeout
-        
+                    
         if diffserv:
             # Add second to last action for setting IP.dscp field for DiffServ treatment
             data['actions'].insert(-1, {'type':'SET_FIELD', 'field':'ip_dscp', 'value':OVS_DIFFSERV_MARK})
-        
         yield from self.rest_api.do_post(url_add, json.dumps(data))
 
-        'ovs-ofctl add-flow -OOpenFlow13 br-ces0 "table=2,priority=10,in_port=tunnel_port,ip,tun_src=tun_dst,tun_dst=tun_src,tun_id=tun_id_in actions=mod_dl_src:OVS_PORT_TUN_L3_MAC,mod_dl_dst:OVS_PORT_TUN_L3_MAC,mod_nw_src:psrc,mod_nw_dst:src,output:OVS_PORT_TUN_L3"'
-        
-        """
-        self._logger.info("Inserting the tunnel_connection via ofctl")
-        ofctl_conn = 'ovs-ofctl add-flow -OOpenFlow13 {} "table={},priority={},in_port={},ip,tun_src={},tun_dst={},tun_id={} actions=mod_dl_src:{},mod_dl_dst:{},mod_nw_src:{},mod_nw_dst:{},output:{}"'
-        ofctl_conn = ofctl_conn.format(self.ovs_bridge_name, 2, 10, tunnel_port, tun_dst, tun_src, tun_id_in, OVS_PORT_TUN_L3_MAC, OVS_PORT_TUN_L3_MAC, psrc, src, OVS_PORT_TUN_L3)
-        print(ofctl_conn)
-        self._do_subprocess_call(ofctl_conn, raise_exc = False, silent = False)        
-        """
-        
-        #"""
+        # ovs-ofctl add-flow -OOpenFlow13 br-ces0 "table=2,priority=10,in_port=tunnel_port,ip,tun_src=tun_dst,tun_dst=tun_src,tun_id=tun_id_in actions=mod_dl_src:OVS_PORT_TUN_L3_MAC,mod_dl_dst:OVS_PORT_TUN_L3_MAC,mod_nw_src:psrc,mod_nw_dst:src,output:OVS_PORT_TUN_L3"
+
         # Create incoming unidirectional connection
         data = {'dpid': OVS_DATAPATH_ID, 'table_id':2, 'priority':10, 'cookie':cookie,
                 'match':{'in_port':tunnel_port, 'eth_type':2048,
@@ -950,17 +962,13 @@ class Network(object):
         
         if hard_timeout is not None:
             data['hard_timeout'] = hard_timeout
-
         if idle_timeout is not None:
             data['idle_timeout'] = idle_timeout
-            
+        
         if diffserv:
-            # Add matching of IP.dscp field for DiffServ treatment   - # if ofctl-connection runs, then also modify template string to include the following
+            # Add matching of IP.dscp field for DiffServ treatment
             data['match']['ip_dscp'] = OVS_DIFFSERV_MARK
-
         yield from self.rest_api.do_post(url_add, json.dumps(data))
-        #"""
-
 
     @asyncio.coroutine
     def delete_tunnel_connection(self, src, psrc, tun_src, tun_dst, tun_id_in, tun_id_out, tun_type, sstag=0, dstag=0, diffserv=False):
@@ -978,8 +986,7 @@ class Network(object):
             tunnel_port = OVS_PORT_TUN_GENEVE
         else:
             raise Exception('Unsupported tunneling type! {}'.format(tun_type))
-
-
+        
         zero_mac  = '00:00:00:00:00:00'
         zero_ipv4 = '0.0.0.0'
         src_ip    = zero_ipv4
@@ -988,6 +995,7 @@ class Network(object):
         if sstag != 0 and dstag != 0:
             src_ip = Utils.int2ip(sstag)
             dst_ip = Utils.int2ip(dstag)
+        
 
         # Delete outgoing unidirectional connection
         data = {'dpid': OVS_DATAPATH_ID, 'table_id':1, 'priority':10,
@@ -1007,47 +1015,34 @@ class Network(object):
 
 
     def synproxy_create(self):
-        self._logger.info('Create SYNPROXY connection')
-        # Create connection to SYNPROXY
-        asyncio.ensure_future(self._synproxy_connect())
-        
-    def is_synproxy_connected(self):
-        """ Return boolean True if synproxy dataplane is reachable and connected """
-        if self.synproxy_sock is None:
-            return False
-        else:
-            return True
+        self.synproxy_obj = None
+        self._synproxy_worker_task = None
+        if self.synproxy is None:
+            self._logger.warning('No SYNPROXY defined!')
+            return
+        asyncio.ensure_future(self._synproxy_respawn(self.synproxy))
 
     @asyncio.coroutine
-    def _synproxy_connect(self):
-        # Initialize object
-        self.synproxy_sock = None
-        # Variables used to calculate avg time per operation
-        self._synproxy_nofops = 0
-        self._synproxy_aggtime = 0
-        # Create TCP socket
-        sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        sock.setblocking(False)
-
+    def _synproxy_respawn(self, addr):
+        # Create SYNPROXY object and connect socket
+        self.synproxy_obj = SynproxyClient(self.loop)
         while True:
             try:
-                # Connect TCP socket
-                yield from self.loop.sock_connect(sock, (self.synproxy[0], self.synproxy[1]))
-                self._logger.warning('Connected to SYNPROXY @ <{}:{}>'.format(self.synproxy[0], self.synproxy[1]))
+                self._logger.info('Connecting to SYNPROXY server @ {}:{}'.format(addr[0],addr[1]))
+                yield from self.loop.create_connection(lambda: self.synproxy_obj, host=addr[0], port=addr[1])
                 break
-            except Exception as e:
-                self._logger.warning('Failed to connect to SYNPROXY @ <{}:{}>'.format(self.synproxy[0], self.synproxy[1]))
-                yield from asyncio.sleep(5)
+            except ConnectionRefusedError as e:
+                self._logger.warning('Failed to connect to SYNPROXY server @ {}:{} / {}'.format(addr[0],addr[1], e))
+                yield from asyncio.sleep(1)
 
-        # Set socket object
-        self.synproxy_sock = sock
-
-        # Flush all connections from SYNPROXY
-        yield from self._synproxy_sendrecv('flush', '0.0.0.0', 0, 0, 0, 0, 0)
+        self._logger.warning('Successfully connected to SYNPROXY server @ {}:{}'.format(addr[0],addr[1]))
+        # Start monitor
+        asyncio.ensure_future(self._synproxy_monitor())
+        # Install initial flows
+        ## Flush all connections from SYNPROXY
+        yield from self.synproxy_sync_connection('flush', '0.0.0.0', 0, 0, 0, 0, 0, 2)
         # Set default connection
-        yield from self._synproxy_sendrecv('mod', '0.0.0.0', 0, 0, 536, 0, 1)                       # Hammad Comment: This could be commented for stricter synproxy application (scaling to individual ports)
+        yield from self.synproxy_sync_connection('mod', '0.0.0.0', 0, 0, 536, 0, 1, 2)
         # Initialize IP address of the CircularPool and ServicePool pool with default TCP options
         ap_cpool = self.pooltable.get('circularpool')
         ap_spool = self.pooltable.get('servicepool')
@@ -1056,69 +1051,175 @@ class Network(object):
         for srv in self.cetp_service:
             ip_addr, port, proto = srv
             yield from self.synproxy_add_connection(ip_addr, port, 0, 1460, 1, 7)
-        
-        #"""
+            
         for ipaddr in ap_pool:
-            yield from self.synproxy_add_connection(ipaddr, 0, 0, 1460, 1, 7)
-        #"""
-        
+            yield from self.synproxy_sync_connection('mod', ipaddr, 0, 0, 1460, 1, 7, 2)
+        self._logger.warning('Successfully initialized SYNPROXY flows')
+
     @asyncio.coroutine
-    def synproxy_add_connection(self, ipaddr, port, proto, tcpmss, tcpsack, tcpwscale):
+    def _synproxy_monitor(self):
+        self._logger.warning('Monitoring status of SYNPROXY connection')
+        yield from self.synproxy_obj.terminated()
+        self._logger.warning('SYNPROXY connection terminated')
+        asyncio.ensure_future(self._synproxy_respawn(self.synproxy))
+
+    def synproxy_close(self):
         return
-        _t = self.loop.time()
-        success = yield from self._synproxy_sendrecv('mod', ipaddr, port, proto, tcpmss, tcpsack, tcpwscale)
-        _tdelay = (self.loop.time() - _t) * 1000
-        self._synproxy_nofops += 1
-        self._synproxy_aggtime += _tdelay
-        _tdelay_avg = self._synproxy_aggtime / self._synproxy_nofops
-        msg = '({:.3} ms / avg {:.3} ms): ipaddr={} port={} protocol={} mss={} sack={} wscale={}'.format(_tdelay, _tdelay_avg, ipaddr, port, proto, tcpmss, tcpsack, tcpwscale)
-        if success:
-            self._logger.info('Added connection to SYNPROXY {}'.format(msg))
-        else:
-            self._logger.warning('Failed to add connection to SYNPROXY {}'.format(msg))
+        #if self.synproxy_obj is not None:
+        #    self.synproxy_obj.connection_lost(True)
 
     @asyncio.coroutine
-    def synproxy_del_connection(self, ipaddr, port, proto):
-        return
+    def synproxy_sync_connection(self, mode, ipaddr, port, proto, tcpmss, tcpsack, tcpwscale, timeout = 1):
+        # Accepted modes are ['flush', 'add', 'mod', 'del']
+
+        # This is the API function
+        # Return if synproxy is not defined
+        if self.synproxy_obj is None:
+            return
+
         _t = self.loop.time()
-        tcpmss, tcpsack, tcpwscale = 0, 0, 0
-        success = yield from self._synproxy_sendrecv('del', ipaddr, port, proto, tcpmss, tcpsack, tcpwscale)
-        _tdelay = (self.loop.time() - _t) * 1000
-        self._synproxy_nofops += 1
-        self._synproxy_aggtime += _tdelay
-        _tdelay_avg = self._synproxy_aggtime / self._synproxy_nofops
-        msg = '({:.3} ms / avg {:.3} ms): ipaddr={} port={} protocol={} mss={} sack={} wscale={}'.format(_tdelay, _tdelay_avg, ipaddr, port, proto, tcpmss, tcpsack, tcpwscale)
-        if success:
-            self._logger.debug('Deleted connection from SYNPROXY {}'.format(msg))
-        else:
-            self._logger.warning('Failed to delete connection from SYNPROXY {}'.format(msg))
-
-    @asyncio.coroutine
-    def _synproxy_sendrecv(self, mode, ipaddr, port, proto, tcpmss, tcpsack, tcpwscale):
-        if self.synproxy_sock is None:
-            #self._logger.warning('SYNPROXY is not connected!')
-            return False
-
         try:
-            msg = self._synproxy_build_message(mode, ipaddr, port, proto, tcpmss, tcpsack, tcpwscale)
-            #self._logger.debug('Send control message <{}>'.format(msg))
-            yield from self.loop.sock_sendall(self.synproxy_sock, msg)
-            data = yield from asyncio.wait_for(self.loop.sock_recv(self.synproxy_sock, 2), timeout=5)
-            # Evaluate response
-            if data == b'1\n':
-                return True
-            elif data == b'0\n':
-                return False
+            # Enqueue a request
+            self._logger.debug('Enqueuing request: {} {}'.format(mode, (ipaddr, port, proto, tcpmss, tcpsack, tcpwscale, timeout)))
+            ret = yield from asyncio.wait_for(self.synproxy_obj.sendrecv_message(mode, ipaddr, port, proto, tcpmss, tcpsack, tcpwscale), timeout = timeout)
+        except asyncio.TimeoutError:
+            # Process error
+            self._logger.warning('Timeout expired while adding a connection to SYNPROXY')
+            ret = False
+
+        # Post operations
+        _tdelay = (self.loop.time() - _t) * 1000
+        msg = 'ipaddr={} port={} protocol={} mss={} sack={} wscale={} in {:.3} ms / {}'.format(ipaddr, port, proto, tcpmss, tcpsack, tcpwscale, _tdelay, self.synproxy_obj.stats())
+        if ret:
+            self._logger.debug('Succeded to <{}> connection to SYNPROXY {}'.format(mode, msg))
+        else:
+            self._logger.warning('Failed to <{}> connection to SYNPROXY {}'.format(mode, msg))
+
+    @asyncio.coroutine
+    def synproxy_add_connection(self, ipaddr, port, proto, tcpmss, tcpsack, tcpwscale, timeout = 1):
+        _ret = yield from self.synproxy_sync_connection('mod', ipaddr, port, proto, tcpmss, tcpsack, tcpwscale, timeout)
+        return _ret
+
+    @asyncio.coroutine
+    def synproxy_del_connection(self, ipaddr, port, proto, timeout = 1):
+        _ret = yield from self.synproxy_sync_connection('del', ipaddr, port, proto, 0, 0, 0, timeout)
+        return _ret
+
+
+
+class SynproxyClient(asyncio.Protocol):
+    def __init__(self, loop):
+        self._logger = logging.getLogger('SynproxyClient')
+        self.loop = loop
+        self.queue = asyncio.Queue(maxsize=0)
+        self.transport = None
+        self.transactions = []
+        # Variables used to calculate avg time per operation
+        self.nofops = 0
+        self.aggtime = 0
+        # Create SYNPROXY queue worker
+        self._worker_task = asyncio.ensure_future(self.worker_queue())
+        # Create event to monitor from Network module
+        self.monitor = asyncio.Event()
+
+    def connection_made(self, transport):
+        self._logger.debug('Connection to SYNPROXY is ready! waiting for events')
+        self.transport = transport
+        # Enable TCP_NODELAY
+        sock = self.transport.get_extra_info('socket')
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+
+    def data_received(self, data):
+        #self._logger.warning('Data received: <{}>'.format(data))
+        if len(self.transactions) == 0:
+            # Drop unexpected message received from server
+            self._logger.warning('Unexpected message: <{}>'.format(data))
+            return
+
+        # Evaluate response
+        if data == b'1\n':
+            success = True
+        elif data == b'0\n':
+            success = False
+        else:
+            # Drop unrecognised message received from server
+            self._logger.warning('Unrecognised message: <{}>'.format(data))
+            return
+
+        # Extract oldest transaction
+        ts, waiter = self.transactions.pop(0)
+        tdelay = (self.loop.time() - ts) * 1000
+        self.nofops += 1
+        self.aggtime += tdelay
+        tdelay_avg = self.aggtime / self.nofops
+        self._logger.debug('Completed operation with success={} in {:.3} ms / avg {:.3} ms / nofops {}. '.format(success, tdelay, tdelay_avg, self.nofops))
+        # Add data to waiter and set it to done
+        waiter.data = success
+        waiter.set()
+
+    def stats(self):
+        if self.nofops == 0:
+            return 'avg {:.3} ms / nofops {}'.format(0.0, 0.0)
+        return 'avg {:.3} ms / nofops {}'.format(self.aggtime / self.nofops, self.nofops)
+
+    def connection_lost(self, exc):
+        self._logger.debug('The server closed the connection {}'.format(exc))
+        # Set monitor to respawn SynproxyClient
+        self.monitor.data = exc
+        self.monitor.set()
+
+    @asyncio.coroutine
+    def terminated(self):
+        yield from self.monitor.wait()
+        try:
+            # Cancel worker task
+            yield from self.queue.put(None)
+            self._worker_task.cancel()
+            yield from asyncio.sleep(1)
         except Exception as e:
-            # TODO: Currently, we do not handle re-connection to socket
-            self._logger.exception('SYNPROXY connection failed, initiate reconnection... ?')
-            #self.synproxy_sock.close()
-            self.synproxy_sock = None
-            #asyncio.ensure_future(self._synproxy_create())
-            return False
+            self._logger.exception(e)
+        return self.monitor.data
+
+    @asyncio.coroutine
+    def sendrecv_message(self, mode, ipaddr, port, proto, tcpmss, tcpsack, tcpwscale):
+        _t = self.loop.time()
+        waiter = asyncio.Event()
+        # Add request to the message queue
+        yield from self.queue.put((waiter, mode, ipaddr, port, proto, tcpmss, tcpsack, tcpwscale))
+        # Wait until a response has been received
+        yield from waiter.wait()
+        # Return success of the operation / True or False
+        return waiter.data
+
+    @asyncio.coroutine
+    def worker_queue(self):
+        self._logger.info('Starting SYNPROXY connection worker')
+        while True:
+            # Make sure the connection is always open!
+            if self.transport is None:
+                self._logger.debug('Socket connection not ready yet!')
+                yield from asyncio.sleep(1)
+                continue
+            try:
+                # Dequeue a request
+                data_q = yield from self.queue.get()
+                waiter, mode, ipaddr, port, proto, tcpmss, tcpsack, tcpwscale = data_q
+                self.queue.task_done()
+                #self._logger.debug('Dequeued request! {}({})'.format(mode, (ipaddr, port, proto, tcpmss, tcpsack, tcpwscale)))
+                # Build message
+                msg_b = SynproxyClient.synproxy_build_message(mode, ipaddr, port, proto, tcpmss, tcpsack, tcpwscale)
+                self.transport.write(msg_b)
+                # Append a transaction entry with timestamp and waiter
+                self.transactions.append((self.loop.time(), waiter))
+            except asyncio.CancelledError as e:
+                self._logger.debug('Terminating SYNPROXY queue worker')
+                break
+            except Exception as e:
+                self._logger.exception(e)
 
 
-    def _synproxy_build_message(self, mode, ipaddr, port, proto, tcpmss, tcpsack, tcpwscale):
+    @staticmethod
+    def synproxy_build_message(mode, ipaddr, port, proto, tcpmss, tcpsack, tcpwscale):
         """
         Build and return synchronization message
 
@@ -1149,6 +1250,8 @@ class Network(object):
             tcpmss = 0
             tcpsack = 0
             tcpwscale = 0
+        else:
+            raise Exception('Unsupported operation mode <{}>'.format(mode))
         # Pack message
         msg = socket.inet_pton(socket.AF_INET, ipaddr) + struct.pack('!HBBHBB', port, proto, flags, tcpmss, tcpsack, tcpwscale)
         # Return built message

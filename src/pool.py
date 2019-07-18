@@ -1,3 +1,35 @@
+"""
+BSD 3-Clause License
+
+Copyright (c) 2018, Jesus Llorente Santos, Aalto University, Finland
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+
+* Neither the name of the copyright holder nor the names of its
+  contributors may be used to endorse or promote products derived from
+  this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""
+
 #TODO: Optimize memory by having the pool and then a bytearray per host (1/0)
 
 import ipaddress
@@ -201,11 +233,11 @@ class _AddressPoolUnit_set(object):
     def get_stats(self):
         """ Return a tuple of (Total/Allocated/Available) """
         return (len(self._pool), len(self._allocated), len(self._available))
-
+    
     def has_available(self):
         """ returns True, if the address pool has any address to allocate """
         return len(self._available) > 0
-
+    
     def in_pool(self, addr):
         return (addr in self._pool)
 
@@ -264,7 +296,7 @@ class _AddressPoolUnit_list(object):
     def get_stats(self):
         """ Return a tuple of (Total/Allocated/Available) """
         return (len(self._pool), len(self._allocated), len(self._available))
-    
+
     def has_available(self):
         """ returns True, if the address pool has any address to allocate """
         return len(self._available) > 0
@@ -315,11 +347,8 @@ class _AddressPoolUnit_list(object):
 _AddressPoolUnit = _AddressPoolUnit_list #Extracts a controlled element
 #_AddressPoolUnit = _AddressPoolUnit_set #Extracts a random element
 
-
-
 if __name__=="__main__":
     p = PoolContainer()
-
     ## CES Proxy IP Pool
     ap = AddressPoolUser('proxypool', name='CES Proxy Pool')
     p.add(ap)
@@ -333,23 +362,5 @@ if __name__=="__main__":
     userid = "hosta1.cesa."
     ap.create_pool(userid)
     print("ap.get_stats(userid): ", ap.get_stats(userid))
-    
     print("Allocated address: ", ap.allocate(userid))
     print("ap.get_stats(userid): ", ap.get_stats(userid))
-
-    print("Allocated address: ", ap.allocate(userid))
-    print("ap.get_stats(userid): ", ap.get_stats(userid))
-
-    print("Allocated address: ", ap.allocate(userid))
-    print("ap.get_stats(userid): ", ap.get_stats(userid))
-    
-    """
-    # Create specific Address Pools
-    ## Service IP Pool
-    ap = AddressPoolShared('servicepool', name='Service Pool')
-    self._pooltable.add(ap)
-    for ipaddr in self._config.getdefault('pool_serviceip', ()):
-        self._logger.info('Adding resource(s) to pool {} @ <{}>'.format(ipaddr, ap))
-        ap.add_to_pool(ipaddr)
-    """
-    

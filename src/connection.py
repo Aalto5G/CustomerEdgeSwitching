@@ -1,16 +1,77 @@
+"""
+BSD 3-Clause License
+
+Copyright (c) 2019, Jesus Llorente Santos, Aalto University, Finland
+All rights reserved.
+
+Edited: 2019, Hammad Kabir, Aalto University, Finland - for CES cooperative firewalling solution.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+
+* Neither the name of the copyright holder nor the names of its
+  contributors may be used to endorse or promote products derived from
+  this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""
+
 import logging
 import time
 import pprint
+import asyncio
 
 import H2HTransaction
 import host
 
 from helpers_n_wrappers import container3
 from helpers_n_wrappers import utils3
-import asyncio
 
-KEY_RGW = 0
-DP_CONN_cookie = 0
+KEY_RGW            = 'KEY_RGW'
+KEY_RGW_FQDN       = 'KEY_RGW_FQDN'
+KEY_RGW_PRIVATE_IP = 'KEY_RGW_PRIVATE_IP'
+KEY_RGW_PUBLIC_IP  = 'KEY_RGW_PUBLIC_IP'
+KEY_RGW_3TUPLE     = 'KEY_RGW_3TUPLE'
+KEY_RGW_5TUPLE     = 'KEY_RGW_5TUPLE'
+
+# Keys for indexing CETP-based connections
+KEY_MAP_CETP_CONN           = 1
+KEY_MAP_LOCAL_FQDN          = 2     # Indexes host connections against FQDN of local host
+KEY_MAP_REMOTE_FQDN         = 3     # Indexes host connections against FQDN of remote host in another CES node
+
+KEY_MAP_LOCAL_HOST          = 4     # Indexes host connections against local host's IP
+KEY_MAP_CETP_PRIVATE_NW     = 5     # Indexes host connections against (lip, lpip) pair
+KEY_MAP_REMOTE_CESID        = 6     # Indexes host connections against remote CESID 
+
+KEY_MAP_CES_FQDN            = 7     # Indexes all host connections across two CES nodes, as pair of the (local and remote host) FQDN 
+KEY_MAP_LOCAL_FQDNs         = 8     # Indexes all host connections within same CES node, as pair of the (local and remote host) FQDN  
+KEY_MAP_HOST_FQDNs          = 9     # Indexes all host connections using local and remote FQDNs
+KEY_MAP_CES_TO_CES          = 10     # Indexes host connection against an (SST, DST) pair
+KEY_MAP_RCESID_C2C          = 11    # Indexes C2C connection against a remote CESID
+
+
+# Setting deafult log levels (for Connection objects)
+LOGLEVEL_CETP_DPConnection_Template = logging.DEBUG
+LOGLEVEL_H2HConnection              = logging.INFO
+LOGLEVEL_LocalConnection            = logging.DEBUG
+
 
 class ConnectionTable(container3.Container):
     def __init__(self, name='ConnectionTable'):
@@ -105,18 +166,18 @@ class ConnectionLegacy(container3.ContainerNode):
         # Basic indexing
         self._built_lookupkeys.append((KEY_RGW, False))
         # Host FQDN based indexing
-        self._built_lookupkeys.append(((KEY_RGW, self.host_fqdn), False))
+        self._built_lookupkeys.append(((KEY_RGW_FQDN, self.host_fqdn), False))
         # Private IP-based indexing
-        #self._built_lookupkeys.append(((KEY_RGW, self.private_ip), False))
+        #self._built_lookupkeys.append(((KEY_RGW_PRIVATE_IP, self.private_ip), False))
         # Outbound IP-based indexing
-        self._built_lookupkeys.append(((KEY_RGW, self.outbound_ip), False))
+        self._built_lookupkeys.append(((KEY_RGW_PUBLIC_IP, self.outbound_ip), False))
         ## The type of unique key come determined by the parameters available
         if not self.remote_ip and not self.remote_port:
             # 3-tuple semi-fledged based indexing
-            self._built_lookupkeys.append(((KEY_RGW, self.outbound_ip, self.outbound_port, self.protocol), True))
+            self._built_lookupkeys.append(((KEY_RGW_3TUPLE, self.outbound_ip, self.outbound_port, self.protocol), True))
         else:
             # 5-tuple full-fledged based indexing
-            self._built_lookupkeys.append(((KEY_RGW, self.outbound_ip, self.outbound_port, self.remote_ip, self.remote_port, self.protocol), True))
+            self._built_lookupkeys.append(((KEY_RGW_5TUPLE, self.outbound_ip, self.outbound_port, self.remote_ip, self.remote_port, self.protocol), True))
 
 
     def lookupkeys(self):
@@ -150,8 +211,9 @@ class ConnectionLegacy(container3.ContainerNode):
             # Bind connection to 5-tuple match
             self.remote_ip, self.remote_port = remote_ip, remote_port
             self._built_lookupkeys = [(KEY_RGW, False),
-                                      ((KEY_RGW, self.outbound_ip), False),
-                                      ((KEY_RGW, self.outbound_ip, self.outbound_port, self.remote_ip, self.remote_port, self.protocol), True)]
+                                      ((KEY_RGW_FQDN, self.host_fqdn), False),
+                                      ((KEY_RGW_PUBLIC_IP, self.outbound_ip), False),
+                                      ((KEY_RGW_5TUPLE, self.outbound_ip, self.outbound_port, self.remote_ip, self.remote_port, self.protocol), True)]
             # Update keys in connection table
             connection_table.updatekeys(self)
             # Set autobind flag to True
@@ -192,26 +254,6 @@ class ConnectionLegacy(container3.ContainerNode):
 
         return ret
 
-
-
-LOGLEVEL_CETP_DPConnection_Template = logging.DEBUG
-LOGLEVEL_H2HConnection              = logging.INFO
-LOGLEVEL_LocalConnection            = logging.DEBUG
-
-# Keys for indexing connections
-KEY_MAP_CETP_CONN           = 1
-KEY_MAP_LOCAL_FQDN          = 2     # Indexes host connections against FQDN of local host
-KEY_MAP_REMOTE_FQDN         = 3     # Indexes host connections against FQDN of remote host in another CES node
-
-KEY_MAP_LOCAL_HOST          = 4     # Indexes host connections against local host's IP
-KEY_MAP_CETP_PRIVATE_NW     = 5     # Indexes host connections against (lip, lpip) pair
-KEY_MAP_REMOTE_CESID        = 6     # Indexes host connections against remote CESID 
-
-KEY_MAP_CES_FQDN            = 7     # Indexes all host connections across two CES nodes, as pair of the (local and remote host) FQDN 
-KEY_MAP_LOCAL_FQDNs         = 8     # Indexes all host connections within same CES node, as pair of the (local and remote host) FQDN  
-KEY_MAP_HOST_FQDNs          = 9     # Indexes all host connections using local and remote FQDNs
-KEY_MAP_CES_TO_CES          = 10     # Indexes host connection against an (SST, DST) pair
-KEY_MAP_RCESID_C2C          = 11    # Indexes C2C connection against a remote CESID
 
 
 
@@ -463,7 +505,6 @@ class LocalConnection(container3.ContainerNode):
         """
 
 
-
 if __name__ == "__main__":
     table = ConnectionTable()
     d1 = {'outbound_ip':'1.2.3.4','dns_resolver':'8.8.8.8','private_ip':'192.168.0.100','fqdn':'host100.rgw','timeout':2.0}
@@ -473,7 +514,6 @@ if __name__ == "__main__":
     c2 = ConnectionLegacy(**d2)
     table.add(c1)
     table.add(c2)
-    
     l1 = LocalConnection(12, lid="None", lip="None", lpip="None", rid="None", rip="None", rpip="None", lfqdn="None", rfqdn="None")
     table.add(l1)
     
@@ -487,3 +527,4 @@ if __name__ == "__main__":
     print(c1.hasexpired())
 
     table.update_all_rgw()
+

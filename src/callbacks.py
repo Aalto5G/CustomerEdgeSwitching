@@ -1,3 +1,38 @@
+"""
+BSD 3-Clause License
+
+Copyright (c) 2018, Jesus Llorente Santos, Aalto University, Finland
+All rights reserved.
+
+Edited: 2019, Hammad Kabir, Aalto University, Finland - for CES cooperative firewalling solution.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+
+* Neither the name of the copyright holder nor the names of its
+  contributors may be used to endorse or promote products derived from
+  this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""
+
 import asyncio
 import logging
 import random
@@ -29,7 +64,6 @@ import connection
 from connection import ConnectionLegacy
 
 import pbra
-from ryu.ofproto.ofproto_parser import msg
 
 DNSRR_TTL_CIRCULARPOOL = 0
 DNSRR_TTL_SERVICEPOOL = 10
@@ -46,7 +80,13 @@ class DNSCallbacks(object):
         self.resolver_list = []
         self.registry = {}
         self.activequeries = {}
-        self._load_naptr_rrs()
+        self._load_naptr_rrs()        
+
+    def shutdown(self):
+        self._logger.warning('Shutdown')
+        # Close registered sockets
+        for obj in self.get_object(None):
+            obj.connection_lost(None)
 
     def get_object(self, name=None):
         if name is None:
@@ -104,8 +144,7 @@ class DNSCallbacks(object):
 
         host_obj = HostEntry(name=fqdn, fqdn=fqdn, ipv4=ipaddr, services=user_data)
         self.hosttable.add(host_obj)
-        
-        #"""
+
         # Create network resources
         hostname = ipaddr
         self.network.ipt_add_user(hostname, ipaddr)
@@ -126,8 +165,7 @@ class DNSCallbacks(object):
             carriergrade_ipt = host_obj.get_service('CARRIERGRADE', [])
             self.network.ipt_add_user_carriergrade(hostname, carriergrade_ipt)
 
-        #"""
-        
+
     @asyncio.coroutine
     def ddns_deregister_user(self, fqdn, rdtype, ipaddr):
         self._logger.info('Deregister user {} @ {}'.format(fqdn, ipaddr))
@@ -151,7 +189,7 @@ class DNSCallbacks(object):
     @asyncio.coroutine
     def ddns_process(self, query, addr, cback):
         """ Process DDNS query from DHCP server """
-        self._logger.info('process_update')
+        self._logger.debug('process_update')
         try:
             #Filter hostname and operation
             for rr in query.authority:
@@ -253,85 +291,10 @@ class DNSCallbacks(object):
 
 
     @asyncio.coroutine
-    def dns_process_rgw_local_soa(self, query, addr, cback):
-        """ Process DNS query from private network of a name in a SOA zone """
-        # Forward or continue to DNS resolver
-        fqdn = format(query.question[0].name)
-        rdtype = query.question[0].rdtype
-
-        self._logger.debug('LAN SOA: {} ({}) from {}/{}'.format(fqdn, dns.rdatatype.to_text(rdtype), addr[0], query.transport))
-
-        if self.hosttable.has((host.KEY_HOST_SERVICE, fqdn)):
-            # The service exists in RGW
-            host_obj = self.hosttable.get((host.KEY_HOST_SERVICE, fqdn))
-            service_data = host_obj.get_service_sfqdn(fqdn)
-            self._logger.debug('Found service: {} / {}'.format(fqdn, service_data))
-        elif self.hosttable.has_carriergrade(fqdn):
-            # There is a host with CarrierGrade service in RGW
-            host_obj, service_data = self.hosttable.get_carriergrade(fqdn)
-            self._logger.debug('Found CarrierGrade service: {} / {}'.format(fqdn, service_data))
-        elif fqdn in self.soa_list:
-            # Querying the RGW domain itself
-            self._logger.debug('Use NS address: {}'.format(fqdn))
-            host_obj = self.hosttable.get((host.KEY_HOST_FQDN, fqdn))
-            # Create DNS Response
-            response = dnsutils.make_response_answer_rr(query, fqdn, dns.rdatatype.A, host_obj.ipv4, rdclass=1, ttl=DNSRR_TTL_DEFAULT, recursion_available=True)
-            self._logger.debug('Send DNS response to {}:{}'.format(addr[0],addr[1]))
-            cback(query, addr, response)
-            return
-        else:
-            # FQDN not found! Answer NXDOMAIN
-            self._logger.debug('Answer {} with NXDOMAIN'.format(fqdn))
-            response = dnsutils.make_response_rcode(query, dns.rcode.NXDOMAIN, recursion_available=True)
-            cback(query, addr, response)
-            return
-
-        # TODO: Modify this to propagate original queries if carriergrade, and only override certain types, e.g. dns.rdatatype.A,
-        
-        if service_data is None:
-            # Answer with empty records or NXDOMAIN if no service_data exists
-            response = dnsutils.make_response_rcode(query, dns.rcode.NXDOMAIN, recursion_available=True)
-            cback(query, addr, response)
-            return
-
-        # Evaluate host and service
-        if service_data['carriergrade'] is True:
-            # Resolve via CarrierGrade
-            self._logger.debug('Process {} with CarrierGrade resolution'.format(fqdn))
-            # Hammad comment:  should there not be a check for 'dns.rdatatype.A' prior to performing the carrier grade resolution?
-            _rcode, _ipv4, _service_data = yield from self._dns_resolve_circularpool_carriergrade(host_obj, fqdn, addr, service_data)
-            if not _ipv4:
-                # Propagate rcode value
-                response = dnsutils.make_response_rcode(query, rcode=_rcode, recursion_available=True)
-                cback(query, addr, response)
-                return
-
-            self._logger.debug('Completed LAN CarrierGrade resolution: {} @ {}'.format(fqdn, _ipv4))
-            # Answer query with A type and answer with IPv4 address of the host
-            response = dnsutils.make_response_answer_rr(query, fqdn, dns.rdatatype.A, _ipv4, rdclass=1, ttl=DNSRR_TTL_DEFAULT, recursion_available=True)
-            cback(query, addr, response)
-
-        elif rdtype == dns.rdatatype.A:
-            # Resolve A type and answer with IPv4 address of the host
-            response = dnsutils.make_response_answer_rr(query, fqdn, rdtype, host_obj.ipv4, rdclass=1, ttl=DNSRR_TTL_DEFAULT, recursion_available=True)
-            cback(query, addr, response)
-
-        elif rdtype == dns.rdatatype.PTR:
-            # Resolve PTR type and answer with FQDN of the host
-            response = dnsutils.make_response_answer_rr(query, fqdn, rdtype, host_obj.fqdn, rdclass=1, ttl=DNSRR_TTL_DEFAULT, recursion_available=True)
-            cback(query, addr, response)
-
-        else:
-            # Answer with empty records for other types
-            response = dnsutils.make_response_rcode(query, dns.rcode.NOERROR, recursion_available=True)
-            cback(query, addr, response)
-
-
-    @asyncio.coroutine
     def dns_process_rgw_lan_soa(self, query, addr, cback):
         """ Process DNS query from private network of a name in a SOA zone """
         # Forward or continue to DNS resolver
-        fqdn = format(query.question[0].name)
+        fqdn = query.fqdn
         rdtype = query.question[0].rdtype
 
         self._logger.debug('LAN SOA: {} ({}) from {}/{}'.format(fqdn, dns.rdatatype.to_text(rdtype), addr[0], query.transport))
@@ -362,18 +325,19 @@ class DNSCallbacks(object):
             return
 
         # TODO: Modify this to propagate original queries if carriergrade, and only override certain types, e.g. dns.rdatatype.A,
-        
-        if service_data is None:
-            # Answer with empty records or NXDOMAIN if no service_data exists
-            response = dnsutils.make_response_rcode(query, dns.rcode.NXDOMAIN, recursion_available=True)
-            cback(query, addr, response)
-            return
 
         # Evaluate host and service
         if service_data['carriergrade'] is True:
             # Resolve via CarrierGrade
+
+            # Answer with empty records for other types not A
+            if rdtype != dns.rdatatype.A:
+                response = dnsutils.make_response_rcode(query, dns.rcode.NOERROR, recursion_available=True)
+                cback(query, addr, response)
+                return
+
             self._logger.debug('Process {} with CarrierGrade resolution'.format(fqdn))
-            # Hammad comment:  should there not be a check for 'dns.rdatatype.A' prior to performing the carrier grade resolution?
+            # Hammad comment:  should there not be a check for 'dns.rdatatype.A' prior to performing the carrier grade resolution?            
             _rcode, _ipv4, _service_data = yield from self._dns_resolve_circularpool_carriergrade(host_obj, fqdn, addr, service_data)
             if not _ipv4:
                 # Propagate rcode value
@@ -388,6 +352,7 @@ class DNSCallbacks(object):
 
         elif rdtype == dns.rdatatype.A:
             # Resolve A type and answer with IPv4 address of the host
+
             cb_args = query, addr
             self.cetp_mgr.process_dns_message(cback, cb_args, fqdn)             # Should this be irrespective of if clause?
             #response = dnsutils.make_response_answer_rr(query, fqdn, rdtype, host_obj.ipv4, rdclass=1, ttl=DNSRR_TTL_DEFAULT, recursion_available=True)
@@ -412,15 +377,15 @@ class DNSCallbacks(object):
         key = (query.id, q.name, q.rdtype, addr)
         fqdn = q.name
         rdtype = q.rdtype
-        
-        #self._logger.info('LAN !SOA: {} ({}) from {}/{}'.format(fqdn, dns.rdatatype.to_text(rdtype), addr[0], query.transport))
+
+        self._logger.info('LAN !SOA: {} ({}) from {}/{}'.format(fqdn, dns.rdatatype.to_text(rdtype), addr[0], query.transport))
 
         if key in self.activequeries:
             # Continue ongoing resolution
             resolver = self.activequeries[key]
             resolver.do_continue(query)
             return
-        
+
         # Changing the A or AAAA queries to NAPTR queries to check if destination is served by a CES/CETP service
         if rdtype in [dns.rdatatype.A, dns.rdatatype.AAAA, dns.rdatatype.PTR]:
             #self._logger.info("Forwarding the {} query as NAPTR query for domain '{}'".format(dns.rdatatype.to_text(rdtype), fqdn))
@@ -429,13 +394,13 @@ class DNSCallbacks(object):
             fwd_query  = dns.message.make_query(fqdn, dns.rdatatype.NAPTR)
             answer     = yield from self._forward_naptr_query(fwd_query, fqdn, key)
             response   = self._pre_process_naptr(answer)
-
+        
             if response is not None:
                 self._process_naptr_response(response, cb)
                 del self.activequeries[key]
                 return
             
-        # Create a new factory for resolving the actual DNS query
+        # Create factory for new resolution
         raddr = self.dns_get_resolver()
         resolver = uDNSResolver()
         self.activequeries[key] = resolver
@@ -453,6 +418,7 @@ class DNSCallbacks(object):
         # Resolution ended, send generated response
         del self.activequeries[key]
         cback(query, addr, response)
+
 
     
     @asyncio.coroutine
@@ -631,7 +597,7 @@ class DNSCallbacks(object):
     @asyncio.coroutine
     def dns_process_rgw_wan_soa(self, query, addr, cback):
         """ Process DNS query from public network of a name in a SOA zone """
-        fqdn = format(query.question[0].name)
+        fqdn = query.fqdn
         rdtype = query.question[0].rdtype
 
         # Initialize to None to prevent AttributeError
@@ -665,17 +631,14 @@ class DNSCallbacks(object):
             cback(query, addr, response)
             return
 
-        # TODO: At this point we have the host object and the service_data.
-        # Maybe it's possible to centralize the PBRA from here instead?
-        # Load reputation metadata in DNS query?
-        
         if rdtype == dns.rdatatype.NAPTR:
             self._logger.info('Answer with NAPTR records for public domain {}'.format(fqdn))
             response = self._get_naptr_response(query, fqdn, rdtype, rdclass=1, ttl=24*60*60)
             cback(query, addr, response)
             return
         
-        response = self.pbra.pbra_dns_preprocess_rgw_wan_soa(query, addr, host_obj, service_data)
+        # Pre-process request with PBRA. Quick return response if pre-emptive actions are required due to policy
+        response = yield from self.pbra.pbra_dns_preprocess_rgw_wan_soa(query, addr, host_obj, service_data)
         if response is not None:
             self._logger.debug('Preprocessing DNS response\n{}'.format(response))
             cback(query, addr, response)
@@ -689,7 +652,7 @@ class DNSCallbacks(object):
             response = dnsutils.make_response_rcode(query, rcode=dns.rcode.NOERROR, recursion_available=False)
             cback(query, addr, response)
             return
-            
+
         # If the service is carriergrade, resolve it first before allocating our own address
         _ipv4, _service_data = host_obj.ipv4, service_data
         if service_data['carriergrade'] is True:
@@ -707,12 +670,24 @@ class DNSCallbacks(object):
             return
 
         # Use PBRA to allocate an address according to policy
-        allocated_ipv4 = self.pbra.pbra_dns_process_rgw_wan_soa(query, addr, host_obj, _service_data, _ipv4)
+        allocated_ipv4 = yield from self.pbra.pbra_dns_process_rgw_wan_soa(query, addr, host_obj, _service_data, _ipv4)
 
-        # Evaluate allocated address
-        if not allocated_ipv4:
+        if not allocated_ipv4 and query.transport == 'tcp':
+            # Failed to allocate an address - hold and reattempt after T ms to bridge the gap with UDP queries
+            rtx_t = 0.50
+            self._logger.debug('Failed to allocate an address for {} via TCP, reattempting in {} msec'.format(fqdn, rtx_t*1000))
+            yield from asyncio.sleep(rtx_t)
+            allocated_ipv4 = yield from self.pbra.pbra_dns_process_rgw_wan_soa(query, addr, host_obj, _service_data, _ipv4)
+
+        if not allocated_ipv4 and query.transport == 'tcp':
+            # Failed to allocate an address - Answer with empty records to avoid stalling the TCP transaction
+            self._logger.warning('Failed to allocate an address for {} via TCP'.format(fqdn))
+            response = dnsutils.make_response_rcode(query, rcode=dns.rcode.NOERROR, recursion_available=False)
+            cback(query, addr, response)
+            return
+
+        if not allocated_ipv4 and query.transport == 'udp':
             # Failed to allocate an address - Drop DNS Query to trigger reattempt
-            self._logger.warning('Failed to allocate an address for {}'.format(fqdn))
             return
 
         # Create DNS response based on received query type
@@ -769,7 +744,7 @@ class DNSCallbacks(object):
                     # Resolution succeeded
                     break
             except Exception as e:
-                self._logger.warning('Exception while performing CarrierGrade resolution: {} ({}) via {}'.format(fqdn, dns.rdatatype.to_text(rdtype), host_ipaddr))
+                self._logger.warning('Exception while performing CarrierGrade resolution: {} ({}) via {} / {}'.format(fqdn, dns.rdatatype.to_text(rdtype), host_ipaddr, e))
 
         if not _ipv4:
             self._logger.warning('Failed CarrierGrade resolution: {} via {}'.format(fqdn, host_ipaddr))
@@ -790,12 +765,41 @@ class DNSCallbacks(object):
     @asyncio.coroutine
     def dns_process_rgw_wan_nosoa(self, query, addr, cback):
         """ Process DNS query from public network of a name not in a SOA zone """
-        fqdn = format(query.question[0].name)
+        '''
+        TODO: Here is a list with ideas related to mismatching queries
+            - If query comes in UDP, assess the posibility of spoofing ?
+            - If query is non-spoofed, quantify the effect of misconfigured DNS server ?
+            - Feed the PBRA anyhow ?
+        '''
+        fqdn = query.fqdn
         rdtype = query.question[0].rdtype
         self._logger.warning('Drop DNS query for non-SOA domain: {} ({}) from {}/{}'.format(fqdn, dns.rdatatype.to_text(rdtype), addr[0], query.transport))
-        # TODO: Feed this to the algorithm as untrusted events? What about misconfigured DNS servers?
         # Drop DNS Query
         return
+
+        '''
+        # TODO: Uncomment these lines when CES support is added
+
+    def dns_process_ces_lan_soa(self, query, addr, cback):
+        """ Process DNS query from private network of a name in a SOA zone """
+        pass
+
+    def dns_process_ces_lan_nosoa(self, query, addr, cback):
+        """ Process DNS query from private network of a name not in a SOA zone """
+        pass
+
+    def dns_process_ces_wan_soa(self, query, addr, cback):
+        """ Process DNS query from public network of a name in a SOA zone """
+        self._logger.warning('dns_process_ces_wan_soa')
+        # Drop DNS Query
+        return
+
+    def dns_process_ces_wan_nosoa(self, query, addr, cback):
+        """ Process DNS query from public network of a name not in a SOA zone """
+        self._logger.warning('dns_process_ces_wan_nosoa')
+        # Drop DNS Query
+        return
+        '''
 
     @asyncio.coroutine
     def dns_error_response(self, query, addr, cback, rcode=dns.rcode.REFUSED):
@@ -827,12 +831,6 @@ class PacketCallbacks(object):
                                                       packet_fields['proto'], packet_fields['ttl'])
 
     def packet_in_circularpool(self, packet):
-        # TODO: Improve lookup processing to also consider dns_bind flag of a waiting connection
-        #       > Match sending client with connection.query.reputation_resolver before claim
-        # TODO: We have modified in connection.py the way of creating the 3-tuple and 5-tuple match
-        #       > This would require up to 3 keys for the 5-tuple match, to include wildcards for remote_port and protocol
-        #       > However, we do not have any use for 5-tuple at this point, so it's probably best to remove it, as it won't be tested
-
         # Get IP data
         data = self.network.ipt_nfpacket_payload(packet)
         # Parse packet
@@ -843,29 +841,29 @@ class PacketCallbacks(object):
         sport = packet_fields.setdefault('sport', 0)
         dport = packet_fields.setdefault('dport', 0)
         sender = '{}:{}'.format(src, sport)
-        self._logger.info('Received PacketIn: {}'.format(packet_fields))
+        self._logger.debug('Received PacketIn: {}'.format(packet_fields))
 
         # Pre-emptive check with PBRA if the packet is blacklister
         response = self.pbra.pbra_data_preaccept_circularpool(data, packet_fields)
         if response is False:
-            self._logger.info('Reject / CircularPool pre-emptive check failed: [{}]'.format(dst,self._format_5tuple(packet_fields)))
+            self._logger.info('Reject / CircularPool pre-emptive check failed for IP {}: [{}]'.format(dst,self._format_5tuple(packet_fields)))
             self.network.ipt_nfpacket_reject(packet)
             self.pbra.pbra_data_track_circularpool(data, packet_fields)
             return
 
         # Build connection lookup keys
         # key1: Basic IP destination for early drop
-        key1 = (connection.KEY_RGW, dst)
-        # key2: Full fledged 5-tuple (not in use by the system, yet)
-        #key2 = (connection.KEY_RGW, dst, dport, src, sport, proto)
+        key1 = (connection.KEY_RGW_PUBLIC_IP, dst)
+        # key2: Full fledged 5-tuple (not in use by the system)
+        #key2 = (connection.KEY_RGW_5TUPLE, dst, dport, src, sport, proto)
         # key3: Semi-full fledged 3-tuple  (SFQDN+)
-        key3 = (connection.KEY_RGW, dst, dport, proto)
+        key3 = (connection.KEY_RGW_3TUPLE, dst, dport, proto)
         # key4: Basic 3-tuple with wildcards (SFQDN-)
-        key4 = (connection.KEY_RGW, dst, dport, 0)
+        key4 = (connection.KEY_RGW_3TUPLE, dst, dport, 0)
         # key5: Basic 3-tuple with wildcards (SFQDN-)
-        key5 = (connection.KEY_RGW, dst, 0, proto)
+        key5 = (connection.KEY_RGW_3TUPLE, dst, 0, proto)
         # key6: Basic 3-tuple with wildcards (FQDN)
-        key6 = (connection.KEY_RGW, dst, 0, 0)
+        key6 = (connection.KEY_RGW_3TUPLE, dst, 0, 0)
 
         # Lookup connection in table with basic key for for early drop
         if not self.connectiontable.has(key1):

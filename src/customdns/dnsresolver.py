@@ -1,9 +1,42 @@
+"""
+BSD 3-Clause License
+
+Copyright (c) 2018, Jesus Llorente Santos, Aalto University, Finland
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+
+* Neither the name of the copyright holder nor the names of its
+  contributors may be used to endorse or promote products derived from
+  this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""
+
 import asyncio
 import logging
 import time
 import socket
 
 from customdns.dnsutils import *
+from helpers_n_wrappers.asyncio_helper3 import AsyncSocketQueue
 
 class DNSResolver(asyncio.DatagramProtocol):
     '''
@@ -168,15 +201,17 @@ class uDNSResolver():
         self.sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
         self.sock.setblocking(False)
         yield from loop.sock_connect(self.sock, addr)
-        fqdn = query.question[0].name
+        # Create async socket wrapper object
+        self.asock = AsyncSocketQueue(self.sock, loop)
+        fqdn = format(query.question[0].name).lower()
         response = None
         i = 0
         for tout in timeouts:
             i += 1
             try:
-                yield from loop.sock_sendall(self.sock, query.to_wire())
-                dataresponse = yield from asyncio.wait_for(loop.sock_recv(self.sock, 1024), timeout=tout)
-                self.sock.close()
+                yield from self.asock.sendall(query.to_wire())
+                dataresponse = yield from asyncio.wait_for(self.asock.recv(), timeout=tout)
+                self.asock.close()
                 return dns.message.from_wire(dataresponse)
             except asyncio.TimeoutError:
                 logger.debug('#{} timeout expired: {:.4f} sec ({})'.format(i, tout, fqdn))
@@ -186,90 +221,5 @@ class uDNSResolver():
     @asyncio.coroutine
     def do_continue(self, query):
         loop = asyncio.get_event_loop()
-        yield from loop.sock_sendall(self._sock, query.to_wire())
+        yield from self.asock.sendall(query.to_wire())
 
-'''
-import threading
-import asyncio
-import socket
-import time
-
-import dns
-from dns import *
-
-@asyncio.coroutine
-def sendrecv_tcp(host, port, message):
-    # This is for TCP!
-    t0 = time.time()
-    reader, writer = yield from asyncio.open_connection(host, port)
-    t1 = time.time()
-    writer.write(message)
-    yield from writer.drain()
-    data = yield from reader.read()
-    t2 = time.time()
-    writer.close()
-    print('Message received: ({} / {} ms) {}'.format((t1-t0)/1000.0, (t2-t0)/1000.0, data))
-
-@asyncio.coroutine
-def sendrecv_udp(host, port, message):
-    # This is for UDP!
-    s = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-    yield from loop.sock_connect(s, (host, port))
-    t0 = time.time()
-    yield from loop.sock_sendall(s, message)
-    answer = yield from loop.sock_recv(s, 1024)
-    t1 = time.time()
-    print('Message received in {} ms: {}'.format((t1-t0)/1000.0, answer))
-    s.close()
-
-
-@asyncio.coroutine
-def _make_query(fqdn, rdtype, host, port):
-    dnsmsg = dns.message.make_query(fqdn, rdtype)
-    sock = yield from _sock_connect(host, port)
-    for tout in [0.5, 0.5, 0.5]:
-        try:
-            print('Sending request with timeout {}'.format(tout))
-            data = yield from _sock_sendrecv(sock, dnsmsg.to_wire(), tout)
-            answer = dns.message.from_wire(data)
-            print(answer)
-            return answer
-        except asyncio.TimeoutError:
-            print ('Timeout {} expired'.format(tout))
-            continue
-
-@asyncio.coroutine
-def _sock_connect(host, port):
-    sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-    yield from loop.sock_connect(sock, (host, port))
-    return sock
-
-@asyncio.coroutine
-def _sock_sendrecv(sock, message, timeout=None, loop=None):
-    """
-    @param timeout: 'None' sets socket in blocking mode.
-    """
-    if loop is None:
-        loop = asyncio.get_event_loop()
-
-    if timeout is None:
-        sock.setblocking(True)
-    else:
-        sock.setblocking(False)
-    yield from loop.sock_sendall(sock, message)
-    data = yield from asyncio.wait_for(loop.sock_recv(sock, 1024), timeout=timeout)
-    sock.close()
-    return data
-
-
-loop = asyncio.get_event_loop()
-
-loop.run_until_complete(_make_query('test.abc', 1, '8.8.8.8', 53))
-
-udpmessage = b'\x1a\xb7\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x04test\x03com\x00\x00\x01\x00\x01'
-tcpmessage = b'\x00\x1a\x1a\xb7\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x04test\x03com\x00\x00\x01\x00\x01'
-
-loop.run_until_complete(sendrecv_udp('8.8.8.8', 53, udpmessage))
-loop.run_until_complete(sendrecv_tcp('8.8.8.8', 53, tcpmessage))
-
-'''
