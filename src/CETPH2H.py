@@ -43,13 +43,12 @@ import traceback
 import json
 import ssl
 import dns
-import customdns
-from customdns import dnsutils
 
 import cetpManager
 import H2HTransaction
-import H2HTransaction_m
 import host
+import customdns
+from customdns import dnsutils
 
 LOGLEVEL_CETPH2H             = logging.INFO
 LOGLEVEL_CETPH2HLocal        = logging.INFO

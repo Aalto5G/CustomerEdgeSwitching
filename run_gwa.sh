@@ -9,6 +9,7 @@ fi
 echo "Starting Realm Gateway as cesa.lte"
 cd src
 ./rgw.py  --name cesa.lte                                                    \
+          --dns-cname-soa    cname-cesa.lte.                                 \
           --dns-soa cesa.lte. 0.168.192.in-addr.arpa. 1.64.100.in-addr.arpa. \
           --dns-server-local 127.0.0.1 53                                    \
           --dns-server-lan   192.168.1.1 53                                  \
@@ -35,10 +36,10 @@ cd src
           --network-api-url  http://127.0.0.1:8081/                          \
           --repository-subscriber-folder ../config.d/cesa.lte.subscriber.d/  \
           --repository-policy-folder     ../config.d/cesa.lte.policy.d/      \
-          --spm-services-boolean    True \
+          --spm-services-boolean    False \
           --spm-url-cetp-host   	http://10.0.3.200/API/cetp_policy_node?  \
           --spm-url-cetp-network  	http://10.0.3.200/API/ces_policy_node?   \
-          --cetp-config  		    ../config.d/cesa.lte.cetp.policy/config_cesa.yaml   \
-          --cetp-policies  		    ../config.d/cesa.lte.cetp.policy/cetp_policies.json \
+          --cetp-config  		../config.d/cesa.lte.cetp.policy/config_cesa.yaml   \
+          --cetp-policies  		../config.d/cesa.lte.cetp.policy/cetp_policies.json \
           --repository-api-url  	http://10.0.3.200:8001                   \
           --synproxy         		127.0.0.1 12345

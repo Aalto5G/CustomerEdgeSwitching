@@ -66,6 +66,8 @@ KEY_MAP_HOST_FQDNs          = 9     # Indexes all host connections using local a
 KEY_MAP_CES_TO_CES          = 10     # Indexes host connection against an (SST, DST) pair
 KEY_MAP_RCESID_C2C          = 11    # Indexes C2C connection against a remote CESID
 
+# Global variable for Data-plane connections
+DP_CONN_cookie = 0
 
 # Setting deafult log levels (for Connection objects)
 LOGLEVEL_CETP_DPConnection_Template = logging.DEBUG

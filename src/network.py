@@ -125,14 +125,14 @@ class Network(object):
         # Initialize iptables
         self.ipt_init()
         # Create SYNPROXY instance
-        self.synproxy_create()
-        '''
+        # self.synproxy_create()
+        #'''
         # TODO: Uncomment these lines when CES support is added
         # Create HTTP REST Client
         self.rest_api_init()
         # Create OpenvSwitch
         self.ovs_create()
-        '''
+        #'''
 
     def shutdown(self):
         self._logger.warning('Shutdown')
@@ -513,6 +513,7 @@ class Network(object):
         self.add_local_connection   = self.add_local_connection_OF14 if OF_PROTOCOL_VERSION>1.3 else self.add_local_connection_OF13
 
     def ovs_create(self):
+        self.ovs_init()
         self.ovs_bridge_name = "br-ces0"
         self._logger.info('Create OpenvSwitch for CES data tunnelling')
         ## Create OVS bridge, set datapath-id (16 hex digits) and configure controller
