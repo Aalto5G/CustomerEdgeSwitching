@@ -1,0 +1,10 @@
+$TTL 36000
+gwb.demo. IN      SOA     ns1.gwb.demo. hostmaster.gwb.demo. (
+               2016030901  ; serial
+               28800       ; refresh (8 hours)
+               1800        ; retry (30 mins)
+               2592000     ; expire (30 days)
+               86400 )     ; minimum (1 day)
+
+gwb.demo.            86400  NS      ns1.gwb.demo
+ns1.gwb.demo.        86400  A       127.0.0.1

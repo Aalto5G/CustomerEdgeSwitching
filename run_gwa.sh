@@ -6,11 +6,11 @@ if [[ $UID != 0 ]]; then
     exit 1
 fi
 
-echo "Starting Realm Gateway as cesa.lte"
+echo "Starting Realm Gateway as gwa.demo"
 cd src
-./rgw.py  --name cesa.lte                                                    \
-          --dns-cname-soa    cname-cesa.lte.                                 \
-          --dns-soa cesa.lte. 0.168.192.in-addr.arpa. 1.64.100.in-addr.arpa. \
+./rgw.py  --name gwa.demo                                                    \
+          --dns-cname-soa    cname-gwa.demo.                                 \
+          --dns-soa gwa.demo. 0.168.192.in-addr.arpa. 1.64.100.in-addr.arpa. \
           --dns-server-local 127.0.0.1 53                                    \
           --dns-server-lan   192.168.1.1 53                                  \
           --dns-server-wan   10.1.3.101 53                                   \
@@ -34,12 +34,12 @@ cd src
           --ipt-markdnat                                                     \
           --ipt-flush                                                        \
           --network-api-url  http://127.0.0.1:8081/                          \
-          --repository-subscriber-folder ../config.d/cesa.lte.subscriber.d/  \
-          --repository-policy-folder     ../config.d/cesa.lte.policy.d/      \
+          --repository-subscriber-folder ../config.d/gwa.demo.subscriber.d/  \
+          --repository-policy-folder     ../config.d/gwa.demo.policy.d/      \
           --spm-services-boolean    False \
           --spm-url-cetp-host   	http://10.0.3.200/API/cetp_policy_node?  \
           --spm-url-cetp-network  	http://10.0.3.200/API/ces_policy_node?   \
-          --cetp-config  		../config.d/cesa.lte.cetp.policy/config_cesa.yaml   \
-          --cetp-policies  		../config.d/cesa.lte.cetp.policy/cetp_policies.json \
+          --cetp-config  		../config.d/gwa.demo.cetp.policy/config_gwa.yaml   \
+          --cetp-policies  		../config.d/gwa.demo.cetp.policy/cetp_policies.json \
           --repository-api-url  	http://10.0.3.200:8001                   \
           --synproxy         		127.0.0.1 12345

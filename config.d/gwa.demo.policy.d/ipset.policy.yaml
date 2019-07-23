@@ -15,9 +15,9 @@ IPSET:
         - {'name': 'IPS_GROUP_PREPAID3',   'type': 'hash:ip',  'create': true, 'flush': true}
         - {'name': 'IPS_SUBSCRIBERS',      'type': 'hash:ip',  'create': true, 'flush': true}
     rules:
-        - {'name': 'IPS_CIRCULAR_POOL',    'type': 'ip',  'items': ['100.64.1.131/32', '100.64.1.132/32', '100.64.1.133/32']}
+        - {'name': 'IPS_CIRCULAR_POOL',    'type': 'ip',  'items': ['10.1.3.111/32', '10.1.3.112/32', '10.1.3.113/32']}
         - {'name': 'IPS_SPOOFED_NET_LAN',  'type': 'net', 'items': ['0.0.0.0/8', '127.0.0.0/8', '10.0.0.0/8', '172.16.0.0/12', '224.0.0.0/3']}
-        - {'name': 'IPS_SPOOFED_NET_WAN',  'type': 'net', 'items': ['0.0.0.0/8', '127.0.0.0/8', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '224.0.0.0/3']}
+        - {'name': 'IPS_SPOOFED_NET_WAN',  'type': 'net', 'items': ['0.0.0.0/8', '127.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '224.0.0.0/3']}
         - {'name': 'IPS_SPOOFED_NET_TUN',  'type': 'net', 'items': ['0.0.0.0/8', '127.0.0.0/8', '10.0.0.0/8', '192.168.0.0/16', '224.0.0.0/3']}
         - {'name': 'IPS_FILTER_BLACKLIST', 'type': 'ip',  'items': []}
         - {'name': 'IPS_FILTER_WHITELIST', 'type': 'ip',  'items': []}

@@ -6,11 +6,11 @@ if [[ $UID != 0 ]]; then
     exit 1
 fi
 
-echo "Starting Realm Gateway as cesb.lte"
+echo "Starting Realm Gateway as gwb.demo"
 cd src
-./rgw.py  --name cesb.lte                                                    \
-          --dns-cname-soa    cname-cesb.lte.                                 \
-          --dns-soa cesb.lte. 0.168.192.in-addr.arpa. 1.64.100.in-addr.arpa. \
+./rgw.py  --name gwb.demo                                                    \
+          --dns-cname-soa    cname-gwb.demo.                                 \
+          --dns-soa gwb.demo. 0.168.192.in-addr.arpa. 1.64.100.in-addr.arpa. \
           --dns-server-local 127.0.0.1 53                                    \
           --dns-server-lan   192.168.0.1 53                                  \
           --dns-server-wan   10.1.3.103 53                                   \
@@ -34,12 +34,12 @@ cd src
           --ipt-markdnat                                                     \
           --ipt-flush                                                        \
           --network-api-url  http://127.0.0.1:8081/                          \
-          --repository-subscriber-folder ../config.d/cesb.lte.subscriber.d/  \
-          --repository-policy-folder     ../config.d/cesb.lte.policy.d/      \
+          --repository-subscriber-folder ../config.d/gwb.demo.subscriber.d/  \
+          --repository-policy-folder     ../config.d/gwb.demo.policy.d/      \
           --spm-services-boolean    False \
           --spm-url-cetp-host   	http://10.0.3.200/API/cetp_policy_node?  \
           --spm-url-cetp-network  	http://10.0.3.200/API/ces_policy_node?   \
-          --cetp-config  		    ../config.d/cesb.lte.cetp.policy/config_cesb.yaml   \
-          --cetp-policies  		    ../config.d/cesb.lte.cetp.policy/cetp_policies.json \
+          --cetp-config  		    ../config.d/gwb.demo.cetp.policy/config_gwb.yaml   \
+          --cetp-policies  		    ../config.d/gwb.demo.cetp.policy/cetp_policies.json \
           --repository-api-url  	http://10.0.3.200:8001                   \
           --synproxy         		10.0.3.151 12345

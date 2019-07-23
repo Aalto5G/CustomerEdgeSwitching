@@ -1,0 +1,10 @@
+$TTL 36000
+gwa.demo. IN      SOA     ns1.gwa.demo. hostmaster.gwa.demo. (
+               2016030901  ; serial
+               28800       ; refresh (8 hours)
+               1800        ; retry (30 mins)
+               2592000     ; expire (30 days)
+               86400 )     ; minimum (1 day)
+
+gwa.demo.             86400  NS      ns1.gwa.demo
+ns1.cesb.demo.        86400  A       127.0.0.1

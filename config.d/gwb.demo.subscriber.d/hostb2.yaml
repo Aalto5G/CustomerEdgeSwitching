@@ -1,16 +1,16 @@
-test102.gwb.demo.:
+hostb2.gwb.demo.:
     ID:
-        fqdn:   ['test102.gwb.demo.']
-        ipv4:   ['192.168.0.105']
-        msisdn: ['0000000102']
+        fqdn:   ['hostb2.gwb.demo.']
+        ipv4:   ['192.168.0.102']
+        msisdn: ['0000000103']
     GROUP:
-        - IPS_GROUP_PREPAID2
+        - IPS_GROUP_PREPAID3
     CIRCULARPOOL:
         max: 3
     SFQDN:
-        - {fqdn:          'test102.gwb.demo.',  proxy_required: false, carriergrade: false                             }
-        - {fqdn:      'www.test102.gwb.demo.',  proxy_required: true , carriergrade: false                             }
-        - {fqdn:      'sip.test102.gwb.demo.',  proxy_required: true , carriergrade: false                             }
+        - {fqdn:          'hostb2.gwb.demo.',  proxy_required: false, carriergrade: false                             }
+        - {fqdn:      'www.hostb2.gwb.demo.',  proxy_required: true , carriergrade: false                             }
+        - {fqdn:      'sip.hostb2.gwb.demo.',  proxy_required: true , carriergrade: false                             }
     FIREWALL:
         FIREWALL_ADMIN:
             - {'priority': 0,   'direction': 'EGRESS',  'protocol': '17', 'udp':{'dport': '53'}, 'target': 'REJECT', 'hashlimit': {'hashlimit-above':'5/sec', 'hashlimit-burst':'50', 'hashlimit-name':'DnsLanHosts', 'hashlimit-mode':'srcip', 'hashlimit-htable-expire':'1001'}, 'comment':{'comment':'Host DNS limit'}}

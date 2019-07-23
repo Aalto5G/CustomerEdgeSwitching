@@ -1,0 +1,62 @@
+# CES Configuration Parameters
+
+CESParameters:
+    name: gwb
+    cesid: gwb.demo.
+    CETPVersion: 2
+    certificate: ../config.d/gwb.demo.cetp.policy/gwb.demo.crt
+    private_key: ../config.d/gwb.demo.cetp.policy/gwb.demo.key
+    ca_certificate: ../config.d/gwb.demo.cetp.policy/ca.crt
+    c2c_establishment_t0: 2
+    incomplete_cetp_state_t0: 2
+    max_c2c_transports: 3
+    max_naptrs_per_dns: 5
+    max_naptrs_per_sec: 800
+    host_filtering_t0: 30
+    dp_ttl: 3600
+    keepalive_idle_t0: 5
+    keepalive_interval: 2
+    keepalive_count: 3
+    caces: 127.0.0.1
+    fw_version: 0.1
+    pow_algo: hashcash
+    ces_session_limit: 3000
+    host_sessions: 2
+    max_ces_session_limit: 4000
+    max_dp_ttl: 7200
+    max_host_ratelimit: 10
+    min_keepalive_timeout: 10
+    rloc_preference:
+        - 100,80,ipv4,10.1.3.103,ISP
+        - 100,60,ipv4,10.0.3.103,IXP
+        - 100,40,ipv6,11:22:33:44:55:66:77:03,ICP
+    payload_preference:
+        ipsec:  100
+        vxlan:  80
+        gre:    60
+        geneve: 40
+
+            
+CETPServers:
+    serverNames:
+        - server1
+        - server2
+        - server3
+    server1:
+        ip: 10.1.3.103
+        port: 49001
+        transport: tls
+        order: 100
+        preference: 10
+    server2:
+        ip: 10.1.3.103
+        port: 49002
+        transport: tls
+        order: 300
+        preference: 10
+    server3:
+        ip: 10.1.3.103
+        port: 49003
+        transport: tls
+        order: 100
+        preference: 20
