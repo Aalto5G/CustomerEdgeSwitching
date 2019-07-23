@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Customer Edge Switching
 
 ## Introduction
