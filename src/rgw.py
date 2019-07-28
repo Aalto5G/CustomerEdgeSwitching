@@ -375,7 +375,7 @@ class RealmGateway(object):
         self._cetp_service = []
         
         if self.cetp_config is not None:
-            self.ces_conf = yaml.load( open(self.cetp_config) )
+            self.ces_conf = yaml.safe_load( open(self.cetp_config) )
             cetp_servers  = self.ces_conf["CETPServers"]["serverNames"]
             for s in cetp_servers:
                 srv = self.ces_conf["CETPServers"][s]
