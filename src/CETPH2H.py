@@ -304,10 +304,11 @@ class CETPH2HLocal:
     @asyncio.coroutine
     def _start_cetp_negotiation(self, src_id, dst_id, cb):
         """ Initiates local policy negotiation process """
+        self._logger.info("Processing local connection from '{}'->'{}'".format(src_id, dst_id))
         (cb_func, cb_args) = cb
         dns_q, addr   = cb_args
         ip_addr, port = addr
-        
+
         h2h = H2HTransaction.H2HTransactionLocal(cb=cb, host_ip=ip_addr, src_id=src_id, dst_id=dst_id, policy_mgr=self.policy_mgr, cesid=self.l_cesid, \
                                                  cetp_security= self.cetp_security, host_table=self.host_table, pool_table=self.pool_table, \
                                                  conn_table=self.conn_table, network=self.network)
