@@ -8,4 +8,5 @@ if [[ $UID != 0 ]]; then
 fi
 
 echo "Enabling Internet access via mgt0 interface"
+ip route del default
 ip route add default via 172.31.255.1 metric 0

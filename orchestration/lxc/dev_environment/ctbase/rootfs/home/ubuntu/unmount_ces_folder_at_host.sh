@@ -8,5 +8,5 @@ if [[ $UID != 0 ]]; then
 fi
 
 echo "Unmounting customer_edge_switching_v2 folder @host for synchronous work"
-umount /customer_edge_switching_v2
-rmdir /customer_edge_switching_v2
+umount /home/ubuntu/customer_edge_switching_v2
+rmdir /home/ubuntu/customer_edge_switching_v2
