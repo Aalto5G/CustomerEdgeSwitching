@@ -61,14 +61,14 @@ IPTABLES:
             - {'table': 'mangle', 'chain': 'CIRCULAR_POOL', 'rule': {'target': {'NFQUEUE': {'queue-num': '1', 'queue-bypass': []}}}}
             - {'table': 'mangle', 'chain': 'PREROUTING',    'rule': {'mark': {'mark': '0xff000003/0xff00000f'}, 'set': {'match-set': ['IPS_CIRCULAR_POOL', 'dst']}, 'comment': {'comment': 'New connections via CircularPool'}, 'conntrack': {'ctstate': 'NEW'}, 'target': 'CIRCULAR_POOL'}}
             # Check proper matching before doing the MARKDNAT - Packet mark is different than gratuitous
-            - {'table': 'nat', 'chain': 'PREROUTING',       'rule': {'mark': [{'mark': ['!', '0x0']}, {'mark': ['!', '0xff000000/0xff000000']}], 'multiport': {'dports': '80,443,8080,8443'}, 'protocol': 'tcp', 'comment': {'comment': 'Redirect to HTTP Reverse Proxy'}, 'target': {'DNAT': {'to-destination': '10.1.3.101'}}}}
+            - {'table': 'nat', 'chain': 'PREROUTING',       'rule': {'mark': [{'mark': ['!', '0x0']}, {'mark': ['!', '0xff000000/0xff000000']}], 'multiport': {'dports': '80,443,8080,8443'}, 'protocol': 'tcp', 'comment': {'comment': 'Redirect to HTTP Reverse Proxy'}, 'target': {'DNAT': {'to-destination': '100.64.1.130'}}}}
             - {'table': 'nat', 'chain': 'PREROUTING',       'rule': {'mark': [{'mark': ['!', '0x0']}, {'mark': ['!', '0xff000000/0xff000000']}], 'comment': {'comment': 'DNAT via CIRCULAR_POOL'}, 'target': 'CIRCULAR_POOL'}}
             - {'table': 'nat', 'chain': 'PREROUTING',       'rule': {'mark': {'mark': '0xffffffff/0xffffffff'}, 'comment': {'comment': 'Accept packet marked by Circular Pool'}, 'target': 'ACCEPT'}}
             - {'table': 'nat', 'chain': 'CIRCULAR_POOL',    'rule': {'comment': {'comment': 'Do MARKDNAT'}, 'target': {'MARKDNAT': {'set-xmark': '0x0/0x0'}}}}
             # Enable SNAT for MARK_LOCAL_TO_WAN packets
-            - {'table': 'nat', 'chain': 'POSTROUTING',      'rule': {'mark': {'mark': '0xFF011131/0xFFFFFFFF'}, 'comment': {'comment': 'SNAT to public IP address'}, 'target': {'SNAT': {'to-source': '10.1.3.101'}}}}
+            - {'table': 'nat', 'chain': 'POSTROUTING',      'rule': {'mark': {'mark': '0xFF011131/0xFFFFFFFF'}, 'comment': {'comment': 'SNAT to public IP address'}, 'target': {'SNAT': {'to-source': '100.64.1.130'}}}}
             # Enable SNAT for MARK_LAN_TO_WAN packets
-            - {'table': 'nat', 'chain': 'POSTROUTING',      'rule': {'mark': {'mark': '0xFF000030/0xFF0000F0'}, 'comment': {'comment': 'SNAT to available pool'}, 'target': {'SNAT': {'to-source': '10.1.3.111-10.1.3.113'}}}}
+            - {'table': 'nat', 'chain': 'POSTROUTING',      'rule': {'mark': {'mark': '0xFF000030/0xFF0000F0'}, 'comment': {'comment': 'SNAT to available pool'}, 'target': {'SNAT': {'to-source': '100.64.1.131-100.64.1.133'}}}}
 
     ADMIN_PREEMPTIVE:
     # This policy installs the basic filtering/droppping/rejecting functionality based on invalid packets and disallowed protocols. In addition, it includes several rules for limiting the number of new connections handled by the node.
