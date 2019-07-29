@@ -12,15 +12,15 @@ cd src
           --dns-cname-soa    cname-gwa.demo.                                 \
           --dns-soa gwa.demo. 0.168.192.in-addr.arpa. 1.64.100.in-addr.arpa. \
           --dns-server-local 127.0.0.1 53                                    \
-          --dns-server-lan   192.168.1.1 53                                  \
-          --dns-server-wan   10.1.3.101 53                                   \
-          --dns-resolver     10.1.3.181 53                                   \
+          --dns-server-lan   192.168.0.1 53                                  \
+          --dns-server-wan   100.64.1.130 53                                 \
+          --dns-resolver     100.64.1.1 53                                   \
           --ddns-server      127.0.0.2 53                                    \
           --dns-timeout      0.010 0.100 0.200                               \
           --dns-timeout-naptr  0.100 0.200 0.300                             \
-          --pool-serviceip   10.1.3.101/32                                   \
-          --pool-cpoolip     10.1.3.111/32 10.1.3.112/32 10.1.3.113/32       \
-          --pool-cespoolip   172.16.1.100/19                                 \
+          --pool-serviceip   100.64.1.130/32                                 \
+          --pool-cpoolip     100.64.1.131/32 100.64.1.132/32 100.64.1.133/32 \
+          --pool-cespoolip   172.16.1.100/26                                 \
           --ipt-cpool-queue  1                                               \
           --ipt-cpool-chain  CIRCULAR_POOL                                   \
           --ipt-host-chain   CUSTOMER_POLICY                                 \
