@@ -4,10 +4,13 @@
 
 ## Install CES/RGW dependencies
 export DEBIAN_FRONTEND=noninteractive
-apt-get update
-apt-get install -y git build-essential python3-dev libnetfilter-queue-dev
+sudo apt-get update
+sudo apt-get install -y git build-essential python3-dev libnetfilter-queue-dev python3-pip
+sudo apt-get install ipset libipset3 iptables ipset ebtables bridge-utils
+sudo apt-get install ipsec-tools openvswitch-common openvswitch-ipsec openvswitch-switch python-openvswitch racoon
 
-pip3 install --upgrade pip setuptools
-pip3 install pip-review ipython dnspython aiohttp scapy-python3 pyyaml NetfilterQueue ryu python-iptables pyroute2
+sudo pip3 install --upgrade pip setuptools
+sudo pip3 install --upgrade dnspython aiohttp pyyaml NetfilterQueue python-iptables pyroute2 ipython scapy-python3 --user
+sudo -H pip3 install --upgrade ryu
 ### Update all pip packages
-pip-review --auto -v
+#pip-review --auto -v
