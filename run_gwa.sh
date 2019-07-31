@@ -14,7 +14,7 @@ cd src
           --dns-server-local 127.0.0.1 53                                    \
           --dns-server-lan   192.168.0.1 53                                  \
           --dns-server-wan   100.64.1.130 53                                 \
-          --dns-resolver     100.64.1.1 53                                   \
+          --dns-resolver     100.64.0.1 53                                   \
           --ddns-server      127.0.0.2 53                                    \
           --dns-timeout      0.010 0.100 0.200                               \
           --dns-timeout-naptr  0.100 0.200 0.300                             \

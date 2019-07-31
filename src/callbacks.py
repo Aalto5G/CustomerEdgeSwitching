@@ -388,14 +388,16 @@ class DNSCallbacks(object):
 
         # Changing the A or AAAA queries to NAPTR queries to check if destination is served by a CES/CETP service
         if rdtype in [dns.rdatatype.A, dns.rdatatype.AAAA, dns.rdatatype.PTR]:
-            #self._logger.info("Forwarding the {} query as NAPTR query for domain '{}'".format(dns.rdatatype.to_text(rdtype), fqdn))
+            self._logger.info("Forwarding the {} query as NAPTR query for domain '{}'".format(dns.rdatatype.to_text(rdtype), fqdn))
             cb_args = (query, addr)
             cb      = (cback, cb_args)
             fwd_query  = dns.message.make_query(fqdn, dns.rdatatype.NAPTR)
             answer     = yield from self._forward_naptr_query(fwd_query, fqdn, key)
             response   = self._pre_process_naptr(answer)
-        
-            if response is not None:
+            
+            if response is None:
+                self._logger.info(" Failed to resolved NAPTR query for the domain '{}'.. Revert to the original host query".format(fqdn))                
+            else:
                 self._process_naptr_response(response, cb)
                 del self.activequeries[key]
                 return
