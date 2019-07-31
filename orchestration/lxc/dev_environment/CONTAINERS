@@ -2,11 +2,15 @@ router
 public
 proxya
 gwa
+hosta1
+hosta2
 test_gwa
 nest_gwa
 test_ngwa
 proxyb
 gwb
+hostb1
+hostb2
 test_gwb
 nest_gwb
 test_ngwb
