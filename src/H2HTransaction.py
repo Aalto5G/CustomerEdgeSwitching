@@ -1180,7 +1180,7 @@ class H2HTransactionLocal(H2HTransaction):
         self.start_time = time.time()
         pre_processed = yield from self._pre_process()
         if not pre_processed:
-            self._logger.error(" Failure in initiating the local H2H session towards '{}'.".format(self.dst_id))
+            self._logger.info(" Failure in initiating the local H2H session from '{}'->'{}'.".format(self.src_id, self.dst_id))
             return
         
         error = False
@@ -1193,26 +1193,25 @@ class H2HTransactionLocal(H2HTransaction):
         #self._logger.info("Local-host policy: \n--- {} ----".format(self.opolicy))
         #self._logger.info("Remote-host policy: \n--- {} ----".format(self.ipolicy))
         
-        #self._logger.info("Match Outbound-Requirements vs Inbound-Available")
         for rtlv in self.opolicy.get_required():
-            
+            #self._logger.info("Matching Outbound-host policy requirements vs Inbound-host policy availables")
             if self.ipolicy.has_available(rtlv):
                 resp_tlv = self.ipolicy.get_available(tlv=rtlv)
                 # Check if the TLV value is acceptable to the sender host's requirements
                 if not self._verify_tlv(resp_tlv, policy=self.opolicy):
                     # Absorbs failure in case of 'optional' required policy TLV
                     if self.opolicy.is_mandatory_required(rtlv):
-                        self._logger.error(" TLV '{}.{}' failed verification".format(rtlv['group'], rtlv['code']))
+                        self._logger.info(" TLV '{}.{}' failed verification".format(rtlv['group'], rtlv['code']))
                         error = True
                         break
             else:
                 if self.opolicy.is_mandatory_required(rtlv):
-                    self._logger.error("Outbound host Requirement '{}.{}' is not met by destination '{}'".format(rtlv['group'], rtlv['code'], self.dst_id))
+                    self._logger.info("Sender host <{}> Requirement '{}.{}' is not met by destination '{}'".format(self.src_id, rtlv['group'], rtlv['code'], self.dst_id))
                     error = True
                     break
                 
         if not error:
-            #self._logger.info("Match Inbound-Requirements vs Outbound-Available")
+            #self._logger.info("Match Inbound-host requirements vs Outbound-host policy availables")
             for rtlv in self.ipolicy.get_required():
                 
                 if self.opolicy.has_available(tlv=rtlv):
@@ -1220,22 +1219,22 @@ class H2HTransactionLocal(H2HTransaction):
                     if not self._verify_tlv(resp_tlv, policy=self.ipolicy):
                         # Absorbs failure in case of 'optional' required policy TLV
                         if self.opolicy.is_mandatory_required(rtlv):
-                            self._logger.error(" TLV {}.{} failed verification".format(resp_tlv['group'], resp_tlv['code']))
+                            self._logger.info(" TLV {}.{} failed verification".format(resp_tlv['group'], resp_tlv['code']))
                             error = True
                             break
                 else:
                     if self.ipolicy.is_mandatory_required(rtlv):
-                        self._logger.error("Inbound host requirement '{}.{}' is not met by the sender '{}'".format(rtlv['group'], rtlv['code'], self.src_id))
+                        self._logger.info("Receiver host <{}> requirement '{}.{}' is not met by the sender '{}'".format(self.dst_id, rtlv['group'], rtlv['code'], self.src_id))
                         error = True
                         break
 
         if error:
-            #self._logger.warning("Local CETP Policy mismatched! Connection refused {} -> {}".format(self.src_id, self.dst_id))
+            self._logger.info("Local host-CETP Policy mismatched! Connection refused {} -> {}".format(self.src_id, self.dst_id))
             self._execute_dns_callback()
             #self.dns_state.delete(stateobj)
             return False
         else:
-            #self._logger.info(" Local CETP Policy matched! Allocate proxy address. {} -> {}".format(self.src_id, self.dst_id))
+            self._logger.info(" Local host-CETP policy negotiation succeeded! from '{}' -> '{}'".format(self.src_id, self.dst_id))
             lpip = yield from self._create_connection()
             
             if lpip is not None:
@@ -1274,7 +1273,7 @@ class H2HTransactionLocal(H2HTransaction):
                 return lpip
         
         except Exception as ex:
-            self._logger.error(" Exception '{}' in _create_connection()".format(ex))
+            self._logger.error(" Exception '{}' in creating connection from '{}' -> '{}'".format(ex, self.src_id, self.dst_id))
             return None
         
     def _execute_dns_callback(self, r_addr=None):
@@ -1290,7 +1289,7 @@ class H2HTransactionLocal(H2HTransaction):
                 cb_f(dns_q, addr, response)
             
         except Exception as ex:
-            self._logger.error("Exception in _execute_dns_callback {}".format(ex))
+            self._logger.error("Exception '{}' in executing DNS Callback".format(ex))
 
 
     def check_outbound_permission(self, hostid):
