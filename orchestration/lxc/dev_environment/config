@@ -41,6 +41,20 @@ test_gwa:
   disabled_services: []
   enabled_services: [vsftpd, nginx]
 
+hosta1:
+  config: hosta1/config
+  rootfs: hosta1/rootfs
+  apt_packages: []
+  disabled_services: []
+  enabled_services: [vsftpd, nginx]
+
+hosta2:
+  config: hosta2/config
+  rootfs: hosta2/rootfs
+  apt_packages: []
+  disabled_services: []
+  enabled_services: [vsftpd, nginx]
+
 nest_gwa:
   config: nest_gwa/config
   rootfs: nest_gwa/rootfs
@@ -72,6 +86,20 @@ gwb:
 test_gwb:
   config: test_gwb/config
   rootfs: test_gwb/rootfs
+  apt_packages: []
+  disabled_services: []
+  enabled_services: [vsftpd, nginx]
+
+hostb1:
+  config: hostb1/config
+  rootfs: hostb1/rootfs
+  apt_packages: []
+  disabled_services: []
+  enabled_services: [vsftpd, nginx]
+
+hostb2:
+  config: hostb2/config
+  rootfs: hostb2/rootfs
   apt_packages: []
   disabled_services: []
   enabled_services: [vsftpd, nginx]
