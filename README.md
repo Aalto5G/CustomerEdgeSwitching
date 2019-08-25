@@ -2,15 +2,14 @@
 
 ## Introduction
 
-This version of Customer Edge Switching v2.0 has been developed in Ubuntu 16.04, using and python3's asyncio framework for asynchronous calls.
+The CES-based cooperative network firewall leads to Policy-based communication between end hosts (in private networks), and is backwards compatible with legacy Internet via Realm Gateway (RGW) solution.The source code of CES/CETP based cooperative network firewalling builds on Realm Gateway (RGW) implementation, made public at: https://github.com/Aalto5G/RealmGateway.
 
-This particular branch adds the CES/CETP based cooperative firewall functionality to previously published Realm Gateway (RGW) functionality. The source code for RGW can be found at: https://github.com/Aalto5G/RealmGateway. The CES implementation has been validated with a test network, developed using LXC container and other default Linux networking capabilities. The project source code will also provide an orchestration of these test networks, for rapid testing of CES functions.
+This second version of Customer Edge Switching (CES) has been developed in Ubuntu 16.04, using python3's asyncio framework for asynchronous calls. The CES implementation has been validated with a test network, developed using LXC container and other Linux networking features. The project source code provides an easy orchestration of these test networks, for rapid testing of CES functions.
 
-This repository contains a submodule and thus it shall be cloned as following: ```git clone $REPOSITORY_URL --recursive```
+This repository contains a submodule, and thus it shall be cloned as following: ```git clone $REPOSITORY_URL --recursive```
 
 
 ## Install package dependencies
-
 The following dependencies are required:
 
 ```
@@ -21,18 +20,18 @@ The following dependencies are required:
 # apt-get install python3-aiohttp python3-yaml python3-dnspython
 ```
 
-
 The following python dependencies are required:
 
 ```
 $ pip3 install --upgrade pip setuptools
-$ pip3 install --upgrade ipython dnspython aiohttp scapy-python3 pyyaml NetfilterQueue ryu python-iptables pyroute2 --user
+$ pip3 install --upgrade ipython dnspython aiohttp scapy pyyaml NetfilterQueue ryu python-iptables pyroute2 --user
 ```
-
 
 ## How to run CES firewall
 
-The configuration file has been discontinued. Now all parameters are passed as arguments to the program, i.e.:
+The CES code is executed by passing a set of network-related parameters to the program (as arguments). Whereas, the CETP-related parameters are read from a configuration file, specified against 'cetp-config' parameter in the startup script. In addition, the host-related and network-related communication policies can be loaded from a Security Policy Management (SPM) system. 
+
+In summary, the CES boot-up script appears as below (for a 'gwa' node in our test setup):
 
 ```
 Run as:
@@ -68,11 +67,9 @@ Run as:
 ```
 
 
-## Caveats and pitfalls
+## Overview of test network, and access to Internet
 
-There are two ways of running automated enviroment for CES/RealmGateway, either using the LXC container orchestration or via the bash script with Linux network namespaces.
-In both cases, the CES/RealmGateway uses the "router" node as default gateway, which also provides SYNPROXY protection to its stub network. Similarly, the "router" node
-is configured to send all default traffic to 100.64.0.254 IP address, which is installed on the host machine running the virtual environment.
+There are two ways of running automated enviroment for CES/RealmGateway, either using the LXC container orchestration or via the bash script with Linux network namespaces. In both cases, the CES/RealmGateway uses the "router" node as default gateway, which also provides SYNPROXY protection to its stub network. Similarly, the "router" node is configured to send all default traffic to 100.64.0.254 IP address, which is installed on the host machine running the virtual environment.
 
 If Internet connectivity is desired on the virtual environment, one can enable NATting (on hosting-VM) via MASQUERADE as follows:
 
@@ -120,19 +117,6 @@ A brief description of what to find:
 - README.md
 - run_gwa.sh: Quickest way to start the code of a netns enviroment
 - TODO
-
-
-## Configuring a deployment
-
-There are two ways of running automated enviroments for Realm Gateway, either using the LXC container orchestration or via the bash script with Linux network namespaces.
-In both cases, the Realm Gateway uses the "router" node as default gateway.
-Additionally, the "router" node is configured to send all default traffic to 100.64.0.254 IP address, which is installed on the host machine running the virtual environment.
-
-If Internet connectivity is desired on the virtual environment, one can enable NATting via MASQUERADE as follows:
-
-```
-iptables -t nat -I POSTROUTING -o interfaceWithInternetAccess -j MASQUERADE
-```
 
 
 ### LXC deployment
