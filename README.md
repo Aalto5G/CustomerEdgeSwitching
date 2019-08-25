@@ -58,12 +58,17 @@ Run as:
                              GUEST_SERVICES                                  \
           --ips-hosts        IPS_SUBSCRIBERS                                 \
           --ipt-markdnat                                                     \
-          --ipt-flush                                                        \
-          --repository-subscriber-folder ../config.d/gwa.demo.subscriber.d/  \
-          --repository-policy-folder     ../config.d/gwa.demo.policy.d/      \
-          --repository-api-url  http://127.0.0.1:8082/                       \
-          --network-api-url     http://127.0.0.1:8081/                       \
-          --synproxy         172.31.255.14 12345
+          --ipt-flush                                                        					\
+          --repository-subscriber-folder ../config.d/gwa.demo.subscriber.d/  					\
+          --repository-policy-folder     ../config.d/gwa.demo.policy.d/      					\
+          --repository-api-url  		http://127.0.0.1:8082/                       			\
+          --network-api-url     		http://127.0.0.1:8081/                       			\
+          --synproxy         			172.31.255.14 12345										\
+          --spm-services-boolean    	False 														\
+          --spm-url-cetp-host   		http://10.0.3.200/API/cetp_policy_node?  				\
+          --spm-url-cetp-network  		http://10.0.3.200/API/ces_policy_node?   				\
+          --cetp-config  				../config.d/gwa.demo.cetp.policy/config_gwa.yaml   	\
+          --cetp-policies  				../config.d/gwa.demo.cetp.policy/cetp_policies.json 	          
 ```
 
 
