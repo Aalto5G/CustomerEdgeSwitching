@@ -101,8 +101,7 @@ This is the current view of the root folder
 ```
 
 A brief description of what to find:
-
-- config.d: Realm Gateway and subcriber policies we have used in the past.
+- config.d: Policies related to CES/RGW and subcriber, we use now and the ones we used in the past.
 - docs: Assorted documentation.
 - iptables_devel: Userspace and kernel modules for MARKDNAT iptables module.
 - logs: Storage for runtime logging.
@@ -119,34 +118,26 @@ A brief description of what to find:
 - TODO
 
 
+## Test deployments
 ### LXC deployment
-
-Originally developed as a separate project for quick orchestration and replication of environments, it has now been added to the main repository.
-
-Check the documentation inside the ```orchestration\lxc``` folder to quickly spawn the ready-made test environment ```dev_environment```.
-
+It was originally developed as a separate project under RealmGateway solution, for quick orchestration and replication of environments. Check the documentation inside the ```orchestration\lxc``` folder to quickly spawn the pre-configured test environment ```dev_environment```.
 
 ### Network namespaces deployment
+This is devised as the quickest way to virtualize hosts with a minimal overhead. It mainly provides isolation to the network stack. Local modifications to the file system are allowed, but discouraged. Check the documentation inside the ```orchestration\netns``` folder to quickly spawn the pre-configured test environment.
 
-Originally devised as the quickest way to virtualize hosts with a minimal overhead.
-Isolation is mainly related to the network stack, local modifications to the file system are allowed, but discouraged.
-
-Check the documentation inside the ```orchestration\netns``` folder to quickly spawn the ready-made test environment.
-
-
-### Policy information
-
+## Policy-related details
 The current repository ships with a set of policies and subscriber information for basic testing.
 
-Depending on the deployment option, LXC or netns, a transparent TCP SYNPROXY may be available.
+### Communication Policy information
 
-However, if we plan on making a new deployment there are a few things we need to take into account:
+### Data-plane policy details -> (primarily related to RGW)
+
+For realm gateway operations:
+When plan on making a new deployment, there are a few things to account (in network node running CES/RGW):
 
 * circularpool.policy: Set a sensible maximum level according the size of the Circular Pool.
-
-* ipset.policy: These are currently processed directly by iproute2, iptables, and ipset. Remember to populate the sets *IPS_CIRCULAR_POOL*, *IPS_SPOOFED_NET_xyz*, and *IPS_FILTER_xyz*.
+* ipset.policy: These are currently processed directly by iproute2, iptables, and ipset modules. Remember to populate the sets *IPS_CIRCULAR_POOL*, *IPS_SPOOFED_NET_xyz*, and *IPS_FILTER_xyz*.
 Setting incorrect values on these fields may make debugging quite difficult as you might need to trace packets in iptables.
-
 * iptables.policy: This is one of the most critical files that needs editing. Please pay attention to the following:
 
     NAT.rules: In mangle.CIRCULAR_POOL chain the targets NFQUEUE queue-num need to match the argument ```--ipt-cpool-queue``` passed to the python program.
@@ -163,36 +154,10 @@ Modify this if your deployment uses different private networks.
     Don't forget to look for the token ```hashlimit``` that sets the limitations in different rules. You may want to modify these values based on the nature of your deployment.
 
 
-## Build & install the iptables modules for Realm Gateway (optional)
-
-The Realm Gateway uses a tailor made module for an iptables extension target, MARKDNAT, which requires both a user space and a kernel module.
-This extension can only be used in table nat and PREROUTING chain. The target implements the normal actions
-of MARK, regarding the skb->mark mangling and DNAT --to-destination A.B.C.D with the resulting mark.
-
-This extension allows performing the DNAT operation based on the packet mark.
-The packet mark can be controlled as well from a user space application via NFQUEUE target.
-
-Installing the kernel module
-
-```
-$ cd ./iptables_devel
-$ make
-# make install_MARKDNAT
-```
-
-Installing the user space module
-
-```
-# cp ./iptables_devel/userspace/libxt_MARKDNAT.so /lib/xtables/
-$ iptables -j MARKDNAT --help
-```
-
-
-## Create subscribers in batch
+### Creating a large number of subscribers on the go
 
 We can quickly create a large number of subscriber based on a pre-defined template as follows:
-
-Create a template file e.g. ```template.gwa.cesproto.re2ee.org.yaml```:
+1. Create a template file e.g. ```template.gwa.cesproto.re2ee.org.yaml```:
 
 ```
 REPLACE_UENAME3.gwa.cesproto.re2ee.org.:
@@ -219,9 +184,7 @@ REPLACE_UENAME3.gwa.cesproto.re2ee.org.:
             - {'priority': 100, 'direction': 'EGRESS',  'target': 'ACCEPT', 'comment':{'comment':'Allow outgoing'}}
             - {'priority': 100, 'direction': 'INGRESS', 'target': 'ACCEPT', 'comment':{'comment':'Allow incoming'}}
 ```
-
-
-Then, in a bash console we will create users ue001 to ue254 as follows:
+2. Then, in a bash console we can create 254 users labeled from ue001 to ue254 as follows:
 
 ```
 for i in $(seq 1 254); do
@@ -233,15 +196,48 @@ for i in $(seq 1 254); do
 done
 ```
 
-## Considerations to performance testing of Realm Gateway
+## Considerations related to development or performance testing
+### Rate limiting policies
+Disable iptables rules that may rate limit packet per second (hashlimit), specially when testing (in development context).
 
-Use the developed client to specifically control the IP addresses for DNS resolution and Data transfers:
+### Network-related considerations
+- Use tc/netem for simulating network delays on the interfaces of a Linux bridge
+```
+tc qdisc add    dev eth0 root netem delay 1000ms
+tc qdisc change dev eth0 root netem delay 1000ms 50ms
+tc qdisc del    dev eth0 root
+```
 
-- You may need to add host-only addresses (/32) to an interface and configure the routing table accordingly.
-- Using several IP sources also enables more socket binding options, which is necesarry for high test loads.
+- Increase the qlen size of your virtual adaptors. We have witnessed how veth pairs with qlen=1000 have resulted in packet loss when testing >2000 new TCP connections per second. Experimentally we have used the value qlen=25000.
+```
+ip link set dev eth0 qlen 25000
+```
 
-Use well defined (S)FQDN to test specifically UDP and TCP connections, as they may be subjected to different network delays due to the presence of an in-network TCP SYNPROXY.
+### Miscellaneous
+- Configure TCP SYNPROXY in default mode for all the required IP addresses and disable synchronization of Realm Gateway connections (add & delete)
+- Reduce console logging (WARNING level) and deactivate other file loggers.
 
+### Performance testing
+Use well-defined (S)FQDN to test specifically UDP and TCP connections, as they may be subjected to different network delays due to the presence of an in-network TCP SYNPROXY.
+
+- Use the developed client to specifically control the IP addresses for DNS resolution and Data transfers:
+- Using several IP sources also enables more socket binding options, which is necessary for high test loads.
+
+
+## Other useful information
+
+### Create python virtual environment
+
+If you don't want to populate your system with extra libraries and modules, you can can create a python virtual environment using the following guide:  http://askubuntu.com/questions/244641/how-to-set-up-and-use-a-virtual-python-environment-in-ubuntu
+
+Remember that the virtual environment shortcuts are not available when doing ```sudo``` per se, but you can achieve admin rights for your python interpreter with the following:
+
+```
+$ sudo /path/to/.virtualenvs/your_virtual_environment/bin/python
+```
+
+
+## Caveats and work arounds (mainly related to RGW in data-plane).
 ### Increase the number of file descriptors
 
 This is the workaround for the "too many files open" problem:
@@ -316,68 +312,4 @@ net.netfilter.nf_conntrack_max=4194304
 ```
 sysctl -p
 ```
-
-
-### Rate limiting policies
-
-Disable iptables rules that may rate limit packet per second (hashlimit).
-
-
-### Network related considerations
-
-- Use tc/netem for network simulations on the interfaces of a Linux bridge
-```
-tc qdisc add    dev eth0 root netem delay 1000ms
-tc qdisc change dev eth0 root netem delay 1000ms 50ms
-tc qdisc del    dev eth0 root
-```
-
-- Increase the qlen size of your virtual adaptors. We have witnessed how veth pairs with qlen=1000 have resulted in packet loss when testing >2000 new TCP connections per second. Experimentally we have used the value qlen=25000.
-```
-ip link set dev eth0 qlen 25000
-```
-
-
-### Miscellaneous
-
-- Configure TCP SYNPROXY in default mode for all the required IP addresses and disable synchronization of Realm Gateway connections (add & delete)
-
-- Reduce console logging (WARNING level) and deactivate other file loggers.
-
-
-## Other useful information
-
-### Create python virtual environment
-
-If you don't want to populute your system with extra libraries and modules, you can can create a python virtual environment using the following guide:
-
-http://askubuntu.com/questions/244641/how-to-set-up-and-use-a-virtual-python-environment-in-ubuntu
-
-Remember that the virtual environment shortcuts are not available when doing ```sudo``` per se, but you can achieve admin rights for your python interpreter with the following:
-
-```
-$ sudo /path/to/.virtualenvs/your_virtual_environment/bin/python
-```
-
-### Linux bridged & iptables (Not currently in use)
-
-It is very common to deploy Linux bridges to trigger iptables packet processing to that traffic.
-However, additional kernel modules need to be loaded.
-
-```
-# modprobe br_netfilter
-# modprobe xt_physdev
-```
-
-In order to send traffic from the linux bridge to iptables modify your ```/etc/sysctl.conf``` to include the following:
-
-```
-net.bridge.bridge-nf-call-arptables=1
-net.bridge.bridge-nf-call-ip6tables=1
-net.bridge.bridge-nf-call-iptables=1
-net.bridge.bridge-nf-filter-pppoe-tagged=0
-net.bridge.bridge-nf-filter-vlan-tagged=1
-net.bridge.bridge-nf-pass-vlan-input-dev=1
-```
-
 
