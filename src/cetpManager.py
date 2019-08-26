@@ -41,7 +41,7 @@ class CETPManager:
     It also aggregates different CETPTransport endpoints from a remote CES-ID under one C2C-Layer.
     """
     
-    def __init__(self, policy_file, cesid, ces_params, hosttable, conn_table, pool_table, network, cetpstate_table, spm_services_boolean, host_policy_url, network_policy_url, loop=None, name="CETPManager"):
+    def __init__(self, cetp_host_policy_file, cesid, ces_params, hosttable, conn_table, pool_table, network, cetpstate_table, spm_services_boolean, host_policy_url, network_policy_url, cetp_network_policy_file, loop=None, name="CETPManager"):
         self._cetp_endpoints        = {}                           # Dictionary of endpoints towards remote CES nodes.
         self._serverEndpoints       = []                           # List of server endpoint offering CETP listening service.
         self.c2c_register           = {}
@@ -62,14 +62,14 @@ class CETPManager:
         self.name                   = name
         self._logger                = logging.getLogger(name)
         self._logger.setLevel(LOGLEVEL_CETPManager)
-        self._launch_policy_manager(policy_file, network_policy_url, host_policy_url)
+        self._launch_policy_manager(cetp_host_policy_file, cetp_network_policy_file, network_policy_url, host_policy_url)
         self._initiate_local_cetp()
 
-    def _launch_policy_manager(self, policy_file, network_policy_url, host_policy_url):
+    def _launch_policy_manager(self, cetp_host_policy_file, cetp_network_policy_file, network_policy_url, host_policy_url):
         if self.spm_services_boolean is True:
             self.policy_mgr = PolicyManager.RESTPolicyClient(network_policy_url= network_policy_url, host_policy_url= host_policy_url, tcp_conn_limit=10)    # Fetches CETP policies from the Security Policy Management (SPM) system.
         else:
-            self.policy_mgr = PolicyManager.PolicyManager(self.cesid, policy_file = policy_file)         # Gets CETP policies from a local JSON-based policy file.
+            self.policy_mgr = PolicyManager.PolicyManager(self.cesid, cetp_host_policy_file = cetp_host_policy_file, cetp_network_policy_file=cetp_network_policy_file)         # Gets CETP policies from a local JSON-based policy file.
 
     def _initiate_local_cetp(self):
         self.local_cetp = CETPH2H.CETPH2HLocal(l_cesid=self.cesid, policy_mgr=self.policy_mgr, cetp_security=self.cetp_security, \

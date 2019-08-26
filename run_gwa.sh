@@ -36,10 +36,11 @@ cd src
           --network-api-url  http://127.0.0.1:8081/                          \
           --repository-subscriber-folder ../config.d/gwa.demo.subscriber.d/  \
           --repository-policy-folder     ../config.d/gwa.demo.policy.d/      \
-          --spm-services-boolean    False \
-          --spm-url-cetp-host   	http://10.0.3.200/API/cetp_policy_node?  \
-          --spm-url-cetp-network  	http://10.0.3.200/API/ces_policy_node?   \
-          --cetp-config  		../config.d/gwa.demo.cetp.policy/config_gwa.yaml   \
-          --cetp-policies  		../config.d/gwa.demo.cetp.policy/cetp_policies.json \
-          --repository-api-url  	http://10.0.3.200:8001                   \
-          --synproxy         		127.0.0.1 12345
+          --cetp-config  		../config.d/gwa.demo.cetp.policy/config_gwa.yaml       \
+          --spm-services-boolean    False                                                      \
+          --cetp-host-policy-location      http://10.0.3.200/API/cetp_policy_node?             \
+          --cetp-network-policy-location   http://10.0.3.200/API/ces_policy_node?              \
+          --cetp-policies-host-file      ../config.d/gwa.demo.cetp.policy/host_cetp_policies.json \
+          --cetp-policies-network-file   ../config.d/gwa.demo.cetp.policy/network_cetp_policies.json \
+          --repository-api-url  	   http://10.0.3.200:8001                              \
+          --synproxy         		   127.0.0.1 12345

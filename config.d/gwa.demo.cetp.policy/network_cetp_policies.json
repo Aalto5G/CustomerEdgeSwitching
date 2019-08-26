@@ -1,0 +1,52 @@
+[
+{
+"type": "cespolicy",
+"proto":"tls",
+"cesid": "gwa.demo.",
+"policy":
+    {
+    "request": [
+        { "ope":"query", "group": "ces", "code": "cesid", "value":["gwb.demo.", "gwc.demo."]},
+        { "ope":"query", "group": "ces", "code": "caces", "value":"195.148.124.145"},
+        { "ope":"query", "group": "ces", "code": "fw_version", "value":"0.1"},
+        { "ope":"query", "group": "ces", "code": "ttl", "value":{"min":"3600", "max":"7200"}},
+        { "ope":"query", "group": "ces", "code": "session_limit", "value": "300"},
+        { "ope":"query", "group": "ces", "code": "evidence_format", "value":["IETF-IOC1", "IETF-IOC2"]},
+        { "ope":"query", "group": "rloc", "code": "ipv4" },
+        { "ope":"query", "group": "rloc", "code": "ipv6" },
+        { "ope":"query", "group": "payload", "code": "vxlan" },
+        { "ope":"query", "group": "payload", "code": "gre" },
+        { "ope":"query", "group": "payload", "code": "geneve" }
+    ],
+    "offer": [
+        { "ope":"info", "group": "ces", "code": "cesid", "value":"gwa.demo."},
+        { "ope":"info", "group": "ces", "code": "caces", "value":"195.148.124.145"},
+        { "ope":"info", "group": "ces", "code": "fw_version", "value":"0.1"},
+        { "ope":"info", "group": "ces", "code": "ttl", "value":"7200"},
+        { "ope":"info", "group": "ces", "code": "session_limit", "value": "200"},
+        { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"},
+        { "ope":"info", "group": "rloc", "code": "ipv4" },
+        { "ope":"info", "group": "rloc", "code": "ipv6" },
+        { "ope":"info", "group": "payload", "code": "vxlan" },
+        { "ope":"info", "group": "payload", "code": "gre" },
+        { "ope":"info", "group": "payload", "code": "geneve" }
+    ],
+    "available": [
+        { "ope":"info", "group": "ces", "code": "cesid", "value":"gwa.demo."},
+        { "ope":"info", "group": "ces", "code": "pow"},
+        { "ope":"info", "group": "ces", "code": "caces", "value":"195.148.124.145"},
+        { "ope":"info", "group": "ces", "code": "fw_version", "value":"0.1"},
+        { "ope":"info", "group": "ces", "code": "ttl", "value":"7200"},
+        { "ope":"info", "group": "ces", "code": "session_limit", "value": "200"},
+        { "ope":"info", "group": "ces", "code": "evidence_format", "value":"IETF-IOC1"},
+        { "ope":"info", "group": "rloc", "code": "ipv4" },
+        { "ope":"info", "group": "rloc", "code": "ipv6" },
+        { "ope":"info", "group": "payload", "code": "vxlan" },
+        { "ope":"info", "group": "payload", "code": "gre" },
+        { "ope":"info", "group": "payload", "code": "geneve" }
+    ]                
+    }
+}
+]
+
+

@@ -102,20 +102,19 @@ class DPConfigurations(object):
 
 class PolicyManager(object):
     # Loads policies, and keeps policy elements as CETPTLV objects
-    def __init__(self, l_cesid, policy_file=None, name="PolicyManager"):
-        self._cespolicy       = {}         # key: PolicyCETP()
-        self._hostpolicy      = {}         # key: PolicyCETP()
-        self.name             = "PolicyManager"
-        self.l_cesid          = l_cesid
-        self._logger          = logging.getLogger(name)
-        self.config_file      = policy_file
+    def __init__(self, l_cesid, cetp_host_policy_file=None, cetp_network_policy_file=None, name="PolicyManager"):
+        self._cespolicy                 = {}         # key: PolicyCETP()
+        self._hostpolicy                = {}         # key: PolicyCETP()
+        self.name                       = "PolicyManager"
+        self.l_cesid                    = l_cesid
+        self._logger                    = logging.getLogger(name)
+        self.cetp_host_policy_file      = cetp_host_policy_file
+        self.cetp_network_policy_file   = cetp_network_policy_file
         self._logger.setLevel(LOGLEVEL_PolicyManager)             # Within this class, logger will only handle message with this or higher level.    (Otherwise, default value of basicConfig() will apply)
-        self.load_policies(self.config_file)
+        self.load_policies()
         
-    def load_policies(self, config_file):
+    def load_policies(self):
         try:
-            f = open(config_file)
-            self._config = json.load(f)
             self._load_CES_policy()
             self._load_host_policy()
         except Exception as ex:
@@ -123,7 +122,11 @@ class PolicyManager(object):
             return False
         
     def _load_CES_policy(self):
-        for policy in self._config:
+        self._logger.info("Loading network-cetp-policies from '{}'".format(self.cetp_network_policy_file))
+        f = open(self.cetp_network_policy_file)
+        policy_f = json.load(f)
+
+        for policy in policy_f:
             if 'type' in policy:
                 if policy['type'] == "cespolicy":
                     policy_type, proto, l_cesid, ces_policy = policy['type'], policy['proto'], policy['cesid'], policy['policy']
@@ -134,7 +137,11 @@ class PolicyManager(object):
 
 
     def _load_host_policy(self):
-        for policy in self._config:
+        self._logger.info("Loading network-cetp-policies from '{}'".format(self.cetp_host_policy_file))
+        f = open(self.cetp_host_policy_file)
+        policy_f = json.load(f)
+
+        for policy in policy_f:
             if 'type' in policy:
                 if policy['type'] == "hostpolicy":
                     policy_type, direction, hostid, host_policy = policy['type'], policy['direction'], policy['fqdn'], policy['policy']
