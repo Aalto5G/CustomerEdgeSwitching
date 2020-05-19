@@ -1,3 +1,2 @@
 # Network configuration
 ## Clear all network settings
-lxc.network =
