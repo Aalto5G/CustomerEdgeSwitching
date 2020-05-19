@@ -1,6 +1,10 @@
 This project orchestrates a number of LXC containers to quickly define and deploy different networking setups.
 
 # Installation of basic packages
+```
+# apt-get install lxc-templates
+```
+
 
 The following packages are needed at the host level:
 
@@ -16,7 +20,7 @@ $ pip3 install pyyaml --user
 
 # Configuration of supporting network
 
-The deployment folder features a pre-up.sh script that is run prior to instantiating any containers.
+The deployment folder (e.g. dev_environment) features a pre-up.sh script that is run prior to instantiating any containers.
 This script should provide the necessary network architecture to deploy the virtual environment.
 Beware of enabling internet access to the containers via NAT.
 ```
