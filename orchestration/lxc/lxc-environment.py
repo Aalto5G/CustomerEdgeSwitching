@@ -316,7 +316,7 @@ class LxcEnvironment(object):
 
         # HACK - APPARMOR issues with kernel feature
         if True:
-            ctbase.append_config_item('lxc.aa_allow_incomplete', '1')
+            ctbase.append_config_item('lxc.apparmor.allow_incomplete', '1')
             ctbase.save_config()
 
         # Start the container
@@ -342,7 +342,7 @@ class LxcEnvironment(object):
         self.ct_stop(name)
         # Clear all network configuration
         ctbase = lxc.Container(name)
-        ctbase.clear_config_item('lxc.network')
+        ctbase.clear_config_item('lxc.net.0')
         ctbase.save_config()
         # Overwrite container configuration
         #self.load_config_container(name, os.path.join(RESOURCE_PATH, config['config']))
