@@ -1,27 +1,39 @@
-# Disable confinement for creating network namespaces
-lxc.aa_profile = unconfined
+# Template used to create this container: /usr/share/lxc/templates/lxc-ubuntu
+# Parameters passed to the template: --user ubuntu --password ubuntu --packages sudo,iptables,ipset,ulogd2,conntrack,openssh-server,sshfs,nano,tmux,dnsutils,htop,psmisc,tree,bash-completion,locate,python3,ipython3,python3-pip,python3-dev,iperf,iperf3,nmap,ftp,vsftpd,curl,wget,lynx,ethtool,tcpdump,bmon,traceroute,iputils-arping,hping3,bind9,dnsmasq,isc-dhcp-server,nginx-core,php-fpm,openvswitch-switch,tnftp,udhcpc,lksctp-tools,build-essential,git,flex,bison,libnetfilter-queue-dev
+# Template script checksum (SHA-1): 865a6e4050da6a45575473b0a71f84ced41604fe
+# For additional config options, please look at lxc.container.conf(5)
+# Uncomment the following line to support nesting containers:
+#lxc.include = /usr/share/lxc/config/nesting.conf
+# (Be aware this has security implications)
+# Common configuration
+lxc.include = /usr/share/lxc/config/ubuntu.common.conf
+# Container specific configuration
+lxc.arch = amd64
+
+
+lxc.apparmor.profile = unconfined
 # Network configuration
 ##
-lxc.network.type = veth
-lxc.network.veth.pair = public_mgt0
-lxc.network.link = lxcmgt0
-lxc.network.flags = up
-lxc.network.ipv4 = 172.31.255.13/24
-lxc.network.name = mgt0
+lxc.net.0.type = veth
+lxc.net.0.veth.pair = public_mgt0
+lxc.net.0.link = lxcmgt0
+lxc.net.0.flags = up
+lxc.net.0.ipv4.address = 172.31.255.13/24
+lxc.net.0.name = mgt0
 ##
-lxc.network.type = veth
-lxc.network.veth.pair = public_wan0
-lxc.network.link = br-wan0
-lxc.network.flags = up
-lxc.network.ipv4 = 100.64.0.100/24
-lxc.network.ipv4 = 100.64.0.101/24
-lxc.network.ipv4 = 100.64.0.102/24
-lxc.network.ipv4 = 100.64.0.103/24
-lxc.network.ipv4 = 100.64.0.104/24
-lxc.network.ipv4 = 100.64.0.105/24
-lxc.network.ipv4 = 100.64.0.106/24
-lxc.network.ipv4 = 100.64.0.107/24
-lxc.network.ipv4 = 100.64.0.108/24
-lxc.network.ipv4 = 100.64.0.109/24
-lxc.network.ipv4.gateway = 100.64.0.1
-lxc.network.name = wan0
+lxc.net.1.type = veth
+lxc.net.1.veth.pair = public_wan0
+lxc.net.1.link = br-wan0
+lxc.net.1.flags = up
+lxc.net.1.ipv4.address = 100.64.0.100/24
+lxc.net.1.ipv4.address = 100.64.0.101/24
+lxc.net.1.ipv4.address = 100.64.0.102/24
+lxc.net.1.ipv4.address = 100.64.0.103/24
+lxc.net.1.ipv4.address = 100.64.0.104/24
+lxc.net.1.ipv4.address = 100.64.0.105/24
+lxc.net.1.ipv4.address = 100.64.0.106/24
+lxc.net.1.ipv4.address = 100.64.0.107/24
+lxc.net.1.ipv4.address = 100.64.0.108/24
+lxc.net.1.ipv4.address = 100.64.0.109/24
+lxc.net.1.ipv4.gateway = 100.64.0.1
+lxc.net.1.name = wan0
