@@ -1050,7 +1050,7 @@ class Network(object):
         ap_pool  = ap_cpool.get_pool() + ap_spool.get_pool()
         
         for srv in self.cetp_service:
-            ip_addr, port, proto = srv
+            ip_addr, port, proto, _, _ = srv
             yield from self.synproxy_add_connection(ip_addr, port, 0, 1460, 1, 7)
             
         for ipaddr in ap_pool:
