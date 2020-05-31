@@ -178,7 +178,7 @@ class CETPTransaction(container3.ContainerNode):
                     return sstag
             
             elif dstag:
-                ##self._logger.debug("iCES is requesting source session tag")
+                #self._logger.debug("iCES is requesting source session tag")
                 """ iCES checks if upon assigning 'sstag' the resulting (SST, DST) pair will lead to a unique transaction. """
                 if not self.cetpstate_table.has( (KEY_ESTABLISHED_TAGS, sstag, dstag)):                   # Checks connected transactions
                     return sstag
@@ -491,8 +491,8 @@ class H2HTransactionOutbound(H2HTransaction):
                 self._logger.info(" Failure in initiating the Host-to-Host session.")
                 return None
             
-            ##self._logger.debug(" Starting H2H session towards '{}' (SST= {} -> DST={})".format(self.dst_id, self.sstag, self.dstag))
-            #self._logger.info("outbound policy: \n {} {} {}".format(15*'-', self.opolicy, 15*'-'))
+            self._logger.debug(" Starting H2H session towards '{}' (SST= {} -> DST={})".format(self.dst_id, self.sstag, self.dstag))
+            self._logger.info("outbound policy: \n {} {} {}".format(15*'-', self.opolicy, 15*'-'))
             tlvs_to_send = []
             tlvs_to_send.append(self.append_dstep_info())
      
@@ -580,7 +580,7 @@ class H2HTransactionOutbound(H2HTransaction):
     def continue_cetp_processing(self, cetp_msg):
         try:
             self._logger.info("Continue negotiating H2H session from '{}'->'{}'. Session tags: ({} -> {})".format(self.src_id, self.dst_id, self.sstag, 0))
-            #self._logger.info("Host policy: \n {} {} {}".format(15*'-', self.opolicy, 15*'-'))
+            self._logger.info("Host policy: \n {} {} {}".format(15*'-', self.opolicy, 15*'-'))
             #self.pprint(cetp_msg, m="Inbound Response")
             start_time = time.time()
             error                       = False
@@ -613,7 +613,7 @@ class H2HTransactionOutbound(H2HTransaction):
                                 continue
                         
                         if self._check_tlv(received_tlv, cmp="optional"):
-                            #self._logger.info(" An optional requirement {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
+                            self._logger.info(" An optional requirement {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
                             ret_tlv = self._get_unavailable_response(received_tlv)
                             tlvs_to_send.append(ret_tlv)
                         else:
@@ -625,7 +625,7 @@ class H2HTransactionOutbound(H2HTransaction):
                 #A CETP response message is processed for: Policy Matching and TLV Verification. The message can have: 1) Less than required TLVs; 2) TLVs with wrong value; 3) a notAvailable TLV; OR 4) a terminate TLV.
                 elif self._check_tlv(received_tlv, ope="info"):
                     if (received_tlv['group'] == 'control') and (received_tlv['code']=='terminate'):
-                        #self._logger.info(" Terminate-TLV received with value: {}".format(received_tlv['value']) )
+                        self._logger.info(" Terminate-TLV received with value: {}".format(received_tlv['value']) )
                         error = True
                         break
     
@@ -642,7 +642,7 @@ class H2HTransactionOutbound(H2HTransaction):
                                 error=True
                                 break
                     else:
-                        #self._logger.warning("Unrequested TLV '{}.{}' is received".format(received_tlv["group"], received_tlv["code"]))
+                        self._logger.warning("Unrequested TLV '{}.{}' is received".format(received_tlv["group"], received_tlv["code"]))
                         pass
                 
             
@@ -831,7 +831,7 @@ class H2HTransactionOutbound(H2HTransaction):
         """  Processes a CETP packet received on a negotiated H2H session.  e.g. a 'terminate' TLV, or change in ratelimit of data connection. 
         """
         try:
-            #self._logger.info(" Post-H2H negotiation packet on (SST={}, DST={})".format(self.sstag, self.dstag))
+            self._logger.info(" Post-H2H negotiation packet on (SST={}, DST={})".format(self.sstag, self.dstag))
             self.packet = cetp_message
             tlv_to_send = []
             
@@ -897,7 +897,7 @@ class H2HTransactionInbound(H2HTransaction):
             dstep_tlv                = None
             
             if len(self.received_tlvs) == 0:
-                #self._logger.debug("Inbound CETP has no TLVs for processing")
+                self._logger.debug("Inbound CETP has no TLVs for processing")
                 return False
             
             for received_tlv in self.received_tlvs:
@@ -974,7 +974,7 @@ class H2HTransactionInbound(H2HTransaction):
     def start_cetp_processing(self, cetp_message):
         """ Processes the inbound CETP-packet for negotiating the H2H policies """
         try:
-            #self._logger.info("{}".format(42*'*') )
+            self._logger.info("{}".format(42*'*') )
             #self.pprint(cetp_message, m="H2H Inbound packet")
             tlvs_to_send, error_tlvs = [], []
             negotiation_status  = None
@@ -999,7 +999,7 @@ class H2HTransactionInbound(H2HTransaction):
                             continue
                         
                     if self._check_tlv(received_tlv, cmp="optional"):
-                        #self._logger.info(" An optional requirement TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
+                        self._logger.info(" An optional requirement TLV {}.{} is not available locally.".format(received_tlv['group'], received_tlv['code']))
                         ret_tlv = self._get_unavailable_response(received_tlv)
                         tlvs_to_send.append(ret_tlv)
                     else:
@@ -1024,7 +1024,7 @@ class H2HTransactionInbound(H2HTransaction):
                                 error = True
                                 break
                     else:
-                        #self._logger.info(" A Non-requested TLV {} is received: ".format(received_tlv))
+                        self._logger.info(" A Non-requested TLV {} is received: ".format(received_tlv))
                         pass
         
             if error:
@@ -1190,11 +1190,11 @@ class H2HTransactionLocal(H2HTransaction):
             self._execute_dns_callback(r_addr=self.host_ip)
             return True
          
-        #self._logger.info("Local-host policy: \n--- {} ----".format(self.opolicy))
-        #self._logger.info("Remote-host policy: \n--- {} ----".format(self.ipolicy))
+        self._logger.info("Local-host policy: \n--- {} ----".format(self.opolicy))
+        self._logger.info("Remote-host policy: \n--- {} ----".format(self.ipolicy))
         
         for rtlv in self.opolicy.get_required():
-            #self._logger.info("Matching sender-host policy requirements vs receiver-host policy availables")
+            self._logger.info("Matching sender-host policy requirements vs receiver-host policy availables")
             if self.ipolicy.has_available(rtlv):
                 resp_tlv = self.ipolicy.get_available(tlv=rtlv)
                 # Check if the TLV value is acceptable to the sender host's requirements
@@ -1211,7 +1211,7 @@ class H2HTransactionLocal(H2HTransaction):
                     break
                 
         if not error:
-            #self._logger.info("Match receiver-host requirements vs sender-host policy availables")
+            self._logger.info("Match receiver-host requirements vs sender-host policy availables")
             for rtlv in self.ipolicy.get_required():
                 
                 if self.opolicy.has_available(tlv=rtlv):
@@ -1261,7 +1261,7 @@ class H2HTransactionLocal(H2HTransaction):
                 hard_ttl = self.h2h_negotiated_params['hard_ttl']
             if 'idle_ttl' in self.h2h_negotiated_params:
                 idle_ttl = self.h2h_negotiated_params["idle_ttl"]
-            ##self._logger.info("Negotiated params: \n ---- \n {} \n ---- ".format(self.h2h_negotiated_params))
+            #self._logger.info("Negotiated params: \n ---- \n {} \n ---- ".format(self.h2h_negotiated_params))
             
             if (lpip is None) or (rpip is None):
                 self._logger.error("Error assigning proxy addresses: lpip={}, rpip={}".format(lpip, rpip))
