@@ -43,4 +43,4 @@ cd src
           --cetp-policies-host-file      ../config.d/gwb.demo.cetp.policy/host_cetp_policies.json    \
           --cetp-policies-network-file   ../config.d/gwb.demo.cetp.policy/network_cetp_policies.json \
           --repository-api-url  	http://10.0.3.200:8001                                       \
-          --synproxy         		10.0.3.151 12345
+          --synproxy         		172.31.255.15 12345

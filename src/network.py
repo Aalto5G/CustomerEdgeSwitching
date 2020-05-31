@@ -125,7 +125,7 @@ class Network(object):
         # Initialize iptables
         self.ipt_init()
         # Create SYNPROXY instance
-        # self.synproxy_create()
+        self.synproxy_create()
         #'''
         # TODO: Uncomment these lines when CES support is added
         # Create HTTP REST Client
@@ -1065,9 +1065,9 @@ class Network(object):
         asyncio.ensure_future(self._synproxy_respawn(self.synproxy))
 
     def synproxy_close(self):
-        return
-        #if self.synproxy_obj is not None:
-        #    self.synproxy_obj.connection_lost(True)
+        #return
+        if self.synproxy_obj is not None:
+            self.synproxy_obj.connection_lost(True)
 
     @asyncio.coroutine
     def synproxy_sync_connection(self, mode, ipaddr, port, proto, tcpmss, tcpsack, tcpwscale, timeout = 1):
