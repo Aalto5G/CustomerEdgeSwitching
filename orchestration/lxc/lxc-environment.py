@@ -79,12 +79,12 @@ class LxcEnvironment(object):
         self.logger = logging.getLogger()
         self.config = yaml.load(open(configfile, 'r'))
         self.ctbasename = ctbasename
-        self.ct_clone = self._ct_clone_lib
-        self.ct_start = self._ct_start_lib
-        self.ct_stop = self._ct_stop_lib
-        #self.ct_clone = self._ct_clone_exec
-        #self.ct_start = self._ct_start_exec
-        #self.ct_stop = self._ct_stop_exec
+        #self.ct_clone = self._ct_clone_lib
+        #self.ct_start = self._ct_start_lib
+        #self.ct_stop = self._ct_stop_lib
+        self.ct_clone = self._ct_clone_exec
+        self.ct_start = self._ct_start_exec
+        self.ct_stop = self._ct_stop_exec
 
     def start(self):
         # Run pre-up script
