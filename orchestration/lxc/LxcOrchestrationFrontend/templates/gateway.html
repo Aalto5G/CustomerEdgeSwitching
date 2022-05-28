@@ -1,0 +1,23 @@
+{% extends 'baseForm.html' %}
+
+{% block content %}
+    <h2>Add Gateway node's configrations </h2>
+    {% if submitted %}
+    <p class="success">
+        Your venue was submitted successfully. Thank you.
+    </p>
+    {% else %}
+    <body>
+        <form action="." id="contactForm1" method="Post" >
+            {% csrf_token %}
+            <table>
+                 {{ form.as_table }}
+                 <tr> <td>&nbsp;</td>
+                     <td><input id="input" type="submit" value="Submit"></td>
+                </tr>
+            </table>
+        </form>
+    </body>
+    {% endif %}
+
+{% endblock content %}

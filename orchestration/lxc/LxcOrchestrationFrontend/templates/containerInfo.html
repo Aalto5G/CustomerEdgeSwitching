@@ -1,0 +1,64 @@
+{% extends 'baseDashboard.html' %}
+{% block tableLayout %}
+    <style>
+        table, th, td {
+          border: 1px solid black;
+        }
+    </style>
+{% endblock tableLayout %}
+
+{% block content %}
+    <h3> Container networking details </h3>
+
+    <div class="table-responsive">
+        <table width= "60%">
+           <thead>
+             <tr>
+                <td>Name</td>
+                <td>{{name}}</td>
+             </tr>
+           </thead>
+           <tbody>
+                <tr>
+                    <td>Type</td>
+                    <td>{{type}}</td>
+                </tr>
+                <tr>
+                    <td>Bridges</td>
+                    <td>
+                        {% for bridge in bridges_list %}
+                            <br>{{bridge}}</br>
+                        {% endfor %}
+                    </td>
+                </tr>
+                <tr>
+                    <td>Interfaces</td>
+                    <td>
+                        {% for iface in interface_list %}
+                            <br>{{iface}}</br>
+                        {% endfor %}
+                    </td>
+                </tr>
+                {% for iface, br in interfaces_bridges.items %}
+                    <tr>
+                        <td>{{iface}} interface</td>
+                        <td>
+                            <br>Bridge:
+                            <br>{{br}}
+                            {% for iface_ip, ip_addrs in interfaces_ipaddr.items %}
+                                {% if iface_ip == iface %}
+                                    <br>IP addresses: </br>
+                                    {% for ip_addr in ip_addrs %}
+                                        <br>{{ip_addr}}</br>
+                                    {% endfor %}
+                                {% endif %}
+                            {% endfor %}
+                        </td>
+                    </tr>
+                {% endfor %}
+
+           </tbody>
+        </table>
+    </div>
+
+{% endblock content %}

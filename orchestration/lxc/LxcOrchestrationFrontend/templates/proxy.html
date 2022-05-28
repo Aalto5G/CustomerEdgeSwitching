@@ -1,0 +1,23 @@
+{% extends 'baseForm.html' %}
+
+{% block content %}
+    {% csrf_token %}
+    <h2>Add proxy node's configuration </h2>
+
+    {% if submitted %}
+    <p class="success">
+        Your venue was submitted successfully. Thank you.
+    </p>
+    {% else %}
+
+    <form action="" method="Post" >
+        <table>
+         {{ form.as_table }}
+         <tr><td>&nbsp;</td>
+         <td><input type="submit" value="Submit"></td>
+        </tr>
+        </table>
+    </form>
+    {% endif %}
+
+{% endblock content %}

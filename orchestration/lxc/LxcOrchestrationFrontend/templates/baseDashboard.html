@@ -1,0 +1,89 @@
+<!-- templates/baseDashboard.html -->
+<!DOCTYPE html>
+{% load static %}
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+    {% block headerTitle %}
+        <title> CES admin</title>
+    {% endblock headerTitle %}
+    <link rel="stylesheet" href="https://maxst.icons8.com/vue-static/landings/line-awesome/line-awesome/1.3.0/css/line-awesome.min.css">
+    <link rel="stylesheet" href="{% static 'css/dashboard.css'%}">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+    {% block formTableAlign %}
+    {% endblock formTableAlign %}
+
+    {% block tableLayout %}
+    {% endblock tableLayout %}
+
+</head>
+<body>
+    <input type="checkbox" id="nav-toggle">
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <h2><span class="lab la-accusoft"></span><span>CesUi</span></h2>
+        </div>
+        <div class="sidebar-menu">
+            <ul>
+                <li>
+                    <a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"><span class="las la-igloo"></span>
+                        <span>Dashboard</span></a>
+                </li>
+                <li>
+                    <a href="{% url 'hostconfig' %}" class="{% if request.resolver_match.url_name == 'hostconfig' %}active{% endif %}"><span class="las la-users"></span>
+                        <span>Host</span></a>
+                </li>
+                <li>
+                    <a href="{% url 'gatewayconfig' %}" class="{% if request.resolver_match.url_name == 'gatewayconfig' %}active{% endif %}"><span class="las la-clipboard-list"></span>
+                        <span>Gateway</span></a>
+                </li>
+                <li>
+                    <a href="{% url 'proxyconfig' %}" class="{% if request.resolver_match.url_name == 'proxyconfig' %}active{% endif %}"><span class="las la-server"></span>
+                        <span>Proxy</span></a>
+                </li>
+                <li>
+                    <a href="{% url 'routerconfig' %}" class="{% if request.resolver_match.url_name == 'routerconfig' %}active{% endif %}"><span class="las la-server"></span>
+                        <span>Router</span></a>
+                </li>
+                <li>
+                    <a href="{% url 'publicconfig' %}" class="{% if request.resolver_match.url_name == 'publicconfig' %}active{% endif %}"><span class="las la-user-circle"></span>
+                        <span>Public</span></a>
+                </li>
+                <li>
+                    <a href="{% url 'networkSetupExample' %}" class="{% if request.resolver_match.url_name == 'networkSetupExample' %}active{% endif %}"><span class="las la-user-circle"></span>
+                        <span>Documentation</span></a>
+                </li>
+            </ul>
+        </div>
+    </div>
+    <div class="main-content">
+        <header>
+            <h2>
+                <label for="nav-toggle">
+                    <span class="las la-bars"></span>
+                </label>
+                Dashboard
+            </h2>
+            <div class="search-wrapper">
+                <span class="las la-search"></span>
+                <input type="search" placeholder="Search here"/>
+            </div>
+            <div class="user-wrapper">
+                <img src="{% static 'images/10.jpg'%}" width="40px" height="40px" alt="">
+                <div>
+                    <h4> Iqra </h4>
+                    <small> Super admin </small>
+                </div>
+            </div>
+        </header>
+        <main>
+            {% block content %}
+            {% endblock content %}
+        </main>
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,23 @@
+{% extends 'baseForm.html' %}
+
+{% block content %}
+    {% csrf_token %}
+    <h2>Add private host's configrations </h2>
+    {% if submitted %}
+    <p class="success">
+        Your action was submitted successfully. Thank you.
+    </p>
+    {% else %}
+
+    <form action="" method="Post" >
+        <table>
+             {{ form.as_table }}
+        <tr>
+            <td></td>     <!-- needed for alignment of Submit button -->
+            <td><input type="submit" value="Submit"></td>
+        </tr>
+        </table>
+    </form>
+    {% endif %}
+
+{% endblock content %}

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+{% load static %}
+
+<html lang="en">
+<head>
+	<title>Website Template Design in HTML & CSS</title>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="{% static 'css/home.css'%}">
+    <link href="https://fonts.googleapis.com/css?family=Nunito:400,600,700,800,900&display=swap" rel="stylesheet">
+    <link href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
+</head>
+<body>
+    {% block content %}
+    {% if user.is_authenticated %}
+       <div class="header">
+         <div class="navbar">
+             <div class="logo">
+                 <a href="#"><img src="{% static 'images/logo.jpg'%}"></a>
+             </div>
+             <div class="menu">
+                 <ul>
+                     <li>Home</li>
+                     <li>About</li>
+                     <li>Services</li>
+                     <li>Mission</li>
+                     <li>Contact</li>
+                 </ul>
+             </div>
+             <div class="login-btn"><a href="{% url 'login' %}">Log in</a></div>
+         </div>
+
+         <div class="banner">
+             <div class="app-text">
+
+                 <h1><b> Welcome to CES UI </b></h1>
+             <p>Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged.</p>
+                 <div class="btn-group">
+            <div class="signup-btn"><a href="{% url 'login' %}">Log in</a></div>
+                     <div class="signup-btn"><a href="{% url 'signup' %}">Sign up now</a></div>
+
+                 </div>
+
+             </div>
+
+             <div class="app-picture">
+                 <img src="{% static 'images/10.jpg'%}">
+             </div>
+         </div>
+
+       </div>
+    {% else %}
+      <p>You are not logged in</p>
+      <a href="{% url 'login' %}">Log In</a>
+    {% endif %}
+    {% endblock content %}
+    
+</body>
+</html>
+

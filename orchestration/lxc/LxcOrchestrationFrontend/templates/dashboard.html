@@ -1,0 +1,95 @@
+{% extends 'baseDashboard.html' %}
+{% load static %}
+
+{% block content %}
+    <div class="cards">
+        <div class="card-single">
+            <div>
+                <h1>54</h1>
+                <span>CPU Usage</span>
+            </div>
+            <div>
+                <span class="las la-microchip"> </span>
+            </div>
+        </div>
+        <div class="card-single">
+            <div>
+                <a href="{% url 'proxyconfig' %}"\><span class="las la-server"></span>
+                <h1>79</h1>
+                <span>Memory Usage</span></a>
+            </div>
+            <div>
+                <span class="las la-memory"> </span>
+            </div>
+        </div>
+        <div class="card-single">
+            <div>
+                <h1>124</h1>
+                <span>Disk</span>
+            </div>
+            <div>
+                <span class="las la-compact-disc"> </span>
+            </div>
+        </div>
+        <div class="card-single">
+            <div>
+                <h1>{{container_count}}</h1>
+                <span>No. of Containers</span>
+            </div>
+            <div>
+                <span class="las la-memory"> </span>
+            </div>
+        </div>
+    </div>
+    <div class="recent-grid">
+        <div class="projects">
+            <div class="card">
+                <div class="card-header">
+                    <h3> List of Containers </h3>
+                    <button> See all <span class="las la-arrow-right"></span></button>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table width= "60%">
+                           <thead>
+                             <tr>
+                                <td> Name </td>
+                                <td> Type </td>
+                                <td> Status </td>
+                                <td> Control </td>
+                                <td> Details </td>
+                             </tr>
+                           </thead>
+                           <tbody>
+                                {% for ct_name, status_report in ct_dict.items %}
+                                    <tr>
+                                        <td>{{ ct_name|safe }}</td>
+                                        <td>{{ status_report.0|lower|capfirst }}</td>
+                                        <td>{{ status_report.1|lower|capfirst }}</td>
+                                        <td>
+                                            {% if status_report.1 == "STOPPED" %}
+                                                <form action={% url 'startContainer' ct_name %} method='GET'>
+                                                    <button type='submit'> Start</button>
+                                                </form>
+                                            {% elif status_report.1 == "RUNNING" %}
+                                                <form action={% url 'stopContainer' ct_name %} method='GET'>
+                                                    <button type='submit'> Stop</button>
+                                                </form>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <form action={% url 'containerInfo' ct_name %} method='GET'>
+                                                <button type='submit'> Show </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                           </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+{% endblock content %}
