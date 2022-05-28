@@ -1,0 +1,74 @@
+curl http://127.0.0.1:8080/
+curl http://127.0.0.1:8080/get_container_list
+curl http://127.0.0.1:8080/create_base_ct
+curl http://127.0.0.1:8080/destroy_container/gwa
+
+curl -X POST -H "Content-Type: application/json" -d '{"interface": ["mgt0", "lan0", "wan0"]}' http://127.0.0.1:8080/test_post
+
+# 'gwa' Gateway container 
+curl -X POST -H "Content-Type: application/json" -d '{"interfaces": {"mgt0":{"ip_addr":["172.31.255.11"], "iface_direction":"mgmt"}, "lan0":{"ip_addr":["192.168.0.1"], "iface_direction":"private"}, "wan0":{"ip_addr":["100.64.1.130", "100.64.1.131", "100.64.1.132"], "iface_direction":"public", "gateway":"100.64.1.1"} }}' http://127.0.0.1:8080/create_container/gateway/gwa
+
+# 'hosta1' private host
+curl -X POST -H "Content-Type: application/json" -d '{"interfaces": {"mgt0":{"ip_addr":["172.31.255.31"], "iface_direction":"mgmt"}, "lan0":{"ip_addr":["192.168.0.101"], "gateway":"192.168.0.1", "gateway_name":"gwa", "iface_direction":"public"}} }' http://127.0.0.1:8080/create_container/private_host/hosta1
+
+# 'hosta2' private host
+curl -X POST -H "Content-Type: application/json" -d '{"interfaces": {"mgt0":{"ip_addr":["172.31.255.32"], "iface_direction":"mgmt"}, "lan0":{"ip_addr":["192.168.0.101"], "gateway":"192.168.0.1", "gateway_name":"gwa", "iface_direction":"public"}} }' http://127.0.0.1:8080/create_container/private_host/hosta2
+
+# 'proxya' private host
+curl -X POST -H "Content-Type: application/json" -d '{"interfaces": {"mgt0":{"ip_addr":["172.31.255.14"], "iface_direction":"mgmt"}, "lan0":{"gateway_name":"gwa", "iface_direction":"private"}, "wan0":{"iface_direction":"public"} } }' http://127.0.0.1:8080/create_container/proxy/proxya
+
+# router for just gwa.sh
+curl -X POST -H "Content-Type: application/json" -d '{"interfaces": {"mgt0":{"ip_addr":["172.31.255.10"], "iface_direction":"mgmt"}, "wan0":{"ip_addr":["100.64.0.1"], "iface_direction":"public"}, "wan1":{"next_container":"proxya", "iface_direction":"private", "ip_addr":["100.64.1.1"]} }}' http://127.0.0.1:8080/create_container/router/router
+
+# router gwa/gwb with (next container name (to gateway) i.e. proxy):
+curl -X POST -H "Content-Type: application/json" -d '{"interfaces": {"mgt0":{"ip_addr":["172.31.255.10"], "iface_direction":"mgmt"}, "wan0":{"ip_addr":["100.64.0.1"], "iface_direction":"public"}, "wan1":{"next_container":"proxya", "iface_direction":"private", "ip_addr":["100.64.1.1"]}, "wan2":{"iface_direction":"private", "next_container":"proxyb", "ip_addr":["100.64.2.1"]} }}' http://127.0.0.1:8080/create_container/router/router
+
+# 'router' (with gateway container name only) 
+curl -X POST -H "Content-Type: application/json" -d '{"interfaces": {"mgt0":{"ip_addr":["172.31.255.10"], "iface_direction":"mgmt"}, "wan0":{"ip_addr":["100.64.0.1"], "iface_direction":"public"}, "wan1":{"gateway_name":"gwa", "iface_direction":"private", "ip_addr":["100.64.1.1"]}, "wan2":{"iface_direction":"private", "gateway_name":"gwb", "ip_addr":["100.64.2.1"]} } }' http://127.0.0.1:8080/create_container/router/router
+
+-------------------------------------------------------------
+# 'gwb' Gateway container 
+curl -X POST -H "Content-Type: application/json" -d '{"interfaces": {"mgt0":{"ip_addr":["172.31.255.11"], "iface_direction":"mgmt"}, "lan0":{"ip_addr":["192.168.0.1"], "iface_direction":"private"}, "wan0":{"ip_addr":["100.64.1.130", "100.64.1.131", "100.64.1.132"], "iface_direction":"public", "gateway":"100.64.1.1"} }}' http://127.0.0.1:8080/create_container/gateway/gwb
+
+# 'hostb1' private host
+curl -X POST -H "Content-Type: application/json" -d '{"interfaces": {"mgt0":{"ip_addr":["172.31.255.31"], "iface_direction":"mgmt"}, "lan0":{"ip_addr":["192.168.0.101"], "gateway":"192.168.0.1", "gateway_name":"gwa", "iface_direction":"public"}} }' http://127.0.0.1:8080/create_container/private_host/hostb1
+
+# 'hostb2' private host
+curl -X POST -H "Content-Type: application/json" -d '{"interfaces": {"mgt0":{"ip_addr":["172.31.255.32"], "iface_direction":"mgmt"}, "lan0":{"ip_addr":["192.168.0.101"], "gateway":"192.168.0.1", "gateway_name":"gwa", "iface_direction":"public"}} }' http://127.0.0.1:8080/create_container/private_host/hostb2
+
+# 'proxyb' private host
+curl -X POST -H "Content-Type: application/json" -d '{"interfaces": {"mgt0":{"ip_addr":["172.31.255.14"], "iface_direction":"mgmt"}, "lan0":{"gateway_name":"gwa", "iface_direction":"private"}, "wan0":{"iface_direction":"public"} } }' http://127.0.0.1:8080/create_container/proxy/proxyb
+
+
+# 'public' host
+curl -X POST -H "Content-Type: application/json" -d '{}' http://127.0.0.1:8080/create_container/
+
+# 'gwb' Gateway
+curl -X POST -H "Content-Type: application/json" -d '{"interfaces": {"mgt0":{"ip_addr":["172.31.255.12"], "iface_direction":"mgmt"}, "lan0":{"ip_addr":["192.168.0.1"], "iface_direction":"private"}, "wan0":{"ip_addr":["100.64.2.130", "100.64.2.131", "100.64.2.132"], "iface_direction":"public", "gateway":"100.64.2.1"} }}' http://127.0.0.1:8080/create_container/gateway/gwb
+
+----------------------------------------
+Logic upon seeing gateway_name, in private host, the script knows which gateway to attach the priavte host to. But, how to know, which bridge should the host shall be attached to?
+
+No way to know, unless there is a class for each container you create. And the class records the details interface, bridges, and their public or private relation with container.
+
+Cause then, you will ask which is private interface of gateway, it will give you interface name and the bridge attached, and you will then use that bridge to create your configuration.
+
+Logic, when connecting containers to 1 bridge [private-host and gateway].
+	When private host is being created, check the iface direction it has.
+	If host's iface direction is public, then it shall share the bridge created on private interface of gateway container. 
+	OR, If host's iface direction is public, then get the host's gateway container name. 
+	Next, From ContainerMgr, get gateway's ContainerInfo. And from that, get bridge name for private interface of gateway.
+	Use this bridge, on then public-interface of hosta1.  [Thus the host will be shared].
+
+Logic sharing bridge between proxy and gateway:
+	Get gateway info from proxy's private direction iface. And from ContainerInfo, then get the gateway's specs (i.e. iface and bridge).
+	Get the bridge attached to public iface of container, and use it for network creation b/w proxy and gateway. 
+
+--------------------------------------------
+
+
+it shall share the bridge created on private interface of gateway container. 
+
+----------------------------------------
+
+
